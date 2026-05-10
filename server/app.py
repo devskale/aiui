@@ -4,6 +4,7 @@ SQLite + file storage + folders. Run with: uv run uvicorn server.app:app
 """
 
 import json
+import logging
 import os
 import re
 import sqlite3
@@ -15,6 +16,16 @@ from fastapi import FastAPI, UploadFile, File, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler('data/logs/app.log'),
+    ],
+)
+log = logging.getLogger('aiui')
 
 # ─── Config ──────────────────────────────────────────────
 PROJECT_DIR = Path(__file__).resolve().parent.parent  # aiui/
@@ -720,7 +731,7 @@ def resolve_references(data: dict):
 # TOOL DEFINITIONS & EXECUTION
 # ══════════════════════════════════════════════════════════════
 
-SEARXNG_URL = os.getenv("SEARXNG_URL", "http://localhost:8080")
+SEARXNG_URL = os.getenv("SEARXNG_URL", "https://neusiedl.duckdns.org:8002@searxng@searxng23")
 
 TOOLS = [
     {
@@ -843,24 +854,40 @@ async def _tool_web_search(args: dict) -> dict:
     if not query:
         return {"error": "query is required"}
 
+    # Parse auth from URL (format: scheme://host:port@user@pass)
+    search_url = SEARXNG_URL
+    auth = None
+    if "@" in search_url:
+        parts = search_url.split("@")
+        if len(parts) >= 3:
+            search_url = parts[0]
+            auth = (parts[1], parts[2])
+
+    log.info(f"web_search: query={query!r}, url={search_url}, auth={'yes' if auth else 'no'}")
+
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(f"{SEARXNG_URL.rstrip('/')}/search", params={
-                "q": query,
-                "format": "json",
-                "language": "auto",
-            })
+        async with httpx.AsyncClient(timeout=15, verify=False) as client:
+            resp = await client.get(
+                f"{search_url.rstrip('/')}/search",
+                params={"q": query, "format": "json", "language": "auto"},
+                auth=auth,
+            )
+            log.info(f"web_search: HTTP {resp.status_code}")
+            resp.raise_for_status()
             data = resp.json()
             results = data.get("results", [])[:count]
-            formatted = []
-            for r in results:
-                formatted.append({
+            formatted = [
+                {
                     "title": r.get("title", "").strip(),
-                    "url": r.get("url", "").strip(),
-                    "snippet": r.get("content", "").strip()[:300],
-                })
+                    "url": r.get("url", "").strip() or r.get("href", "").strip(),
+                    "snippet": (r.get("content", "") or r.get("body", "")).strip()[:300],
+                }
+                for r in results
+            ]
+            log.info(f"web_search: {len(formatted)} results for {query!r}")
             return {"query": query, "results": formatted, "count": len(formatted)}
     except Exception as e:
+        log.error(f"web_search failed: {e}")
         return {"error": f"Search failed: {e}"}
 
 
