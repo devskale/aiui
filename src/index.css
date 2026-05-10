@@ -459,6 +459,21 @@ pre code { background: none; padding: 0; font-size: 13px; }
   50% { opacity: .45; }
 }
 
+/* Dynamic running label (flips per tool) */
+.tool-now {
+  font-size: 12px;
+  color: #7c5dfa;
+  padding: 2px 0 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  animation: toolFadeIn .25s ease-out;
+}
+@keyframes toolFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* ═══ MODAL ═══ */
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,.65);

@@ -47,6 +47,18 @@ export function Message({ msg }) {
 
   const anyRunning = tools.some(t => t.status === 'running')
 
+  // Find the currently running tool (last one with status 'running')
+  const runningTool = [...tools].reverse().find(t => t.status === 'running')
+  const runningLabel = runningTool
+    ? runningTool.name === 'web_search'
+      ? `Searching "${(runningTool.args?.query || '').slice(0, 60)}"`
+      : runningTool.name === 'fetch_url'
+        ? `Fetching ${(runningTool.args?.url || '').replace(/^https?:\/\//, '').slice(0, 50)}`
+        : runningTool.name === 'read_file'
+          ? `Reading ${runningTool.args?.file_id || ''}`
+          : runningTool.name
+    : null
+
   return (
     <div className={`msg-row ${isUser ? 'user' : 'assistant'}`}>
       {!isUser && <div className="msg-avatar"><Icons.logo /></div>}
@@ -72,6 +84,9 @@ export function Message({ msg }) {
               )
             })}
           </div>
+        )}
+        {runningLabel && (
+          <div className="tool-now">{runningLabel}</div>
         )}
         {images.length > 0 && images.map((src, i) => (
           <img key={i} src={src} alt="attachment" className="msg-image" />
