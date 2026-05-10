@@ -1035,9 +1035,9 @@ async def proxy_completions(request: Request):
                 if sources:
                     seen_urls = set()
                     src_lines = ["\n\n---\n**Sources:**"]
-                    for title, url in sources:
-                        if url not in seen_urls:
-                            seen_urls.add(url)
+                    for title, src_url in sources:
+                        if src_url not in seen_urls:
+                            seen_urls.add(src_url)
                             src_lines.append(f"- [{title}]({url})")
                     content += "".join(src_lines)
                     log.info("tool_loop: appended %d unique sources", len(seen_urls))
