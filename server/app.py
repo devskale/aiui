@@ -979,6 +979,11 @@ async def proxy_completions(request: Request):
         sources = []  # collect (title, url) from web_search + fetch_url
         log.info("tool_loop: START web_search=%s msgs=%d", web_search_requested, len(msgs))
         for round_num in range(max_tool_rounds):
+            # Check if client disconnected (user clicked Stop)
+            if await request.is_disconnected():
+                log.info("tool_loop: client disconnected at round %d", round_num)
+                yield "data: [DONE]\n\n"
+                return
             req_body = {
                 "model": model,
                 "messages": msgs,
@@ -1039,6 +1044,9 @@ async def proxy_completions(request: Request):
 
                 if content:
                     for i in range(0, len(content), 4):
+                        if i % 40 == 0 and await request.is_disconnected():
+                            log.info("tool_loop: client disconnected during stream")
+                            return
                         delta = {"role": "assistant", "content": content[i:i+4]}
                         sse = json.dumps({"id": data.get("id",""), "object": "chat.completion.chunk",
                             "created": int(time.time()), "model": model,
@@ -1096,6 +1104,22 @@ async def proxy_completions(request: Request):
         log.warning("tool_loop: EXCEEDED max rounds (%d)", max_tool_rounds)
         yield f"data: {{'error': 'Tool loop exceeded maximum rounds'}}\n\n"
         yield "data: [DONE]\n\n"
+
+    async def simple_stream():
+        """Passthrough stream without tools (fallback)."""
+        async with httpx.AsyncClient(timeout=120) as client:
+            try:
+                async with client.stream("POST", url, json=body,
+                    headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}) as resp:
+                    async for chunk in resp.aiter_bytes():
+                        if await request.is_disconnected():
+                            log.info("simple_stream: client disconnected")
+                            break
+                        yield chunk
+            except Exception as exc:
+                log.error("simple_stream error: %s", exc)
+                yield f"data: {{'error': 'Stream error'}}\n\n"
+                yield "data: [DONE]\n\n"
 
     # Decide: use tool loop or passthrough?
     # Always try tools if model supports function calling
