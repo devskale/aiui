@@ -850,7 +850,7 @@ async def _tool_read_file(args: dict) -> dict:
 
 async def _tool_web_search(args: dict) -> dict:
     query = args.get("query", "").strip()
-    count = min(20, max(1, int(args.get("count", 8))))
+    count = min(8, max(1, int(args.get("count", 5))))
     if not query:
         return {"error": "query is required"}
 
@@ -880,7 +880,7 @@ async def _tool_web_search(args: dict) -> dict:
                 {
                     "title": r.get("title", "").strip(),
                     "url": r.get("url", "").strip() or r.get("href", "").strip(),
-                    "snippet": (r.get("content", "") or r.get("body", "")).strip()[:300],
+                    "snippet": (r.get("content", "") or r.get("body", "")).strip()[:150],
                 }
                 for r in results
             ]
@@ -899,8 +899,9 @@ async def _tool_fetch_url(args: dict) -> dict:
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
 
+    log.info(f"fetch_url: url={url!r}")
     try:
-        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True, verify=False) as client:
             resp = await client.get(url)
             html = resp.text
 
@@ -922,8 +923,10 @@ async def _tool_fetch_url(args: dict) -> dict:
         if len(text) > max_len:
             text = text[:max_len] + "... (truncated)"
 
+        log.info(f"fetch_url: OK {len(text)} chars from {url}")
         return {"url": url, "title": _extract_title(resp.text), "content": text, "chars_fetched": len(text)}
     except Exception as e:
+        log.error(f"fetch_url failed: {url!r} → {e}")
         return {"error": f"Fetch failed: {e}"}
 
 
@@ -967,16 +970,17 @@ async def proxy_completions(request: Request):
 
     # ── Tool-calling loop ──
     max_tool_rounds = 10
+    max_tools_per_round = 2
 
     async def run_with_tools():
         """Run LLM with tools, looping until final text response."""
         msgs = list(messages)
+        log.info("tool_loop: START web_search=%s msgs=%d", web_search_requested, len(msgs))
         for round_num in range(max_tool_rounds):
-            # Build request — include tools only if web search requested
             req_body = {
                 "model": model,
                 "messages": msgs,
-                "stream": False,  # use non-streaming for tool detection
+                "stream": False,
                 "max_tokens": body.get("max_tokens") or 8192,
                 "temperature": body.get("temperature", 0.7),
             }
@@ -984,86 +988,89 @@ async def proxy_completions(request: Request):
                 req_body["tools"] = TOOLS
                 req_body["tool_choice"] = "auto"
 
-            async with httpx.AsyncClient(timeout=120) as client:
-                resp = await client.post(url, json=req_body,
-                    headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"})
+            log.info("tool_loop: round %d → LLM (%d msgs)", round_num, len(msgs))
+            try:
+                async with httpx.AsyncClient(timeout=120) as client:
+                    resp = await client.post(url, json=req_body,
+                        headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"})
+            except Exception as exc:
+                log.error("tool_loop: round %d request failed: %s", round_num, exc)
+                yield f"data: {{'error': 'Request failed: {exc}'}}\n\n"
+                yield "data: [DONE]\n\n"
+                return
 
             if resp.status_code != 200:
-                # LLM error — return raw error as text
-                yield f"data: {json.dumps({'error': f'LLM HTTP {resp.status_code}: {resp.text[:200]}'})}\n\n"
+                log.error("tool_loop: round %d HTTP %d", round_num, resp.status_code)
+                yield f"data: {{'error': 'LLM HTTP {resp.status_code}'}}\n\n"
+                yield "data: [DONE]\n\n"
                 return
 
             data = resp.json()
             choice = data.get("choices", [{}])[0]
-            msg = choice.get("message", {})
-            finish_reason = choice.get("finish_reason", "")
+            msg_resp = choice.get("message", {})
+            finish_reason = choice.get("finish_reason", "") or ""
 
-            # Check if LLM wants to call tools
-            tool_calls = msg.get("tool_calls", [])
+            raw_tool_calls = msg_resp.get("tool_calls")
+            tool_calls = raw_tool_calls[:max_tools_per_round] if raw_tool_calls else []
+            content = ""
+            if msg_resp.get("content") is not None:
+                content = str(msg_resp["content"])
 
+            log.info("tool_loop: round %d finish=%s tools=%d content=%d",
+                     round_num, finish_reason, len(tool_calls), len(content))
+
+            # Done — stream final text response
             if not tool_calls or finish_reason == "stop":
-                # Final text response — yield it
-                content = msg.get("content", "") or ""
-                # Stream it character by character for nice UX
                 if content:
-                    # Yield as SSE chunks matching OpenAI format
-                    for i in range(0, len(content), 4):  # small chunks
-                        chunk = content[i:i+4]
-                        delta = {"role": "assistant", "content": chunk}
+                    for i in range(0, len(content), 4):
+                        delta = {"role": "assistant", "content": content[i:i+4]}
                         sse = json.dumps({"id": data.get("id",""), "object": "chat.completion.chunk",
-                            "created": int(time.time()), "model": model, "choices": [{"index": 0, "delta": delta, "finish_reason": None}]})
+                            "created": int(time.time()), "model": model,
+                            "choices": [{"index": 0, "delta": delta, "finish_reason": None}]})
                         yield f"data: {sse}\n\n"
-                    # Final chunk
                     final_sse = json.dumps({"id": data.get("id",""), "object": "chat.completion.chunk",
-                        "created": int(time.time()), "model": model, "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]})
+                        "created": int(time.time()), "model": model,
+                        "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]})
                     yield f"data: {final_sse}\n\n"
                 else:
-                    # Empty response (e.g. reasoning-only) — send minimal stop
                     stop_sse = json.dumps({"id": data.get("id",""), "object": "chat.completion.chunk",
-                        "created": int(time.time()), "model": model, "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]})
+                        "created": int(time.time()), "model": model,
+                        "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]})
                     yield f"data: {stop_sse}\n\n"
+                log.info("tool_loop: DONE after %d rounds — summary streamed", round_num + 1)
                 yield "data: [DONE]\n\n"
                 return
 
-            # ── Execute tool calls ──
-            msgs.append(msg)  # assistant message with tool_calls
+            # Execute tools
+            msgs.append(msg_resp)
 
             for tc in tool_calls:
                 fn_name = tc["function"]["name"]
                 try:
                     fn_args = json.loads(tc["function"]["arguments"])
-                except:
+                except Exception:
                     fn_args = {}
 
-                # Emit tool status event to frontend
                 status_evt = json.dumps({"type": "tool_start", "tool": fn_name, "args": fn_args})
                 yield f"event: tool_status\ndata: {status_evt}\n\n"
 
                 result = await execute_tool(fn_name, fn_args)
 
-                # Emit tool result event
-                result_evt = json.dumps({"type": "tool_result", "tool": fn_name, 
+                result_evt = json.dumps({"type": "tool_result", "tool": fn_name,
                     "ok": "error" not in result, "preview": str(result)[:200]})
                 yield f"event: tool_status\ndata: {result_evt}\n\n"
 
-                # Append tool result message
                 msgs.append({
                     "role": "tool",
                     "tool_call_id": tc["id"],
                     "content": json.dumps(result, ensure_ascii=False),
                 })
+                log.info("tool_loop: executed %s (total msgs: %d)", fn_name, len(msgs))
 
         # Max rounds exceeded
-        yield f"data: {json.dumps({'error': 'Tool loop exceeded maximum rounds'})}\n\n"
+        log.warning("tool_loop: EXCEEDED max rounds (%d)", max_tool_rounds)
+        yield f"data: {{'error': 'Tool loop exceeded maximum rounds'}}\n\n"
         yield "data: [DONE]\n\n"
-
-    async def simple_stream():
-        """Passthrough stream without tools (fallback)."""
-        async with httpx.AsyncClient(timeout=120) as client:
-            async with client.stream("POST", url, json=body,
-                headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}) as resp:
-                async for chunk in resp.aiter_bytes():
-                    yield chunk
 
     # Decide: use tool loop or passthrough?
     # Always try tools if model supports function calling
