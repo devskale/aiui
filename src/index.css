@@ -406,72 +406,50 @@ pre code { background: none; padding: 0; font-size: 13px; }
 .msg-image { max-width: 280px; max-height: 280px; border-radius: 12px; margin-bottom: 8px; object-fit: contain; }
 .msg-bubble.user-bubble .msg-image { margin-top: 4px; }
 
-/* ─ Tool Calls (stacked icons + label) ─ */
+/* ─ Tool Pills ─ */
 .tool-stack {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 16px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
   margin-bottom: 8px;
 }
-.tool-group {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 13px; color: #666;
+.tool-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11.5px; color: #777; line-height: 1.5;
+  padding: 1px 6px 1px 5px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.04);
+  width: fit-content;
+  max-width: 100%;
+  transition: background .15s;
 }
-.tool-group.tool-done { color: #666; }
-.tool-group.tool-running { color: #7c5dfa; }
-.tool-group.tool-err { color: #f44; }
-
-/* Stacked overlapping icons */
-.tool-stacked-icons {
-  position: relative;
-  display: inline-block;
-  width: 28px; height: 18px;
-  margin-right: 2px;
-}
-.tool-stacked-icon {
-  position: absolute;
-  font-size: 14px;
-  line-height: 1;
-  filter: grayscale(30%);
-  transition: filter .15s;
-}
-.tool-running .tool-stacked-icon { filter: none; }
-.tool-done .tool-stacked-icon { opacity: .7; }
-
-/* Spinner overlaid on last icon when active */
-.tool-stack-spin {
-  position: absolute;
-  right: -2px; bottom: -2px;
-  width: 10px; height: 10px;
-  border: 1.8px solid #7c5dfa; border-top-color: transparent;
-  border-radius: 50%;
-  animation: spin .7s linear infinite;
-}
-
-/* Label */
-.tool-stack-label {
+.tool-pill:hover { background: rgba(255,255,255,.08); }
+.tool-pill.running { color: #7c5dfa; background: rgba(124,93,250,.08); }
+.tool-pill.done { color: #888; }
+.tool-pill.error { color: #f44; background: rgba(244,68,68,.06); }
+.tool-pill-icon { font-size: 12px; flex-shrink: 0; line-height: 1; }
+.tool-pill-label {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-family: 'SF Mono', 'Fira Code', monospace;
   font-weight: 500;
-  letter-spacing: .02em;
 }
-.tool-running .tool-stack-label {
-  animation: toolPulse 1.4s ease-in-out infinite;
+.tool-pill-arg {
+  color: #555; font-style: italic;
+  font-weight: 400;
 }
-@keyframes toolPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: .45; }
+.tool-pill-spin {
+  width: 12px; height: 12px;
+  border: 1.5px solid currentColor; border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin .7s linear infinite; flex-shrink: 0;
 }
-
-/* Dynamic running label (flips per tool) */
-.tool-now {
-  font-size: 12px;
-  color: #7c5dfa;
-  padding: 2px 0 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  animation: toolFadeIn .25s ease-out;
+.tool-pill-ok::after {
+  content: '';
+  display: inline-block; width: 10px; height: 10px;
+  border-radius: 50%;
+  background: #555; flex-shrink: 0;
 }
-@keyframes toolFadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+.tool-pill-err::after {
+  content: '✗';
+  font-size: 9px; color: #f44; flex-shrink: 0;
 }
 
 /* ─ Sources section (appended after summary) ─ */
