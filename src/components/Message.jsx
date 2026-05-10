@@ -30,31 +30,47 @@ export function Message({ msg }) {
   const tools = msg.tools || []
   const toolIcons = { read_file: '📄', web_search: '🔍', fetch_url: '🌐' }
 
-  const formatToolLabel = (tc) => {
-    if (tc.name === 'web_search') return (tc.args?.query || '').slice(0, 60)
-    if (tc.name === 'fetch_url') return (tc.args?.url || '').replace(/^https?:\/\//, '').slice(0, 50)
-    if (tc.name === 'read_file') return tc.args?.file_id || ''
-    return ''
+  // Group tools by name for stacking
+  const toolGroups = {}
+  for (const tc of tools) {
+    const key = tc.name
+    if (!toolGroups[key]) toolGroups[key] = []
+    toolGroups[key].push(tc)
   }
+
+  const groupLabel = (name, items) => {
+    if (name === 'web_search') return 'Sources'
+    if (name === 'fetch_url') return `Fetched${items.length > 1 ? ` (${items.length})` : ''}`
+    if (name === 'read_file') return `Read${items.length > 1 ? ` (${items.length})` : ''}`
+    return name
+  }
+
+  const anyRunning = tools.some(t => t.status === 'running')
 
   return (
     <div className={`msg-row ${isUser ? 'user' : 'assistant'}`}>
       {!isUser && <div className="msg-avatar"><Icons.logo /></div>}
       <div className={`msg-bubble ${isUser ? 'user-bubble' : ''}`}>
         {tools.length > 0 && (
-          <div className="tool-stack">
-            {tools.map((tc, i) => (
-              <div key={i} className={`tool-pill ${tc.status || 'done'}`} style={{ marginLeft: i * 18 }}>
-                <span className="tool-pill-icon">{toolIcons[tc.name] || '🔧'}</span>
-                <span className="tool-pill-label">
-                  {tc.name}
-                  {formatToolLabel(tc) && <span className="tool-pill-arg"> {formatToolLabel(tc)}</span>}
-                </span>
-                {tc.status === 'running' && <span className="tool-pill-spin" />}
-                {tc.status === 'done' && <span className="tool-pill-ok" />}
-                {tc.status === 'error' && <span className="tool-pill-err" />}
-              </div>
-            ))}
+          <div className={`tool-stack ${anyRunning ? 'tool-stack-active' : ''}`}>
+            {Object.entries(toolGroups).map(([name, items]) => {
+              const icon = toolIcons[name] || '🔧'
+              const allDone = items.every(t => t.status === 'done')
+              const hasError = items.some(t => t.status === 'error')
+              return (
+                <div key={name} className={`tool-group ${hasError ? 'tool-err' : allDone ? 'tool-done' : 'tool-running'}`}>
+                  <span className="tool-stacked-icons">
+                    {items.map((_, i) => (
+                      <span key={i} className="tool-stacked-icon" style={{ left: i * 10 }}>{icon}</span>
+                    ))}
+                    {anyRunning && items.some(t => t.status === 'running') && (
+                      <span className="tool-stack-spin" />
+                    )}
+                  </span>
+                  <span className="tool-stack-label">{groupLabel(name, items)}</span>
+                </div>
+              )
+            })}
           </div>
         )}
         {images.length > 0 && images.map((src, i) => (

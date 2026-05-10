@@ -976,6 +976,7 @@ async def proxy_completions(request: Request):
         """Run LLM with tools, looping until final text response."""
         msgs = list(messages)
         total_tools_used = 0
+        sources = []  # collect (title, url) from web_search + fetch_url
         log.info("tool_loop: START web_search=%s msgs=%d", web_search_requested, len(msgs))
         for round_num in range(max_tool_rounds):
             req_body = {
@@ -1025,6 +1026,17 @@ async def proxy_completions(request: Request):
 
             # Done — stream final text response
             if not tool_calls or finish_reason == "stop":
+                # Append sources as markdown references if we have any
+                if sources:
+                    seen_urls = set()
+                    src_lines = ["\n\n---\n**Sources:**"]
+                    for title, url in sources:
+                        if url not in seen_urls:
+                            seen_urls.add(url)
+                            src_lines.append(f"- [{title}]({url})")
+                    content += "".join(src_lines)
+                    log.info("tool_loop: appended %d unique sources", len(seen_urls))
+
                 if content:
                     for i in range(0, len(content), 4):
                         delta = {"role": "assistant", "content": content[i:i+4]}
@@ -1070,7 +1082,15 @@ async def proxy_completions(request: Request):
                     "content": json.dumps(result, ensure_ascii=False),
                 })
                 total_tools_used += 1
-                log.info("tool_loop: executed %s (%d/%d total)", fn_name, total_tools_used, max_total_tools)
+                # Collect sources for inline references in summary
+                if fn_name == "web_search" and "results" in result:
+                    for r in result["results"]:
+                        if r.get("url") and r.get("title"):
+                            sources.append((r["title"], r["url"]))
+                elif fn_name == "fetch_url" and "url" in result:
+                    title = result.get("title", result["url"])
+                    sources.append((title, result["url"]))
+                log.info("tool_loop: executed %s (%d/%d total, %d sources)", fn_name, total_tools_used, max_total_tools, len(sources))
 
         # Max rounds exceeded
         log.warning("tool_loop: EXCEEDED max rounds (%d)", max_tool_rounds)

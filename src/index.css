@@ -406,57 +406,57 @@ pre code { background: none; padding: 0; font-size: 13px; }
 .msg-image { max-width: 280px; max-height: 280px; border-radius: 12px; margin-bottom: 8px; object-fit: contain; }
 .msg-bubble.user-bubble .msg-image { margin-top: 4px; }
 
-/* ─ Tool Calls (subtle stacked pills) ─ */
+/* ─ Tool Calls (stacked icons + label) ─ */
 .tool-stack {
-  display: flex; flex-direction: column; gap: 2px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 16px;
   margin-bottom: 8px;
 }
-.tool-pill {
-  display: inline-flex; align-items: center; gap: 4px;
-  font-size: 11.5px; color: #777; line-height: 1.5;
-  padding: 1px 6px 1px 5px;
-  border-radius: 10px;
-  background: rgba(255,255,255,.04);
-  width: fit-content;
-  max-width: 100%;
-  transition: background .15s;
+.tool-group {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; color: #666;
 }
-.tool-pill:hover { background: rgba(255,255,255,.08); }
-.tool-pill.running { color: #7c5dfa; background: rgba(124,93,250,.1); }
-.tool-pill.running .tool-pill-icon {
-  animation: toolPulse 1.2s ease-in-out infinite;
+.tool-group.tool-done { color: #666; }
+.tool-group.tool-running { color: #7c5dfa; }
+.tool-group.tool-err { color: #f44; }
+
+/* Stacked overlapping icons */
+.tool-stacked-icons {
+  position: relative;
+  display: inline-block;
+  width: 28px; height: 18px;
+  margin-right: 2px;
+}
+.tool-stacked-icon {
+  position: absolute;
+  font-size: 14px;
+  line-height: 1;
+  filter: grayscale(30%);
+  transition: filter .15s;
+}
+.tool-running .tool-stacked-icon { filter: none; }
+.tool-done .tool-stacked-icon { opacity: .7; }
+
+/* Spinner overlaid on last icon when active */
+.tool-stack-spin {
+  position: absolute;
+  right: -2px; bottom: -2px;
+  width: 10px; height: 10px;
+  border: 1.8px solid #7c5dfa; border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+
+/* Label */
+.tool-stack-label {
+  font-weight: 500;
+  letter-spacing: .02em;
+}
+.tool-running .tool-stack-label {
+  animation: toolPulse 1.4s ease-in-out infinite;
 }
 @keyframes toolPulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: .4; transform: scale(.85); }
-}
-.tool-pill.done { color: #888; }
-.tool-pill.error { color: #f44; background: rgba(244,68,68,.06); }
-.tool-pill-icon { font-size: 12px; flex-shrink: 0; line-height: 1; }
-.tool-pill-label {
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  font-family: 'SF Mono', 'Fira Code', monospace;
-  font-weight: 500;
-}
-.tool-pill-arg {
-  color: #555; font-style: italic;
-  font-weight: 400;
-}
-.tool-pill-spin {
-  width: 12px; height: 12px;
-  border: 1.5px solid #7c5dfa; border-top-color: transparent;
-  border-radius: 50%;
-  animation: spin .7s linear infinite; flex-shrink: 0;
-}
-.tool-pill-ok::after {
-  content: '';
-  display: inline-block; width: 10px; height: 10px;
-  border-radius: 50%;
-  background: #555; flex-shrink: 0;
-}
-.tool-pill-err::after {
-  content: '✗';
-  font-size: 9px; color: #f44; flex-shrink: 0;
+  0%, 100% { opacity: 1; }
+  50% { opacity: .45; }
 }
 
 /* ═══ MODAL ═══ */
