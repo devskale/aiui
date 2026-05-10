@@ -30,29 +30,29 @@ export function Message({ msg }) {
   const tools = msg.tools || []
   const toolIcons = { read_file: '📄', web_search: '🔍', fetch_url: '🌐' }
 
+  const formatToolLabel = (tc) => {
+    if (tc.name === 'web_search') return (tc.args?.query || '').slice(0, 60)
+    if (tc.name === 'fetch_url') return (tc.args?.url || '').replace(/^https?:\/\//, '').slice(0, 50)
+    if (tc.name === 'read_file') return tc.args?.file_id || ''
+    return ''
+  }
+
   return (
     <div className={`msg-row ${isUser ? 'user' : 'assistant'}`}>
       {!isUser && <div className="msg-avatar"><Icons.logo /></div>}
       <div className={`msg-bubble ${isUser ? 'user-bubble' : ''}`}>
         {tools.length > 0 && (
-          <div className="tool-calls">
+          <div className="tool-stack">
             {tools.map((tc, i) => (
-              <div key={i} className={`tool-call ${tc.status}`}>
-                <span className="tool-icon">{toolIcons[tc.name] || '🔧'}</span>
-                <span className="tool-name">{tc.name}</span>
-                {tc.status === 'running' && <span className="tool-spinner">⟳</span>}
-                {tc.status === 'done' && <span className="tool-status-ok">✓</span>}
-                {tc.status === 'error' && <span className="tool-status-err">✗</span>}
-                {tc.args && (
-                  <span className="tool-args">
-                    {tc.name === 'read_file' && tc.args.file_id}
-                    {tc.name === 'web_search' && `"${(tc.args.query || '').slice(0, 50)}"`}
-                    {tc.name === 'fetch_url' && (tc.args.url || '').slice(0, 50)}
-                  </span>
-                )}
-                {tc.result && tc.status !== 'running' && (
-                  <div className="tool-result">{tc.result}</div>
-                )}
+              <div key={i} className={`tool-pill ${tc.status || 'done'}`} style={{ marginLeft: i * 18 }}>
+                <span className="tool-pill-icon">{toolIcons[tc.name] || '🔧'}</span>
+                <span className="tool-pill-label">
+                  {tc.name}
+                  {formatToolLabel(tc) && <span className="tool-pill-arg"> {formatToolLabel(tc)}</span>}
+                </span>
+                {tc.status === 'running' && <span className="tool-pill-spin" />}
+                {tc.status === 'done' && <span className="tool-pill-ok" />}
+                {tc.status === 'error' && <span className="tool-pill-err" />}
               </div>
             ))}
           </div>

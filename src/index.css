@@ -406,26 +406,50 @@ pre code { background: none; padding: 0; font-size: 13px; }
 .msg-image { max-width: 280px; max-height: 280px; border-radius: 12px; margin-bottom: 8px; object-fit: contain; }
 .msg-bubble.user-bubble .msg-image { margin-top: 4px; }
 
-/* ─ Tool Calls ─ */
-.tool-calls {
-  display: flex; flex-direction: column; gap: 6px;
-  margin-bottom: 10px; padding: 10px 12px;
-  background: rgba(124,93,250,.06); border-radius: 10px; border-left: 3px solid #7c5dfa;
+/* ─ Tool Calls (subtle stacked pills) ─ */
+.tool-stack {
+  display: flex; flex-direction: column; gap: 2px;
+  margin-bottom: 8px;
 }
-.tool-call { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #bbb; line-height: 1.6; }
-.tool-call.running { color: #7c5dfa; }
-.tool-call.done { color: #8bc34a; }
-.tool-call.error { color: #f44; }
-.tool-icon { font-size: 15px; }
-.tool-name { font-weight: 600; font-family: 'SF Mono', 'Fira Code', monospace; }
-.tool-spinner { animation: spin .8s linear infinite; color: #7c5dfa; }
-.tool-status-ok { color: #8bc34a; font-weight: bold; }
-.tool-status-err { color: #f44; font-weight: bold; }
-.tool-args { color: #888; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-style: italic; }
-.tool-result {
-  margin-top: 4px; padding: 6px 10px; background: rgba(0,0,0,.25); border-radius: 6px;
-  font-size: 11.5px; color: #999; line-height: 1.5; max-height: 120px; overflow-y: auto;
-  white-space: pre-wrap; word-break: break-word;
+.tool-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11.5px; color: #777; line-height: 1.5;
+  padding: 1px 6px 1px 5px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.04);
+  width: fit-content;
+  max-width: 100%;
+  transition: background .15s;
+}
+.tool-pill:hover { background: rgba(255,255,255,.08); }
+.tool-pill.running { color: #7c5dfa; background: rgba(124,93,250,.08); }
+.tool-pill.done { color: #888; }
+.tool-pill.error { color: #f44; background: rgba(244,68,68,.06); }
+.tool-pill-icon { font-size: 12px; flex-shrink: 0; line-height: 1; }
+.tool-pill-label {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-weight: 500;
+}
+.tool-pill-arg {
+  color: #555; font-style: italic;
+  font-weight: 400;
+}
+.tool-pill-spin {
+  width: 12px; height: 12px;
+  border: 1.5px solid currentColor; border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin .7s linear infinite; flex-shrink: 0;
+}
+.tool-pill-ok::after {
+  content: '';
+  display: inline-block; width: 10px; height: 10px;
+  border-radius: 50%;
+  background: #555; flex-shrink: 0;
+}
+.tool-pill-err::after {
+  content: '✗';
+  font-size: 9px; color: #f44; flex-shrink: 0;
 }
 
 /* ═══ MODAL ═══ */

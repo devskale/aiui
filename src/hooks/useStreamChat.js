@@ -74,7 +74,8 @@ export function useStreamChat() {
       }
 
       // Sanitize base64 for DB, then persist
-      const final = [...messages, { role: 'assistant', content: assistantContent }]
+      const finalAssistant = { role: 'assistant', content: assistantContent, tools: toolCalls.length > 0 ? [...toolCalls] : undefined }
+      const final = [...messages, finalAssistant]
       const sanitized = final.map(m => {
         if (typeof m.content === 'string') return m
         if (!Array.isArray(m.content)) return m
@@ -87,7 +88,7 @@ export function useStreamChat() {
         return { ...m, content: clean }
       })
       onUpdateChat(chatId, { messages: sanitized })
-      onUpdateMessages(() => final) // replace with unsanitized (keeps images for display)
+      onUpdateMessages(() => final) // keeps tools for display
     } catch (err) {
       if (err.name !== 'AbortError') {
         onUpdateMessages(prev => [...prev.slice(0, -1), { role: 'error', content: `Error: ${err.message}` }])
