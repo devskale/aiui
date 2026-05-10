@@ -6,6 +6,8 @@ export function useStreamChat() {
   const abortRef = useRef(null)
 
   const stream = async ({ messages, onUpdateMessages, chatId, onUpdateChat, llmConfig, webSearch }) => {
+    const controller = new AbortController()
+    abortRef.current = controller
     try {
       const apiMessages = messages.map(m => ({ role: m.role, content: m.content }))
       let assistantContent = ''
@@ -31,6 +33,7 @@ export function useStreamChat() {
       let currentEvent = null
 
       while (true) {
+        if (controller.signal.aborted) break
         const { done, value } = await reader.read()
         if (done) break
         buf += decoder.decode(value, { stream: true })
