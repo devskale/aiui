@@ -1034,11 +1034,12 @@ async def proxy_completions(request: Request):
                 # Append sources as markdown references if we have any
                 if sources:
                     seen_urls = set()
-                    src_lines = ["\n\n---\n**Sources:**"]
+                    src_lines = ["\n\n---\nSources:"]
                     for title, src_url in sources:
-                        if src_url not in seen_urls:
+                        if src_url not in seen_urls and len(seen_urls) < 8:
                             seen_urls.add(src_url)
-                            src_lines.append(f"- [{title}]({url})")
+                            short = (title[:42] + '...') if len(title) > 42 else title
+                            src_lines.append(f"- [{short}]({src_url})")
                     content += "".join(src_lines)
                     log.info("tool_loop: appended %d unique sources", len(seen_urls))
 
