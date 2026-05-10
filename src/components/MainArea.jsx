@@ -76,7 +76,15 @@ export function MainArea({ sidebarOpen, onToggleSidebar, chat, account, activeMo
   const llmConfig = account
     ? { baseUrl: account.baseUrl, apiKey: account.apiKey, model: activeModel } : null
 
-  useEffect(() => { setMessages(chat?.messages || []); setInput(''); setAttachments([]) }, [chat?.id])
+  useEffect(() => {
+    // Don't wipe in-memory messages if they have tools (streaming just finished)
+    setMessages(prev => {
+      const hasTools = prev.some(m => m.tools && m.tools.length > 0)
+      if (hasTools) return prev
+      return chat?.messages || []
+    })
+    setInput(''); setAttachments([])
+  }, [chat?.id])
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
   // ─── Attachments ───
