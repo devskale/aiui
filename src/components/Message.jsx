@@ -76,7 +76,7 @@ export function Message({ msg }) {
         {images.length > 0 && images.map((src, i) => (
           <img key={i} src={src} alt="attachment" className="msg-image" />
         ))}
-        {text ? renderMd(text) : (!tools.length ? <TypingInline /> : null)}
+        {text ? renderMd(text) : null}
       </div>
     </div>
   )
