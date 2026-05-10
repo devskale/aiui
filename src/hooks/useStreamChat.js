@@ -5,7 +5,7 @@ export function useStreamChat() {
   const [streaming, setStreaming] = useState(false)
   const abortRef = useRef(null)
 
-  const stream = async ({ messages, onUpdateMessages, chatId, onUpdateChat, llmConfig }) => {
+  const stream = async ({ messages, onUpdateMessages, chatId, onUpdateChat, llmConfig, webSearch }) => {
     try {
       const apiMessages = messages.map(m => ({ role: m.role, content: m.content }))
       let assistantContent = ''
@@ -19,6 +19,7 @@ export function useStreamChat() {
         body: JSON.stringify({
           __base_url: llmConfig.baseUrl, __api_key: llmConfig.apiKey,
           model: llmConfig.model, messages: apiMessages, stream: true,
+          __web_search: webSearch || false,
         }),
         signal: abortRef.current?.signal,
       })

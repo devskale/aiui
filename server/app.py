@@ -924,6 +924,7 @@ async def proxy_completions(request: Request):
     body = await request.json()
     base_url = body.pop("__base_url", None)
     api_key = body.pop("__api_key", None)
+    web_search_requested = body.pop("__web_search", False)
     if not base_url or not api_key:
         conn = get_db()
         acc = conn.execute("SELECT base_url, api_key FROM accounts LIMIT 1").fetchone()
@@ -944,16 +945,17 @@ async def proxy_completions(request: Request):
         """Run LLM with tools, looping until final text response."""
         msgs = list(messages)
         for round_num in range(max_tool_rounds):
-            # Build request — always include TOOLS definition
+            # Build request — include tools only if web search requested
             req_body = {
                 "model": model,
                 "messages": msgs,
-                "tools": TOOLS,
-                "tool_choice": "auto",
                 "stream": False,  # use non-streaming for tool detection
                 "max_tokens": body.get("max_tokens") or 8192,
                 "temperature": body.get("temperature", 0.7),
             }
+            if web_search_requested:
+                req_body["tools"] = TOOLS
+                req_body["tool_choice"] = "auto"
 
             async with httpx.AsyncClient(timeout=120) as client:
                 resp = await client.post(url, json=req_body,
@@ -1038,7 +1040,7 @@ async def proxy_completions(request: Request):
 
     # Decide: use tool loop or passthrough?
     # Always try tools if model supports function calling
-    use_tools = True  # always on for now; could make configurable per-account
+    use_tools = web_search_requested
 
     async def stream_generator():
         if use_tools and is_stream:

@@ -4,7 +4,7 @@ import { Icons } from '../lib/icons'
 import { IMG_TYPES, SUGGESTIONS, fileToDataUrl } from '../lib/utils'
 import { apiGet } from '../lib/api'
 import { useStreamChat } from '../hooks/useStreamChat'
-import { Message, TypingIndicator } from './Message'
+import { Message } from './Message'
 import { ChatInput, WelcomeInput, AttachmentBar } from './ChatInput'
 import { ModelPicker } from './ModelPicker'
 
@@ -16,6 +16,7 @@ export function MainArea({ sidebarOpen, onToggleSidebar, chat, account, activeMo
   const [messages, setMessages] = useState(chat?.messages || [])
   const [input, setInput] = useState('')
   const [attachments, setAttachments] = useState([])
+  const [webOn, setWebOn] = useState(false)
   const endRef = useRef(null)
   const inputRef = useRef(null)
   const fileInputRef = useRef(null)
@@ -128,8 +129,8 @@ export function MainArea({ sidebarOpen, onToggleSidebar, chat, account, activeMo
       const t = (title || '📷 Image').slice(0, 50)
       onUpdateChat(chat.id, { title: t + (title && title.length > 50 ? '...' : '') })
     }
-    setInput(''); setAttachments([]); setStreaming(true)
-    await stream({ messages: updated, onUpdateMessages: setMessages, chatId: chat.id, onUpdateChat, llmConfig })
+    setInput(''); setAttachments([]); setWebOn(false); setStreaming(true)
+    await stream({ messages: updated, onUpdateMessages: setMessages, chatId: chat.id, onUpdateChat, llmConfig, webSearch: webOn })
   }
 
   // ─── Send ───
@@ -186,7 +187,8 @@ export function MainArea({ sidebarOpen, onToggleSidebar, chat, account, activeMo
     onKeyDown: e => { if (!acHandleKey(e)) handleKeyDown(e) },
     streaming, onStop: abort,
     onAttachClick: () => fileInputRef.current?.click(),
-    acShow, acItems, acIndex, acSetIndex, acSelect, acSetShow,
+    webOn, toggleWeb: () => setWebOn(prev => !prev),
+    acShow, acItems, acIndex, acSetIndex, acSelect,
   }
 
   return (
@@ -231,7 +233,6 @@ export function MainArea({ sidebarOpen, onToggleSidebar, chat, account, activeMo
           <>
             <div className="messages">
               {messages.map((msg, i) => <Message key={i} msg={msg} />)}
-              {streaming && !messages[messages.length - 1]?.content && <TypingIndicator />}
               <div ref={endRef} />
             </div>
             <div className="chat-input-area">
