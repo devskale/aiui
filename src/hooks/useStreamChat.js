@@ -14,6 +14,7 @@ export function useStreamChat() {
       let toolCalls = []
 
       onUpdateMessages(prev => [...prev, { role: 'assistant', content: '', tools: [] }])
+      setStreaming(true)
 
       const res = await fetch('/api/chat/completions', {
         method: 'POST',
