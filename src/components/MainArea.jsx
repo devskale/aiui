@@ -129,7 +129,7 @@ export function MainArea({ sidebarOpen, onToggleSidebar, chat, account, activeMo
       const t = (title || '📷 Image').slice(0, 50)
       onUpdateChat(chat.id, { title: t + (title && title.length > 50 ? '...' : '') })
     }
-    setInput(''); setAttachments([]); setWebOn(false); setStreaming(true)
+    setInput(''); setAttachments([]); setStreaming(true)
     await stream({ messages: updated, onUpdateMessages: setMessages, chatId: chat.id, onUpdateChat, llmConfig, webSearch: webOn })
   }
 

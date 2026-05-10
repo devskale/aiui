@@ -43,12 +43,15 @@ export function Message({ msg }) {
                 {tc.status === 'running' && <span className="tool-spinner">⟳</span>}
                 {tc.status === 'done' && <span className="tool-status-ok">✓</span>}
                 {tc.status === 'error' && <span className="tool-status-err">✗</span>}
-                {tc.args && tc.status !== 'running' && (
+                {tc.args && (
                   <span className="tool-args">
                     {tc.name === 'read_file' && tc.args.file_id}
-                    {tc.name === 'web_search' && `"${(tc.args.query || '').slice(0, 40)}"`}
-                    {tc.name === 'fetch_url' && (tc.args.url || '').slice(0, 40)}
+                    {tc.name === 'web_search' && `"${(tc.args.query || '').slice(0, 50)}"`}
+                    {tc.name === 'fetch_url' && (tc.args.url || '').slice(0, 50)}
                   </span>
+                )}
+                {tc.result && tc.status !== 'running' && (
+                  <div className="tool-result">{tc.result}</div>
                 )}
               </div>
             ))}

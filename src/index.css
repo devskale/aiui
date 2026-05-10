@@ -408,19 +408,25 @@ pre code { background: none; padding: 0; font-size: 13px; }
 
 /* ─ Tool Calls ─ */
 .tool-calls {
-  display: flex; flex-direction: column; gap: 4px;
-  margin-bottom: 8px; padding: 8px 10px;
-  background: rgba(255,255,255,.04); border-radius: 8px; border-left: 3px solid #555;
+  display: flex; flex-direction: column; gap: 6px;
+  margin-bottom: 10px; padding: 10px 12px;
+  background: rgba(124,93,250,.06); border-radius: 10px; border-left: 3px solid #7c5dfa;
 }
-.tool-call { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: #aaa; line-height: 1.6; }
+.tool-call { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #bbb; line-height: 1.6; }
+.tool-call.running { color: #7c5dfa; }
 .tool-call.done { color: #8bc34a; }
 .tool-call.error { color: #f44; }
-.tool-icon { font-size: 14px; }
-.tool-name { font-weight: 600; font-family: monospace; }
-.tool-spinner { animation: spin .8s linear infinite; }
+.tool-icon { font-size: 15px; }
+.tool-name { font-weight: 600; font-family: 'SF Mono', 'Fira Code', monospace; }
+.tool-spinner { animation: spin .8s linear infinite; color: #7c5dfa; }
 .tool-status-ok { color: #8bc34a; font-weight: bold; }
 .tool-status-err { color: #f44; font-weight: bold; }
-.tool-args { color: #777; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-style: italic; }
+.tool-args { color: #888; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-style: italic; }
+.tool-result {
+  margin-top: 4px; padding: 6px 10px; background: rgba(0,0,0,.25); border-radius: 6px;
+  font-size: 11.5px; color: #999; line-height: 1.5; max-height: 120px; overflow-y: auto;
+  white-space: pre-wrap; word-break: break-word;
+}
 
 /* ═══ MODAL ═══ */
 .modal-overlay {
