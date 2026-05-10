@@ -11,7 +11,7 @@ import time
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, UploadFile, File, Query, Request, Form
+from fastapi import FastAPI, UploadFile, File, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
@@ -123,17 +123,29 @@ def init_db():
             fid = uuid.uuid4().hex[:8]
             conn.execute("INSERT INTO folders (id, name, icon, color) VALUES (?, ?, ?, ?)", (fid, name, icon, color))
 
-    # ── Migration: old 'model' column → new 'models' JSON column ──
-    try:
-        cols = [r[1] for r in conn.execute("PRAGMA table_info(accounts)").fetchall()]
-        if "model" in cols and "models" not in cols:
-            rows = conn.execute("SELECT id, model FROM accounts").fetchall()
-            conn.execute("ALTER TABLE accounts ADD COLUMN models TEXT NOT NULL DEFAULT '[]'")
-            for rid, old_model in rows:
-                models_json = json.dumps([old_model] if old_model else [])
-                conn.execute("UPDATE accounts SET models = ? WHERE id = ?", (models_json, rid))
-    except Exception as e:
-        print(f"Migration warning: {e}")
+    # ── Migrations ──
+    def _migrate(conn):
+        # accounts: old 'model' column → new 'models' JSON column
+        try:
+            cols = [r[1] for r in conn.execute("PRAGMA table_info(accounts)").fetchall()]
+            if "model" in cols and "models" not in cols:
+                rows = conn.execute("SELECT id, model FROM accounts").fetchall()
+                conn.execute("ALTER TABLE accounts ADD COLUMN models TEXT NOT NULL DEFAULT '[]'")
+                for rid, old_model in rows:
+                    models_json = json.dumps([old_model] if old_model else [])
+                    conn.execute("UPDATE accounts SET models = ? WHERE id = ?", (models_json, rid))
+        except Exception as e:
+            print(f"Migration warning (accounts): {e}")
+
+        # chats: add 'model' column if missing
+        try:
+            cols = [r[1] for r in conn.execute("PRAGMA table_info(chats)").fetchall()]
+            if "model" not in cols:
+                conn.execute("ALTER TABLE chats ADD COLUMN model TEXT NOT NULL DEFAULT ''")
+        except Exception as e:
+            print(f"Migration warning (chats): {e}")
+
+    _migrate(conn)
 
     conn.commit()
     conn.close()
@@ -1069,7 +1081,7 @@ async def e2e_test():
         acc = conn.execute("SELECT base_url, api_key, models FROM accounts LIMIT 1").fetchone()
         conn.close()
         if acc and acc["base_url"] and acc["api_key"]:
-            models = json.loads(acc.get("models", "[]"))
+            models = json.loads(acc["models"] or "[]")
             model = models[0] if models else "test"
             async with httpx.AsyncClient(timeout=15) as client:
                 async with client.stream("POST", f'{acc["base_url"].rstrip("/")}/chat/completions',

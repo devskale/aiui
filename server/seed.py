@@ -1,7 +1,8 @@
 import sqlite3, time, json
+from pathlib import Path
 
-DB = 'data/aiui.db'
-conn = sqlite3.connect(DB)
+DB = Path(__file__).resolve().parent.parent / "data" / "aiui.db"
+conn = sqlite3.connect(str(DB))
 now = time.time()
 yesterday = now - 86400
 weekago = now - 86400 * 5
