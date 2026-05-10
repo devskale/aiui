@@ -969,12 +969,13 @@ async def proxy_completions(request: Request):
     is_stream = body.get("stream", False)
 
     # ── Tool-calling loop ──
-    max_tool_rounds = 10
-    max_tools_per_round = 2
+    max_tool_rounds = 12
+    max_total_tools = 20  # total tool calls allowed across all rounds
 
     async def run_with_tools():
         """Run LLM with tools, looping until final text response."""
         msgs = list(messages)
+        total_tools_used = 0
         log.info("tool_loop: START web_search=%s msgs=%d", web_search_requested, len(msgs))
         for round_num in range(max_tool_rounds):
             req_body = {
@@ -988,7 +989,8 @@ async def proxy_completions(request: Request):
                 req_body["tools"] = TOOLS
                 req_body["tool_choice"] = "auto"
 
-            log.info("tool_loop: round %d → LLM (%d msgs)", round_num, len(msgs))
+            log.info("tool_loop: round %d → LLM (%d msgs, %d/%d tools used)",
+                     round_num, len(msgs), total_tools_used, max_total_tools)
             try:
                 async with httpx.AsyncClient(timeout=120) as client:
                     resp = await client.post(url, json=req_body,
@@ -1010,8 +1012,10 @@ async def proxy_completions(request: Request):
             msg_resp = choice.get("message", {})
             finish_reason = choice.get("finish_reason", "") or ""
 
-            raw_tool_calls = msg_resp.get("tool_calls")
-            tool_calls = raw_tool_calls[:max_tools_per_round] if raw_tool_calls else []
+            raw_tool_calls = msg_resp.get("tool_calls") or []
+            # Allow all tool calls this round, but cap at remaining budget
+            remaining = max_total_tools - total_tools_used
+            tool_calls = raw_tool_calls[:remaining] if remaining > 0 else []
             content = ""
             if msg_resp.get("content") is not None:
                 content = str(msg_resp["content"])
@@ -1065,7 +1069,8 @@ async def proxy_completions(request: Request):
                     "tool_call_id": tc["id"],
                     "content": json.dumps(result, ensure_ascii=False),
                 })
-                log.info("tool_loop: executed %s (total msgs: %d)", fn_name, len(msgs))
+                total_tools_used += 1
+                log.info("tool_loop: executed %s (%d/%d total)", fn_name, total_tools_used, max_total_tools)
 
         # Max rounds exceeded
         log.warning("tool_loop: EXCEEDED max rounds (%d)", max_tool_rounds)

@@ -422,7 +422,14 @@ pre code { background: none; padding: 0; font-size: 13px; }
   transition: background .15s;
 }
 .tool-pill:hover { background: rgba(255,255,255,.08); }
-.tool-pill.running { color: #7c5dfa; background: rgba(124,93,250,.08); }
+.tool-pill.running { color: #7c5dfa; background: rgba(124,93,250,.1); }
+.tool-pill.running .tool-pill-icon {
+  animation: toolPulse 1.2s ease-in-out infinite;
+}
+@keyframes toolPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .4; transform: scale(.85); }
+}
 .tool-pill.done { color: #888; }
 .tool-pill.error { color: #f44; background: rgba(244,68,68,.06); }
 .tool-pill-icon { font-size: 12px; flex-shrink: 0; line-height: 1; }
@@ -437,7 +444,7 @@ pre code { background: none; padding: 0; font-size: 13px; }
 }
 .tool-pill-spin {
   width: 12px; height: 12px;
-  border: 1.5px solid currentColor; border-top-color: transparent;
+  border: 1.5px solid #7c5dfa; border-top-color: transparent;
   border-radius: 50%;
   animation: spin .7s linear infinite; flex-shrink: 0;
 }
