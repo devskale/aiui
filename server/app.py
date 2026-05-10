@@ -1,6 +1,6 @@
 """
 AIUI — Ultra-minimal backend
-SQLite + file storage + folders. Single file. Run with: uv run server.py
+SQLite + file storage + folders. Run with: uv run uvicorn server.app:app
 """
 
 import json
@@ -17,7 +17,8 @@ from fastapi.middleware.cors import CORSMiddleware
 import httpx
 
 # ─── Config ──────────────────────────────────────────────
-DATA_DIR = Path(__file__).parent / "data"
+PROJECT_DIR = Path(__file__).resolve().parent.parent  # aiui/
+DATA_DIR = PROJECT_DIR / "data"
 FILES_DIR = DATA_DIR / "files"
 DB_PATH = DATA_DIR / "aiui.db"
 PORT = 8099

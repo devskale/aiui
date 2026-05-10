@@ -34,5 +34,4 @@ uv.lock
 # Junk
 __pycache__/
 test-results/
-src/App.jsx.bak
 package-lock.json

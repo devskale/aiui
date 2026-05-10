@@ -21,7 +21,7 @@
 | Layer | Tool | Notes |
 |---|---|---|
 | Frontend | Vite + React 19 | SPA, port 8082, proxies `/api` → backend |
-| Backend | Python 3.11+ / uv / FastAPI | Single `server.py`, port 8099 |
+| Backend | Python 3.11+ / uv / FastAPI | `server/app.py`, port 8099 |
 | Database | SQLite (`aiui.db`) | WAL mode, foreign keys, in `data/` |
 | File Storage | Flat files (`data/files/`) | UUID filenames, subdirs per folder |
 | Package Mgr | pnpm (frontend) + uv (backend) | No venv, no global installs |
@@ -394,7 +394,10 @@ aiui/
 ├── vite.config.js            # frontend dev server, proxies /api → :8099
 ├── index.html
 ├── package.json
-├── server.py                 # ⭐ backend: FastAPI, SQLite, file mgmt, LLM proxy
+├── server/                # ⭐ backend package
+│   ├── __init__.py
+│   ├── app.py             # FastAPI app, SQLite, file mgmt, LLM proxy
+│   └── seed.py            # DB seed script
 ├── src/
 │   ├── main.jsx              # React entry
 │   ├── App.jsx               # Root layout, context providers
@@ -605,7 +608,7 @@ User clicks Send
 cd aiui
 
 # Backend (port 8099)
-uv run server.py
+uv run uvicorn server.app:app
 
 # Frontend (port 8082) — in another terminal
 pnpm dev
