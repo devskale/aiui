@@ -21,19 +21,20 @@ Slim Open WebUI clone. **FastAPI + SQLite backend**, **Vite + React SPA frontend
 
 ## Architecture
 
-### File Layout (actual)
+### File Layout
 ```
 aiui.sh                  # Dev control: start|stop|restart|dev|clean|status|logs
 server/
-  app.py                 # FastAPI: chat proxy, tool loop, accounts, chats (SQLite)
+  app.py                 # FastAPI: all routes, tool loop, file library
   seed.py                # DB seed + migration
 src/
-  App.jsx                # Root layout, context providers
+  App.jsx                # Root layout, state management, data loading
   components/
-    Sidebar.jsx          # Chat list, new chat, account switcher
+    Sidebar.jsx          # Chat list, folders, file library, account switcher
+    FolderExpansion.jsx  # File list inside expanded folder
     MainArea.jsx         # Chat window, message list, input orchestration
     Message.jsx          # Single message (user/assistant/tool pills)
-    ChatInput.jsx        # Pill-shaped input: textarea + toolbar (attach, web toggle, send)
+    ChatInput.jsx        # Pill-shaped input + autocomplete dropdown
     ModelPicker.jsx      # Model dropdown
     SettingsModal.jsx    # Account CRUD, base URL, model config
   hooks/
@@ -45,21 +46,25 @@ src/
   index.css              # All styles, dark theme
 tests/
   conftest.py            # pytest fixtures (httpx AsyncClient)
-  test_tools.py          # Tool loop + endpoint tests (30 tests)
+  test_tools.py          # Tool loop + endpoint tests
 ```
 
-### Backend (server/app.py)
+### Backend (server/app.py, ~1200 lines)
 - **Port 8099**, proxies LLM calls, handles tool execution server-side
-- **Tool loop:** `run_with_tools()` async generator — global budget 20 tools / 12 rounds
-- **Tools:** `web_search` (SearXNG), `fetch_url` (httpx)
+- **Accounts/Chats:** CRUD via `/api/accounts`, `/api/chats`
+- **File Library:** upload, folders, search, PDF extraction (`/api/upload`, `/api/library`, `/api/extract-pdf`)
+- **#file references:** `/api/resolve-references` expands `#filename` into image blocks
+- **Tool loop:** `run_with_tools()` async generator — budget 20 tools / 12 rounds
+- **Tools:** `web_search` (SearXNG), `fetch_url` (httpx), `read_file`
 - **SSE events:** `tool_status` with `tool_start`/`tool_result` payloads
-- **DB:** SQLite at `data/aiui.db` (accounts, chats, messages)
+- **DB:** SQLite at `data/aiui.db` — accounts, chats, messages, files, folders
 
 ### Frontend
 - Vite dev on `:8082`, proxies `/api` → `:8099`
 - Streaming via SSE parser in `useStreamChat.js`
 - Web search: **persistent toggle** (globe icon stays on until clicked off)
 - Tool pills: per-tool call, stacked with overlap, status indicators
+- `#file` autocomplete in input (triggers on `#`, queries `/api/library/search`)
 
 ---
 
@@ -97,6 +102,12 @@ tests/
 - Tools live on message object as `msg.tools` array
 - Not stored in DB — preserved in React state
 - `useEffect([chat?.id])` skips reset if current messages have tools
+
+### File Library
+- Files stored as SHA256-hashed blobs in `data/files/`
+- Folders with color coding, file counts, CRUD
+- PDF text extraction server-side (`pdfplumber` or fallback)
+- `#filename` references resolve to inline image blocks
 
 ### Common Pitfalls
 - `msg.get("tool_calls")` and `msg.get("content")` can return `None`, not `[]`/`""`
