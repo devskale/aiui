@@ -72,6 +72,7 @@ export default function App() {
         open={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)}
         chats={chats} activeChatId={activeChatId}
         onSelectChat={setActiveChatId} onNewChat={createChat} onDeleteChat={deleteChat}
+        onRenameChat={(id, title) => updateChat(id, { title })}
         account={account} onOpenSettings={() => setShowSettings(true)}
         folders={folders} onFoldersChange={setFolders}
         onInsertFile={inputInsertRef}

@@ -26,6 +26,16 @@ export function fileToDataUrl(file) {
 }
 
 // ─── Markdown rendering ──────────────────────────────────
+function CopyButton({ text }) {
+  const [copied, setCopied] = React.useState(false)
+  const copy = () => {
+    navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+  return <button className="md-copy-btn" onClick={copy} title="Copy">{copied ? '✓' : '⧉'}</button>
+}
+
 const mdComponents = {
   pre({ children }) {
     return <React.Fragment>{children}</React.Fragment>
@@ -35,9 +45,15 @@ const mdComponents = {
     const code = String(children).replace(/\n$/, '')
     if (lang || code.includes('\n')) {
       return (
-        <SyntaxHighlighter style={atomDark} language={lang || 'text'} PreTag="div">
-          {code}
-        </SyntaxHighlighter>
+        <div className="md-code-block">
+          <div className="md-code-header">
+            <span className="md-code-lang">{lang || ''}</span>
+            <CopyButton text={code} />
+          </div>
+          <SyntaxHighlighter style={atomDark} language={lang || 'text'} PreTag="div">
+            {code}
+          </SyntaxHighlighter>
+        </div>
       )
     }
     return <code className="md-inline-code">{children}</code>

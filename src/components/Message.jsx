@@ -5,11 +5,12 @@ import { renderMd } from '../lib/utils'
 // ════════════════════════════════════════════════════════════════════
 // MESSAGE
 // ════════════════════════════════════════════════════════════════════
-export function Message({ msg }) {
+export function Message({ msg, isLast, onRegenerate, onEdit, streaming }) {
   if (msg.role === 'error') {
     return <div className="msg-row error"><div className="msg-bubble error-bubble">{msg.content}</div></div>
   }
   const isUser = msg.role === 'user'
+  const [hovered, setHovered] = React.useState(false)
 
   let text = ''
   let images = []
@@ -37,8 +38,13 @@ export function Message({ msg }) {
     return ''
   }
 
+  const showActions = hovered && !streaming && (
+    (isUser && onEdit) || (!isUser && isLast && onRegenerate)
+  )
+
   return (
-    <div className={`msg-row ${isUser ? 'user' : 'assistant'}`}>
+    <div className={`msg-row ${isUser ? 'user' : 'assistant'}`}
+      onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
       {!isUser && <div className="msg-avatar"><Icons.logo /></div>}
       <div className={`msg-bubble ${isUser ? 'user-bubble' : ''}`}>
         {tools.length > 0 && (
@@ -61,6 +67,20 @@ export function Message({ msg }) {
           <img key={i} src={src} alt="attachment" className="msg-image" />
         ))}
         {text ? renderMd(text) : null}
+        {showActions && (
+          <div className="msg-actions">
+            {isUser && onEdit && (
+              <button className="msg-action-btn" onClick={() => onEdit(text)} title="Edit & resubmit">
+                <Icons.edit /> <span>Edit</span>
+              </button>
+            )}
+            {!isUser && isLast && onRegenerate && (
+              <button className="msg-action-btn" onClick={onRegenerate} title="Regenerate">
+                <Icons.refresh /> <span>Regenerate</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

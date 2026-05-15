@@ -1,4 +1,5 @@
 import { useEffect, useRef, forwardRef } from 'react'
+import { Globe, X } from 'lucide-react'
 import { Icons } from '../lib/icons'
 
 // ════════════════════════════════════════════════════════════════════
@@ -43,14 +44,8 @@ export function AttachmentBar({ attachments, onRemove }) {
   )
 }
 
-// Globe icon for web search tool
-const GlobeIcon = () => (
-  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10" />
-    <line x1="2" y1="12" x2="22" y2="12" />
-    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-  </svg>
-)
+// Globe icon for web search tool — uses lucide-react
+const GlobeIcon = () => <Globe size={17} />
 
 // ════════════════════════════════════════════════════════════════════
 // WELCOME INPUT (big centered)

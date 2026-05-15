@@ -83,6 +83,11 @@ pre code { background: none; padding: 0; font-size: 13px; }
 }
 .sb-chat-item:hover .sb-chat-del { color: #666; }
 .sb-chat-del:hover { color: #f44 !important; background: rgba(255,68,68,.1); }
+.sb-chat-rename {
+  background: #0b0b0c; border: 1px solid #7c5dfa; color: #ddd;
+  padding: 6px 10px; border-radius: 6px; font-size: 13px; width: 100%;
+  outline: none; font-family: inherit;
+}
 
 /* ── Folders ── */
 .sb-folder-item {
@@ -328,6 +333,21 @@ pre code { background: none; padding: 0; font-size: 13px; }
 .msg-bubble p:first-child { margin-top: 0; }
 .msg-bubble p:last-child { margin-bottom: 0; }
 
+/* ─ Code block copy button ─ */
+.md-code-block { position: relative; }
+.md-code-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 4px 12px; background: #1a1a1e; border: 1px solid #222; border-bottom: none;
+  border-radius: 10px 10px 0 0; font-size: 11px;
+}
+.md-code-lang { color: #666; text-transform: uppercase; letter-spacing: .5px; }
+.md-copy-btn {
+  background: none; border: 1px solid #333; color: #888; cursor: pointer;
+  font-size: 13px; padding: 2px 8px; border-radius: 4px; transition: all .15s;
+}
+.md-copy-btn:hover { color: #ccc; border-color: #555; }
+.md-code-block .md-code-header + div { border-top-left-radius: 0; border-top-right-radius: 0; margin-top: 0; }
+
 .user-bubble { background: #1e2028; padding: 10px 16px; border-radius: 16px; border-bottom-right-radius: 4px; }
 .error-bubble { background: rgba(255,68,68,.08); border: 1px solid rgba(255,68,68,.15); color: #f88; padding: 10px 16px; border-radius: 12px; }
 
@@ -473,6 +493,18 @@ pre code { background: none; padding: 0; font-size: 13px; }
   font-size: 9px; color: #f44; flex-shrink: 0;
 }
 
+/* ─ Message actions (regenerate, edit) ─ */
+.msg-actions {
+  display: flex; gap: 4px; margin-top: 8px;
+}
+.msg-action-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: none; border: 1px solid #2a2a2e; color: #888;
+  padding: 4px 10px; border-radius: 6px; font-size: 12px;
+  cursor: pointer; transition: all .15s; font-family: inherit;
+}
+.msg-action-btn:hover { color: #ccc; border-color: #444; background: rgba(255,255,255,.03); }
+
 /* ─ Sources section (appended after summary) ─ */
 .msg-bubble hr {
   border: none;
@@ -565,6 +597,14 @@ pre code { background: none; padding: 0; font-size: 13px; }
 }
 .mp-option:hover { background: #252530; color: #fff; }
 .mp-option.active { color: #7c5dfa; background: rgba(124,93,250,.1); }
+.mp-fetch {
+  display: flex; align-items: center; gap: 6px; width: 100%; padding: 8px 14px;
+  background: none; border: none; border-top: 1px solid #222;
+  color: #666; cursor: pointer; font-size: 12px; font-family: inherit;
+}
+.mp-fetch:hover { color: #aaa; background: #1a1a1e; }
+.mp-fetch:disabled { opacity: .5; cursor: wait; }
+.spinning { animation: spin .7s linear infinite; }
 
 /* ═══ RESPONSIVE ═══ */
 @media (max-width: 768px) {

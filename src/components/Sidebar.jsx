@@ -10,7 +10,7 @@ const stripEmoji = (s) => s.replace(/^[\p{Emoji_Presentation}\p{Extended_Pictogr
 // SIDEBAR
 // ════════════════════════════════════════════════════════════════════
 export function Sidebar({ open, onToggle, chats, activeChatId, onSelectChat,
-  onNewChat, onDeleteChat, account, onOpenSettings, folders, onFoldersChange, onInsertFile }) {
+  onNewChat, onDeleteChat, onRenameChat, account, onOpenSettings, folders, onFoldersChange, onInsertFile }) {
   const [showFolders, setShowFolders] = useState(false)
   const [expandedFolderId, setExpandedFolderId] = useState(null)
   const [folderFiles, setFolderFiles] = useState([])
@@ -99,7 +99,8 @@ export function Sidebar({ open, onToggle, chats, activeChatId, onSelectChat,
       <span className="sb-date-label">{label}</span>
       {items.map(c => (
         <ChatItem key={c.id} chat={c} active={c.id === activeChatId}
-          onSelect={() => onSelectChat(c.id)} onDelete={() => onDeleteChat(c.id)} />
+          onSelect={() => onSelectChat(c.id)} onDelete={() => onDeleteChat(c.id)}
+          onRename={onRenameChat} />
       ))}
     </>
   )
@@ -200,9 +201,20 @@ export function Sidebar({ open, onToggle, chats, activeChatId, onSelectChat,
 }
 
 // ─── Sub-components ──────────────────────────────────────
-function ChatItem({ chat, active, onSelect, onDelete }) {
+function ChatItem({ chat, active, onSelect, onDelete, onRename }) {
+  const [editing, setEditing] = React.useState(false)
+  const [title, setTitle] = React.useState(chat.title)
+  if (editing) return (
+    <input autoFocus className="sb-chat-rename" value={title}
+      onChange={e => setTitle(e.target.value)}
+      onBlur={() => { if (title.trim() && title !== chat.title) onRename(chat.id, title.trim()); setEditing(false) }}
+      onKeyDown={e => {
+        if (e.key === 'Enter') { if (title.trim() && title !== chat.title) onRename(chat.id, title.trim()); setEditing(false) }
+        if (e.key === 'Escape') setEditing(false)
+      }} />
+  )
   return (
-    <button className={`sb-chat-item ${active ? 'active' : ''}`} onClick={onSelect}>
+    <button className={`sb-chat-item ${active ? 'active' : ''}`} onClick={onSelect} onDoubleClick={() => setEditing(true)}>
       <span className="sb-chat-title">{chat.title}</span>
       <span className="sb-chat-del" onClick={e => { e.stopPropagation(); onDelete() }}><Icons.close /></span>
     </button>

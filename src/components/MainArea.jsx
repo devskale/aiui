@@ -175,6 +175,20 @@ export function MainArea({ sidebarOpen, onToggleSidebar, chat, account, activeMo
     await commitAndStream(buildUserContent(finalContent, imgs), finalContent)
   }
 
+  const handleRegenerate = async () => {
+    // Remove last assistant message and re-stream
+    const trimmed = messages.slice(0, -1)
+    setMessages(trimmed)
+    await stream({ messages: trimmed, onUpdateMessages: setMessages, chatId: chat.id, onUpdateChat, llmConfig, webSearch: webOn })
+  }
+
+  const handleEdit = (text) => {
+    // Remove last user + assistant messages, put text back in input
+    const prev = messages.slice(0, -2)
+    setMessages(prev)
+    setInput(text)
+  }
+
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input) }
   }
@@ -207,7 +221,7 @@ export function MainArea({ sidebarOpen, onToggleSidebar, chat, account, activeMo
 
       <header className="topbar">
         {!sidebarOpen && <button className="tb-btn" onClick={onToggleSidebar}><Icons.panelLeft /></button>}
-        <ModelPicker models={account?.models || []} activeModel={activeModel} onSelect={onSetActiveModel} />
+        <ModelPicker models={account?.models || []} activeModel={activeModel} onSelect={onSetActiveModel} account={account} />
         <div style={{ flex: 1 }} />
         <button className="tb-btn" onClick={onOpenSettings}><Icons.settings /></button>
       </header>
@@ -240,7 +254,12 @@ export function MainArea({ sidebarOpen, onToggleSidebar, chat, account, activeMo
         ) : (
           <>
             <div className="messages">
-              {messages.map((msg, i) => <Message key={i} msg={msg} />)}
+              {messages.map((msg, i) => <Message key={i} msg={msg}
+                isLast={i === messages.length - 1}
+                streaming={streaming}
+                onRegenerate={handleRegenerate}
+                onEdit={handleEdit}
+              />)}
               <div ref={endRef} />
             </div>
             <div className="chat-input-area">
