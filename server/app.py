@@ -37,7 +37,14 @@ PORT = 8099
 DATA_DIR.mkdir(exist_ok=True)
 FILES_DIR.mkdir(exist_ok=True)
 
-DEFAULT_ACCOUNTS = [
+def _load_config():
+    cfg_path = PROJECT_DIR / "config.json"
+    if cfg_path.exists():
+        return json.loads(cfg_path.read_text())
+    return {"accounts": []}
+
+CONFIG = _load_config()
+DEFAULT_ACCOUNTS = CONFIG.get("accounts", [
     {
         "id": "default",
         "name": "Default",
@@ -45,7 +52,7 @@ DEFAULT_ACCOUNTS = [
         "api_key": "test23@test34",
         "models": ["tu@qwen-3.6-35b", "tu@qwen-3.5-397b"],
     },
-]
+])
 
 ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
 ALLOWED_FILE_TYPES = ALLOWED_IMAGE_TYPES | {"application/pdf", "text/plain", "text/markdown"}
