@@ -5,7 +5,7 @@ HOST="${DEPLOY_HOST:-lubu}"
 REMOTE_DIR="${DEPLOY_DIR:-/home/woodmastr/code/webuis/aiui}"
 
 echo "🔨 Building..."
-pnpm build
+VITE_BASE=/aiui/ pnpm build
 
 echo "📦 Syncing to $HOST:$REMOTE_DIR ..."
 rsync -avz --delete \
