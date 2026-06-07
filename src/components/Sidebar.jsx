@@ -62,6 +62,7 @@ export function Sidebar({ open, onToggle, model, streaming, connected }) {
       <div className="sb-footer">
         <div className="sb-avatar">π</div>
         <span className="sb-model-name">{model || 'loading...'}</span>
+        <span className="sb-version">v{__APP_VERSION__}</span>
       </div>
     </aside>
   )
