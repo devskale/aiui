@@ -86,6 +86,9 @@ function ToolCall({ tc }) {
       {tc.name?.toLowerCase().includes('bash') && args.command && (
         <div className="tc-args">$ {args.command}</div>
       )}
+      {tc.name?.toLowerCase().includes('read') && (args.file_path || args.path) && (
+        <div className="tc-args">{args.file_path || args.path}</div>
+      )}
 
       {/* Output */}
       {output && (
