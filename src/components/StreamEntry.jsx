@@ -75,8 +75,8 @@ function ToolCall({ tc }) {
       style={{ borderLeftColor: isError ? '#ef4444' : isRunning ? '#eab308' : meta.color }}
     >
       <div className="tc-header">
-        <span className="tc-icon" style={{ color: meta.color }}>{meta.icon}</span>
-        <span className="tc-name" style={{ fontFamily: 'monospace', fontSize: '12.5px', color: '#ccc' }}>{label}</span>
+        <span className="tc-tool-name" style={{ color: meta.color }}>{tc.name}</span>
+        <span className="tc-label">{label !== tc.name ? label : ''}</span>
         {isRunning && <span className="tc-status running">⋯</span>}
         {!isRunning && !isError && <span className="tc-status ok">✓</span>}
         {isError && <span className="tc-status err">✗</span>}
