@@ -103,7 +103,7 @@ function reducer(state, action) {
       if (!existing) {
         cur.toolCalls = [...cur.toolCalls, {
           name,
-          args: typeof action.args === 'string' ? action.args : JSON.stringify(action.args || {}),
+          args: typeof action.args === 'object' ? action.args : (action.args || {}),
           status: 'running',
           output: '',
         }]

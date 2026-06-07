@@ -38,7 +38,7 @@ function formatPath(p) {
 function parseArgs(args) {
   if (!args) return {}
   if (typeof args === 'object') return args
-  try { return JSON.parse(args) } catch { return { raw: args } }
+  try { return JSON.parse(args) } catch { return { raw: String(args) } }
 }
 
 function truncateOutput(text, maxLines = 12) {
