@@ -1,44 +1,76 @@
 import { createAgentSession, AuthStorage, ModelRegistry, SessionManager } from '@earendil-works/pi-coding-agent'
 import path from 'node:path'
+import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const sessionDir = path.join(__dirname, '..', 'session')
 
-let session = null
 let authStorage = null
 let modelRegistry = null
+let session = null
+let unsubscribe = null
 let eventBroadcaster = null
 
-export async function getOrCreateSession() {
-  if (!session) {
+// Shared auth + registry (created once)
+async function initShared() {
+  if (!authStorage) {
     authStorage = AuthStorage.create()
     modelRegistry = ModelRegistry.create(authStorage)
+  }
+}
 
-    const { session: s } = await createAgentSession({
-      cwd: path.join(__dirname, '..'),
-      sessionManager: SessionManager.inMemory(sessionDir),
-      authStorage,
-      modelRegistry,
+// Create a fresh session, destroying the old one
+async function resetSession() {
+  if (unsubscribe) { unsubscribe(); unsubscribe = null }
+  if (session) {
+    try { session.dispose?.() } catch {}
+    session = null
+  }
+  // Wipe session files so no bad state persists
+  fs.rmSync(sessionDir, { recursive: true, force: true })
+  fs.mkdirSync(sessionDir, { recursive: true })
+}
+
+export async function getOrCreateSession() {
+  if (session) return session
+  await initShared()
+  await resetSession()
+
+  const { session: s } = await createAgentSession({
+    cwd: path.join(__dirname, '..'),
+    authStorage,
+    modelRegistry,
+  })
+  session = s
+  console.log('π agent session created')
+
+  // Wire broadcaster if already set
+  if (eventBroadcaster && !unsubscribe) {
+    unsubscribe = session.subscribe((event) => {
+      eventBroadcaster(event.type, event)
     })
-    session = s
-    console.log('π agent session created (cwd:', sessionDir, ')')
   }
   return session
 }
 
 export function setEventBroadcaster(fn) {
   eventBroadcaster = fn
-  // Wire up subscription lazily when both session + broadcaster are ready
-  if (session && eventBroadcaster && !session._broadcastWired) {
-    session.subscribe((event) => {
+  // Wire if session already exists
+  if (session && !unsubscribe) {
+    unsubscribe = session.subscribe((event) => {
       eventBroadcaster(event.type, event)
     })
-    session._broadcastWired = true
   }
 }
 
 export async function prompt(text, attachments = []) {
+  // If there are images, create a fresh session to avoid replaying failed image state
+  const hasImages = attachments.some(a => a.isImage && a.dataUrl)
+  if (hasImages && session) {
+    await resetSession()
+    session = null
+  }
   const s = await getOrCreateSession()
   const promptText = text?.trim() || 'Describe this image.'
   const images = attachments
@@ -47,7 +79,8 @@ export async function prompt(text, attachments = []) {
       const match = a.dataUrl.match(/^data:([^;]+);base64,(.+)$/)
       return {
         type: 'image',
-        source: { type: 'base64', mediaType: match?.[1] || 'image/png', data: match?.[2] },
+        mimeType: match?.[1] || 'image/png',
+        data: match?.[2],
       }
     })
   return s.prompt(promptText, { images })
@@ -60,7 +93,6 @@ export async function abort() {
 
 export async function setModel(modelId) {
   const s = await getOrCreateSession()
-  // Find model in registry
   const available = await modelRegistry.getAvailable()
   const model = available.find(m => m.id === modelId || `${m.provider}@${m.id}` === modelId)
   if (model) {
@@ -73,7 +105,6 @@ export async function setModel(modelId) {
 export async function getAvailableModels() {
   await getOrCreateSession()
   const models = await modelRegistry.getAvailable()
-  // Group by provider
   const grouped = {}
   for (const m of models) {
     const provider = m.provider || 'unknown'

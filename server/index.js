@@ -121,7 +121,7 @@ app.post('/api/upload', upload.array('files', 10), (req, res) => {
     const info = {
       id: f.filename,
       name: f.originalname,
-      path: `/uploads/${f.filename}`,
+      path: `${process.env.VITE_BASE || ''}/uploads/${f.filename}`,
       size: f.size,
       mimetype,
       isImage,
@@ -155,13 +155,14 @@ app.get('/api/test-image', async (_req, res) => {
 
   res.json({ ok: true, file, mediaType, size: data.length })
   await session.prompt(`Describe this image: ${file}`, {
-    images: [{ type: 'image', source: { type: 'base64', mediaType, data } }],
+    images: [{ type: 'image', mimeType: mediaType, data }],
   })
 })
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '..', 'dist')))
 }
-app.use('/uploads', express.static(uploadsDir))
+const base = process.env.VITE_BASE || ''
+app.use(`${base}/uploads`, express.static(uploadsDir))
 
 // ── Security headers ──
 app.use((_req, res, next) => {

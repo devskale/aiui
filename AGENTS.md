@@ -106,6 +106,73 @@ Tool calls carry across `message_start` boundaries within a turn (see `prevToolC
 - Component files export named functions, not default exports
 - Hooks return destructured objects for consumers
 
+## SDK Gotchas
+
+These cost significant debugging time. Read before touching the SDK integration.
+
+### 1. Image format is FLAT, not nested
+
+The SDK's `ImageContent` type is **flat**:
+```js
+// ✅ CORRECT
+{ type: 'image', mimeType: 'image/png', data: '<base64>' }
+
+// ❌ WRONG — the docs show this format but it's for a different layer
+{ type: 'image', source: { type: 'base64', mediaType: 'image/png', data: '<base64>' } }
+```
+
+The provider code (`openai-completions.js`) reads `item.mimeType` and `item.data` directly. If you pass the nested format, both will be `undefined` and you'll get `data:undefined;base64,undefined` in the API request — which silently fails with no SDK error.
+
+### 2. `.pi/settings.json` uses camelCase, not snake_case
+
+```json
+// ✅ CORRECT
+{ "defaultProvider": "amd", "defaultModel": "tu@qwen-3.5-397b" }
+
+// ❌ WRONG — silently ignored, falls back to global settings
+{ "default_provider": "amd", "default_model": "tu@qwen-3.5-397b" }
+```
+
+If your project `.pi/settings.json` has snake_case keys, the SDK won't find them. It falls back to the global `~/.pi/agent/settings.json` defaults, which may be a completely different provider/model. This can cause subtle failures like sending images to a text-only model.
+
+### 3. Different Node module resolution on lubu (pnpm vs npm)
+
+The local dev uses npm (`node_modules/@earendil-works/pi-ai/...`), but lubu uses pnpm which hardlinks to a content-addressed store (`node_modules/.pnpm/@earendil-works+pi-ai@0.78.1_.../node_modules/...`). If you need to debug/patch the SDK on lubu, find the actual file with:
+```bash
+find node_modules -name "openai-completions.js" -path '*pi-ai*'
+```
+
+### 4. CLI and SDK may be different versions
+
+The CLI (`pi`) and the SDK (`@earendil-works/pi-coding-agent` in node_modules) can be different versions with different behavior. Check both:
+```bash
+pi --version                                          # CLI version
+cat node_modules/@earendil-works/pi-coding-agent/package.json | jq .version  # SDK version
+```
+
+### 5. The SDK uses `fetch`, not `node:http`
+
+The OpenAI Node SDK (used internally by pi-ai) uses the `fetch` API, not Node's `http`/`https` modules. To intercept HTTP requests for debugging, hook `globalThis.fetch`, not `https.request`. And the hook must be loaded via `--import` **before** the OpenAI SDK captures the reference.
+
+### 6. Upload static path needs VITE_BASE prefix
+
+When deployed behind a reverse proxy at a sub-path (e.g. `/aiui/`), the upload URL must include the base path:
+```js
+path: `${process.env.VITE_BASE || ''}/uploads/${filename}`
+```
+Without this, the frontend requests `/uploads/...` which goes to nginx root, not the node server.
+
+### 7. SSE needs nginx `proxy_buffering off` + `proxy_read_timeout`
+
+Add these to the nginx location block:
+```nginx
+location /aiui/ {
+    proxy_buffering off;
+    proxy_cache off;
+    proxy_read_timeout 86400s;  # SSE can be long-lived
+}
+```
+
 ## Boundaries
 
 - ✅ **Always:** Run `pnpm dev` to verify changes before committing
