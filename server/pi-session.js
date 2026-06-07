@@ -72,12 +72,18 @@ export async function getAvailableModels() {
 
 export async function getCommands() {
   const s = await getOrCreateSession()
-  // Access resource loader from session
-  const loader = s.agent?.state?.resourceLoader
+  const loader = s.resourceLoader
   if (!loader) return { skills: [], prompts: [], extensions: [] }
 
-  const skills = (loader.getSkills?.() || []).map(s => ({ name: s.name, description: s.description }))
-  const prompts = (loader.getPrompts?.() || []).map(p => ({ name: p.name, description: p.description }))
-  const extensions = (loader.getExtensions?.() || []).map(e => ({ name: e.name, description: e.description }))
+  const skillsData = loader.getSkills()
+  const promptsData = loader.getPrompts()
+  const extensionsData = loader.getExtensions()
+
+  const skills = (skillsData?.skills || []).map(s => ({ name: s.name, description: s.description }))
+  const prompts = (promptsData?.prompts || []).map(p => ({ name: p.name, description: p.description }))
+  const extensions = (extensionsData?.extensions || []).map(e => {
+    const name = e.path?.split('/').pop()?.replace(/\.ts$|\.js$/, '') || 'extension'
+    return { name, description: e.sourceInfo?.description || '' }
+  })
   return { skills, prompts, extensions }
 }
