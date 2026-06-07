@@ -178,7 +178,7 @@ function reducer(state, action) {
     }
 
     case 'reset':
-      return { ...initialState }
+      return { ...initialState, connected: state.connected }
 
     default:
       return state
