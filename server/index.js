@@ -41,10 +41,15 @@ app.get('/api/events', (req, res) => {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     Connection: 'keep-alive',
+  'X-Accel-Buffering': 'no',
   })
   res.write('\n')
   clients.add(res)
-  req.on('close', () => clients.delete(res))
+  // Keepalive every 30s to prevent idle proxy/bridge disconnects
+  const keepalive = setInterval(() => {
+    try { res.write(': keepalive\n\n') } catch { clearInterval(keepalive) }
+  }, 30000)
+  req.on('close', () => { clearInterval(keepalive); clients.delete(res) })
 })
 
 // ── Prompt ──
@@ -120,5 +125,16 @@ if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '..', 'dist')))
 }
 
+// ── Security headers ──
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN')
+  next()
+})
+
+// ── Local-network-only binding ──
+// Binds to 0.0.0.0 so it's reachable from LAN, but NOT from the internet.
+// For extra safety, use a firewall rule or reverse proxy to restrict further.
 const PORT = process.env.PORT || 3001
-app.listen(PORT, () => console.log(`πui API server running on http://localhost:${PORT}`))
+const HOST = process.env.HOST || '0.0.0.0'
+app.listen(PORT, HOST, () => console.log(`πui server running on http://${HOST}:${PORT}`))
