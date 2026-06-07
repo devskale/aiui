@@ -48,7 +48,7 @@ export function InputBar({ onSend, onStop, streaming, attachments, onRemoveAttac
         <div className="attachment-bar">
           {attachments.map(a => (
             <div key={a.id} className="attachment-preview">
-              {a.type === 'image' && <img src={a.dataUrl} alt={a.name} />}
+              {a.isImage && a.previewUrl && <img src={a.previewUrl} alt={a.name} />}
               <span>{a.name}</span>
               <button className="att-remove" onClick={() => onRemoveAttachment(a.id)}>×</button>
             </div>

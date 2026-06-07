@@ -4,7 +4,7 @@ import { v4 as uuid } from 'uuid'
 import path from 'node:path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { getOrCreateSession, prompt, abort, setModel, getAvailableModels, getCommands } from './pi-session.js'
+import { getOrCreateSession, prompt, abort, setModel, getAvailableModels, getCommands, setEventBroadcaster } from './pi-session.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const uploadsDir = path.join(__dirname, '..', 'uploads')
@@ -18,7 +18,9 @@ const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadsDir),
   filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname)
-    cb(null, uuid() + ext)
+    const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9._-]/g, '_')
+    const date = new Date().toISOString().slice(0, 10)
+    cb(null, `${date}_${base}${ext}`)
   },
 })
 const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } })
@@ -55,17 +57,15 @@ app.get('/api/events', (req, res) => {
 // ── Prompt ──
 app.post('/api/prompt', async (req, res) => {
   const { text, attachments } = req.body
-  if (!text?.trim()) return res.status(400).json({ error: 'empty prompt' })
+  if (!text?.trim() && (!attachments || attachments.length === 0)) return res.status(400).json({ error: 'empty prompt' })
 
   res.json({ ok: true })
 
   try {
     const session = await getOrCreateSession()
-    const unsubscribe = session.subscribe((event) => {
-      broadcast(event.type, event)
-    })
+    // Wire up broadcaster if not yet done
+    setEventBroadcaster((type, data) => broadcast(type, data))
     await prompt(text, attachments)
-    unsubscribe()
   } catch (err) {
     broadcast('error', { message: err.message })
   }
@@ -110,13 +110,28 @@ app.get('/api/commands', async (_req, res) => {
 })
 
 // ── File upload ──
+const IMG_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
+const EXT_TO_MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' }
+
 app.post('/api/upload', upload.array('files', 10), (req, res) => {
-  const files = (req.files || []).map(f => ({
-    id: f.filename,
-    name: f.originalname,
-    path: f.path,
-    size: f.size,
-  }))
+  const files = (req.files || []).map(f => {
+    const ext = path.extname(f.originalname).toLowerCase().replace('.', '')
+    const mimetype = EXT_TO_MIME[ext] || f.mimetype
+    const isImage = IMG_TYPES.includes(mimetype)
+    const info = {
+      id: f.filename,
+      name: f.originalname,
+      path: `/uploads/${f.filename}`,
+      size: f.size,
+      mimetype,
+      isImage,
+    }
+    if (isImage) {
+      const data = fs.readFileSync(f.path)
+      info.dataUrl = `data:${mimetype};base64,${data.toString('base64')}`
+    }
+    return info
+  })
   res.json({ files })
 })
 
@@ -124,6 +139,7 @@ app.post('/api/upload', upload.array('files', 10), (req, res) => {
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '..', 'dist')))
 }
+app.use('/uploads', express.static(uploadsDir))
 
 // ── Security headers ──
 app.use((_req, res, next) => {

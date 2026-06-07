@@ -1,19 +1,11 @@
 // ════════════════════════════════════════════════════════════════════
 // useAttachments — file upload handling (drag, paste, picker)
+// All files upload to server. Server returns path + dataUrl for images.
 // ════════════════════════════════════════════════════════════════════
 import { useState, useCallback } from 'react'
 import { apiUrl } from '../lib/api'
 
 const IMG_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
-
-function fileToDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result)
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
-}
 
 export function useAttachments() {
   const [attachments, setAttachments] = useState([])
@@ -22,23 +14,24 @@ export function useAttachments() {
     const newAtts = []
     for (const file of fileList) {
       const id = Date.now().toString(36) + Math.random().toString(36).slice(2)
-      if (IMG_TYPES.includes(file.type)) {
-        try {
-          const dataUrl = await fileToDataUrl(file)
-          newAtts.push({ id, file, name: file.name, type: 'image', dataUrl })
-        } catch {}
-      } else {
-        // Upload non-image files to server
-        const fd = new FormData()
-        fd.append('file', file)
-        try {
-          const res = await fetch(apiUrl('/api/upload'), { method: 'POST', body: fd })
-          if (res.ok) {
-            const data = await res.json()
-            newAtts.push({ id, file, name: file.name, type: 'file', serverFile: data.files?.[0] })
+      const fd = new FormData()
+      fd.append('files', file)
+      try {
+        const res = await fetch(apiUrl('/api/upload'), { method: 'POST', body: fd })
+        if (res.ok) {
+          const data = await res.json()
+          const serverFile = data.files?.[0]
+          if (serverFile) {
+            newAtts.push({
+              id,
+              name: file.name,
+              isImage: serverFile.isImage,
+              previewUrl: serverFile.isImage ? serverFile.path : null,
+              serverFile,
+            })
           }
-        } catch {}
-      }
+        }
+      } catch {}
     }
     setAttachments(prev => [...prev, ...newAtts])
   }, [])
@@ -50,10 +43,7 @@ export function useAttachments() {
   const clear = useCallback(() => setAttachments([]), [])
 
   const buildPayload = useCallback(() => {
-    return attachments.map(a => {
-      if (a.type === 'image') return { type: 'image', dataUrl: a.dataUrl, name: a.name }
-      return { type: 'file', name: a.name, ...a.serverFile }
-    })
+    return attachments.map(a => a.serverFile).filter(Boolean)
   }, [attachments])
 
   return { attachments, addFiles, remove, clear, buildPayload }

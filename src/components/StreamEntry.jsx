@@ -41,105 +41,44 @@ function parseArgs(args) {
   try { return JSON.parse(args) } catch { return { raw: String(args) } }
 }
 
-function truncateOutput(text, maxLines = 12) {
-  if (!text) return { preview: '', truncated: 0, total: 0 }
-  const lines = text.split('\n')
-  const total = lines.length
-  if (total <= maxLines) return { preview: text, truncated: 0, total }
-  return {
-    preview: lines.slice(0, maxLines).join('\n'),
-    truncated: total - maxLines,
-    total,
-  }
-}
-
-// ── ToolCall Component ──
+// ── ThinkingBlock — simple muted one-liner, expandable ──
 function ToolCall({ tc }) {
   const [expanded, setExpanded] = useState(false)
   const isError = tc.status === 'error'
   const isRunning = tc.status === 'running'
   const meta = getToolMeta(tc.name)
   const args = parseArgs(tc.args)
-
-  // Build label
   const label = meta.label(args)
-
-  // Format output for display
   const output = tc.output || ''
-  const { preview, truncated, total } = truncateOutput(expanded ? output : output, expanded ? Infinity : 10)
 
   return (
     <div
-      className={`entry-tool-call ${isError ? 'error' : ''}`}
+      className={`tc-line ${isError ? 'error' : ''} ${output ? 'clickable' : ''}`}
       onClick={() => output && setExpanded(!expanded)}
-      style={{ borderLeftColor: isError ? '#ef4444' : isRunning ? '#eab308' : meta.color }}
     >
-      <div className="tc-header">
-        <span className="tc-tool-name" style={{ color: meta.color }}>{tc.name}</span>
-        <span className="tc-label">{label !== tc.name ? label : ''}</span>
-        {isRunning && <span className="tc-status running">⋯</span>}
-        {!isRunning && !isError && <span className="tc-status ok">✓</span>}
-        {isError && <span className="tc-status err">✗</span>}
-      </div>
-
-      {/* Show compact args for some tools */}
-      {tc.name?.toLowerCase().includes('bash') && args.command && (
-        <div className="tc-args">$ {args.command}</div>
-      )}
-      {tc.name?.toLowerCase().includes('read') && (args.file_path || args.path) && (
-        <div className="tc-args">{args.file_path || args.path}</div>
-      )}
-
-      {/* Output */}
-      {output && (
-        <div className="tc-output">
-          <pre style={{ margin: 0, fontSize: '12px', color: '#999', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-            {expanded ? output : preview}
-          </pre>
-          {truncated > 0 && !expanded && (
-            <div style={{ fontSize: '11px', color: '#555', marginTop: 4, cursor: 'pointer' }}>
-              … {truncated} more lines (click to expand)
-            </div>
-          )}
-          {expanded && truncated > 0 && (
-            <div style={{ fontSize: '11px', color: '#555', marginTop: 4, cursor: 'pointer' }}>
-              ↑ click to collapse ({total} lines)
-            </div>
-          )}
-        </div>
+      <span className="tc-dot" style={{ color: isError ? '#ef4444' : isRunning ? '#eab308' : meta.color }}>
+        {isRunning ? '⋯' : isError ? '✗' : '✓'}
+      </span>
+      <span className="tc-name" style={{ color: meta.color }}>{tc.name}</span>
+      {label && label !== tc.name && <span className="tc-detail">{label}</span>}
+      {expanded && output && (
+        <pre className="tc-output-inline">{output}</pre>
       )}
     </div>
   )
 }
 
-// ── ThinkingBlock — pi-TUI style: italic muted text, expandable ──
+// ── ThinkingBlock — simple muted one-liner, expandable ──
 function ThinkingBlock({ thinking, thinkingDone, thinkingText }) {
   const [expanded, setExpanded] = useState(false)
   const text = thinkingText || ''
-  if (!text.trim()) {
-    return (
-      <div className="entry-thinking">
-        <span className={`thinking-dot ${thinkingDone ? 'done' : ''}`} />
-        <span className="thinking-label">{thinkingDone ? 'Thought' : 'Thinking…'}</span>
-      </div>
-    )
-  }
-
-  const lines = text.split('\n')
-  const PREVIEW_LINES = 3
-  const needsCollapse = lines.length > PREVIEW_LINES
+  const hasText = text.trim().length > 0
 
   return (
-    <div className="thinking-block" onClick={() => setExpanded(!expanded)}>
-      <div className="thinking-header">
-        <span className={`thinking-dot ${thinkingDone ? 'done' : ''}`} />
-        <span className="thinking-label">{thinkingDone ? 'Thought' : 'Thinking…'}</span>
-        {needsCollapse && <span className="thinking-toggle">{expanded ? '↑' : `+${lines.length - PREVIEW_LINES} lines`}</span>}
-      </div>
-      <div className="thinking-content">
-        {expanded ? text : lines.slice(0, PREVIEW_LINES).join('\n')}
-        {!expanded && needsCollapse && '…'}
-      </div>
+    <div className={`think-line ${hasText ? 'clickable' : ''}`} onClick={() => hasText && setExpanded(!expanded)}>
+      <span className={`think-dot ${thinkingDone ? 'done' : ''}`} />
+      <span className="think-label">{thinkingDone ? 'Thought' : 'Thinking…'}</span>
+      {expanded && hasText && <span className="think-text">{text}</span>}
     </div>
   )
 }

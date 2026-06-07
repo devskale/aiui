@@ -8,6 +8,7 @@ const sessionDir = path.join(__dirname, '..', 'session')
 let session = null
 let authStorage = null
 let modelRegistry = null
+let eventBroadcaster = null
 
 export async function getOrCreateSession() {
   if (!session) {
@@ -26,10 +27,22 @@ export async function getOrCreateSession() {
   return session
 }
 
+export function setEventBroadcaster(fn) {
+  eventBroadcaster = fn
+  // Wire up subscription lazily when both session + broadcaster are ready
+  if (session && eventBroadcaster && !session._broadcastWired) {
+    session.subscribe((event) => {
+      eventBroadcaster(event.type, event)
+    })
+    session._broadcastWired = true
+  }
+}
+
 export async function prompt(text, attachments = []) {
   const s = await getOrCreateSession()
+  const promptText = text?.trim() || 'Describe this image.'
   const images = attachments
-    .filter(a => a.type === 'image' && a.dataUrl)
+    .filter(a => a.isImage && a.dataUrl)
     .map(a => {
       const match = a.dataUrl.match(/^data:([^;]+);base64,(.+)$/)
       return {
@@ -37,7 +50,7 @@ export async function prompt(text, attachments = []) {
         source: { type: 'base64', mediaType: match?.[1] || 'image/png', data: match?.[2] || a.dataUrl },
       }
     })
-  return s.prompt(text, { images })
+  return s.prompt(promptText, { images })
 }
 
 export async function abort() {
