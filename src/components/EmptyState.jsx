@@ -7,7 +7,7 @@ export function EmptyState() {
       <div className="empty-logo">π</div>
       <div className="empty-title">Welcome to πui</div>
       <div className="empty-sub">
-        A clean interface for the pi coding agent. Upload images and files, ask questions, build things.
+        A clean interface for the pi agent. Upload images and files, ask questions, build things.
       </div>
     </div>
   )
