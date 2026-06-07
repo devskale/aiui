@@ -184,7 +184,7 @@ function reducer(state, action) {
     }
 
     case 'reset':
-      return { ...initialState, connected: state.connected }
+      return { ...initialState, connected: state.connected, sessionAlive: state.sessionAlive, sessionModel: state.sessionModel }
 
     default:
       return state
