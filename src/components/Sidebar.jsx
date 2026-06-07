@@ -3,7 +3,7 @@
 // ════════════════════════════════════════════════════════════════════
 import { useState, useEffect } from 'react'
 
-export function Sidebar({ open, onToggle, model, streaming, connected }) {
+export function Sidebar({ open, onToggle, model, streaming, connected, onNewChat }) {
   const [commands, setCommands] = useState(null)
 
   useEffect(() => {
@@ -30,7 +30,7 @@ export function Sidebar({ open, onToggle, model, streaming, connected }) {
       </div>
 
       <nav className="sb-nav">
-        <button className="sb-nav-item">
+        <button className="sb-nav-item" onClick={onNewChat}>
           <span>＋</span><span>New Chat</span>
         </button>
       </nav>

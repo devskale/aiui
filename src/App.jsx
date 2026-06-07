@@ -9,7 +9,7 @@ import { EmptyState } from './components/EmptyState'
 import { UserEntry, AssistantEntry, ErrorEntry } from './components/StreamEntry'
 
 export default function App() {
-  const { entries, current, streaming, connected, sendPrompt, abortAgent } = useAgentEvents()
+  const { entries, current, streaming, connected, sendPrompt, abortAgent, dispatch } = useAgentEvents()
   const { attachments, addFiles, remove: removeAttachment, clear: clearAttachments, buildPayload } = useAttachments()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [showModelPicker, setShowModelPicker] = useState(false)
@@ -65,6 +65,7 @@ export default function App() {
         model={model}
         streaming={streaming}
         connected={connected}
+        onNewChat={() => dispatch({ type: 'reset' })}
       />
 
       <main className={`main ${!sidebarOpen ? 'full' : ''}`}>
