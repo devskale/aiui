@@ -1,99 +1,114 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
-
-import { DEFAULT_ACCOUNTS, apiGet, apiPost, apiPut, apiDel, lsGet, lsSet } from './lib/api'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { useAgentEvents } from './hooks/useAgentEvents'
+import { useAttachments } from './hooks/useAttachments'
 import { Sidebar } from './components/Sidebar'
-import { MainArea } from './components/MainArea'
-import { SettingsModal } from './components/SettingsModal'
+import { ModelPicker } from './components/ModelPicker'
+import { CommandPanel } from './components/CommandPanel'
+import { InputBar } from './components/InputBar'
+import { EmptyState } from './components/EmptyState'
+import { UserEntry, AssistantEntry, ErrorEntry } from './components/StreamEntry'
 
-// ════════════════════════════════════════════════════════════════════
-// APP — root component, state management, data loading
-// ════════════════════════════════════════════════════════════════════
 export default function App() {
-  const [accounts, setAccounts] = useState([])
-  const [activeModel, setActiveModel] = useState(() => lsGet('aiui_active_model') || 'tu@qwen-3.6-35b')
-  const [chats, setChats] = useState([])
-  const [activeChatId, setActiveChatId] = useState(null)
-  const [folders, setFolders] = useState([])
+  const { entries, current, streaming, connected, sendPrompt, abortAgent } = useAgentEvents()
+  const { attachments, addFiles, remove: removeAttachment, clear: clearAttachments, buildPayload } = useAttachments()
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [showSettings, setShowSettings] = useState(false)
-  const [ready, setReady] = useState(false)
-  const inputInsertRef = useRef(null) // { current: (text) => void }
+  const [showModelPicker, setShowModelPicker] = useState(false)
+  const [model, setModel] = useState('')
+  const endRef = useRef(null)
+  const [dragOver, setDragOver] = useState(false)
 
-  const account = accounts[0]
-
-  // ─── Load from backend on mount ───
+  // Fetch current model on mount
   useEffect(() => {
-    (async () => {
-      try {
-        const accts = await apiGet('/accounts')
-        setAccounts(accts.length ? accts : [DEFAULT_ACCOUNTS])
-        const chatList = await apiGet('/chats')
-        setChats(chatList)
-        if (chatList.length) setActiveChatId(chatList[0].id)
-        const fldrs = await apiGet('/folders')
-        setFolders(fldrs)
-      } catch (e) { console.error('Failed to load:', e) }
-      setReady(true)
-    })()
+    fetch('/api/models')
+      .then(r => r.json())
+      .then(data => {
+        // Try to find the active model from settings
+        if (typeof data === 'object' && !Array.isArray(data)) {
+          const all = Object.values(data).flat()
+          const first = all[0]
+          setModel(typeof first === 'string' ? first : first?.id || first?.name || '')
+        }
+      })
+      .catch(() => {})
   }, [])
 
-  // ─── Persist active model, validate ───
+  // Auto-scroll
   useEffect(() => {
-    if (!ready || !account) return
-    lsSet('aiui_active_model', activeModel)
-    const models = account.models || []
-    if (models.length && !models.includes(activeModel)) setActiveModel(models[0])
-  }, [activeModel, ready, account])
+    endRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [entries, current])
 
-  const createChat = useCallback(async () => {
-    const c = await apiPost('/chats', { account_id: account?.id || 'default', model: activeModel })
-    setChats(prev => [
-      { id: c.id, title: c.title, messages: [], created_at: Date.now() / 1000, updated_at: Date.now() / 1000 },
-      ...prev,
-    ])
-    setActiveChatId(c.id)
-  }, [account, activeModel])
+  // Global drag/drop
+  const handleDragOver = useCallback((e) => { e.preventDefault(); setDragOver(true) }, [])
+  const handleDragLeave = useCallback(() => setDragOver(false), [])
+  const handleDrop = useCallback((e) => {
+    e.preventDefault()
+    setDragOver(false)
+    const files = Array.from(e.dataTransfer?.files || [])
+    if (files.length) addFiles(files)
+  }, [addFiles])
 
-  const deleteChat = useCallback(async (id) => {
-    await apiDel(`/chats/${id}`)
-    setChats(prev => prev.filter(c => c.id !== id))
-    if (activeChatId === id) setActiveChatId(null)
-  }, [activeChatId])
+  const handleSend = async (text) => {
+    const payload = buildPayload()
+    await sendPrompt(text, payload)
+    clearAttachments()
+  }
 
-  const updateChat = useCallback(async (id, updates) => {
-    setChats(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c))
-    try { await apiPut(`/chats/${id}`, updates) }
-    catch (e) { console.error('Save chat failed:', e) }
-  }, [])
+  const hasContent = entries.length > 0 || current
 
   return (
-    <div className="app">
+    <div className="app" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
+      {dragOver && <div className="drop-zone"><span>Drop files here</span></div>}
+
       <Sidebar
-        open={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)}
-        chats={chats} activeChatId={activeChatId}
-        onSelectChat={setActiveChatId} onNewChat={createChat} onDeleteChat={deleteChat}
-        onRenameChat={(id, title) => updateChat(id, { title })}
-        account={account} onOpenSettings={() => setShowSettings(true)}
-        folders={folders} onFoldersChange={setFolders}
-        onInsertFile={inputInsertRef}
+        open={sidebarOpen}
+        onToggle={() => setSidebarOpen(!sidebarOpen)}
+        model={model}
+        streaming={streaming}
+        connected={connected}
       />
-      <MainArea
-        sidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-        chat={chats.find(c => c.id === activeChatId)}
-        account={account} activeModel={activeModel} onSetActiveModel={setActiveModel}
-        onUpdateChat={updateChat} onNewChat={createChat}
-        onOpenSettings={() => setShowSettings(true)}
-        ready={ready} inputInsertRef={inputInsertRef}
-      />
-      {showSettings && (
-        <SettingsModal
-          accounts={accounts} account={account} activeModel={activeModel}
-          onSetActiveModel={setActiveModel}
-          onClose={() => setShowSettings(false)}
-          onSave={async (acs) => {
-            setAccounts(acs)
-            try { await apiPut('/accounts', acs) } catch (e) { console.error('Save accounts failed:', e) }
-          }}
+
+      <main className={`main ${!sidebarOpen ? 'full' : ''}`}>
+        <header className="topbar">
+          {!sidebarOpen && (
+            <button className="tb-btn" onClick={() => setSidebarOpen(true)}>☰</button>
+          )}
+          <button className="tb-model" onClick={() => setShowModelPicker(true)}>
+            {model || 'select model'}
+          </button>
+          <div style={{ flex: 1 }} />
+        </header>
+
+        <div className="content">
+          {hasContent ? (
+            <div className="entries">
+              {entries.map((entry, i) => {
+                if (entry.role === 'user') return <UserEntry key={i} text={entry.text} />
+                if (entry.role === 'error') return <ErrorEntry key={i} text={entry.text} />
+                return <AssistantEntry key={i} entry={entry} isStreaming={false} />
+              })}
+              {current && <AssistantEntry entry={current} isStreaming={true} />}
+              <div ref={endRef} />
+            </div>
+          ) : (
+            <EmptyState />
+          )}
+        </div>
+
+        <InputBar
+          onSend={handleSend}
+          onStop={abortAgent}
+          streaming={streaming}
+          attachments={attachments}
+          onRemoveAttachment={removeAttachment}
+          onAddFiles={addFiles}
+        />
+      </main>
+
+      {showModelPicker && (
+        <ModelPicker
+          activeModel={model}
+          onSelect={setModel}
+          onClose={() => setShowModelPicker(false)}
         />
       )}
     </div>

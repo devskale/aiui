@@ -1,37 +1,9 @@
-# Logs
-logs
+node_modules/
+dist/
+uploads/
+session/
+.pi/
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# AIUI runtime
-data/
-.venv/
-*.pid
-.backend.log
-.frontend.log
-uv.lock
-
-# Junk
-__pycache__/
-test-results/
-package-lock.json
+pi/
+pi

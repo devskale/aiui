@@ -1,55 +1,73 @@
+// ════════════════════════════════════════════════════════════════════
+// ModelPicker — full-screen model selection overlay
+// ════════════════════════════════════════════════════════════════════
 import { useState, useEffect, useRef } from 'react'
-import { RefreshCw } from 'lucide-react'
-import { Icons } from '../lib/icons'
 
-export function ModelPicker({ models, activeModel, onSelect, account }) {
-  const [open, setOpen] = useState(false)
-  const [fetched, setFetched] = useState([])
-  const [loading, setLoading] = useState(false)
-  const ref = useRef(null)
+export function ModelPicker({ activeModel, onSelect, onClose }) {
+  const [models, setModels] = useState([])
+  const [search, setSearch] = useState('')
+  const [loading, setLoading] = useState(true)
+  const inputRef = useRef(null)
 
   useEffect(() => {
-    if (!open) return
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [open])
+    inputRef.current?.focus()
+    fetch('/api/models')
+      .then(r => r.json())
+      .then(data => {
+        // data is an object: { provider: [{ id, name }] }
+        const flat = []
+        if (Array.isArray(data)) {
+          data.forEach(m => flat.push(typeof m === 'string' ? m : m.id || m.name))
+        } else if (typeof data === 'object') {
+          for (const [provider, list] of Object.entries(data)) {
+            if (Array.isArray(list)) {
+              list.forEach(m => flat.push(typeof m === 'string' ? m : m.id || m.name))
+            }
+          }
+        }
+        setModels(flat)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [])
 
-  const fetchModels = async () => {
-    if (!account?.baseUrl) return
-    setLoading(true)
-    try {
-      const params = new URLSearchParams({ base_url: account.baseUrl, api_key: account.apiKey || '' })
-      const res = await fetch(`/api/models?${params}`)
-      if (res.ok) {
-        const data = await res.json()
-        if (data.models?.length) setFetched(data.models)
-      }
-    } catch { /* ignore */ }
-    setLoading(false)
+  const filtered = search
+    ? models.filter(m => m.toLowerCase().includes(search.toLowerCase()))
+    : models
+
+  const handleSelect = (model) => {
+    fetch('/api/model', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model }),
+    }).then(() => {
+      onSelect(model)
+      onClose()
+    })
   }
 
-  // Use fetched models if available, else configured models
-  const allModels = fetched.length ? fetched : models
-  if (!allModels.length) return null
-
   return (
-    <div className="model-picker" ref={ref}>
-      <button className="mp-trigger" onClick={() => setOpen(!open)}>
-        <span className="mp-name">{activeModel}</span><Icons.chevronDown />
-      </button>
-      {open && (
-        <div className="mp-dropdown">
-          {allModels.map(m => (
-            <button key={m} className={`mp-option ${m === activeModel ? 'active' : ''}`}
-              onClick={() => { onSelect(m); setOpen(false) }}>{m}</button>
-          ))}
-          <button className="mp-fetch" onClick={fetchModels} disabled={loading}>
-            <RefreshCw size={12} className={loading ? 'spinning' : ''} />
-            {loading ? 'Fetching...' : 'Fetch from API'}
-          </button>
+    <div className="model-picker-overlay" onClick={onClose}>
+      <div className="model-picker" onClick={e => e.stopPropagation()}>
+        <div className="mp-search">
+          <input
+            ref={inputRef}
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search models…"
+          />
         </div>
-      )}
+        <div className="mp-list">
+          {loading && <div style={{ padding: 16, color: '#666', textAlign: 'center' }}>Loading models…</div>}
+          {!loading && filtered.length === 0 && <div style={{ padding: 16, color: '#555', textAlign: 'center' }}>No models found</div>}
+          {filtered.map(m => (
+            <button key={m} className={`mp-model ${m === activeModel ? 'active' : ''}`}
+              onClick={() => handleSelect(m)}>
+              {m}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
