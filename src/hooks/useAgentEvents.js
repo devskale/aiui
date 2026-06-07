@@ -37,9 +37,18 @@ function reducer(state, action) {
 
     case 'message_start': {
       // New assistant message starting
+      // Preserve tool calls from previous message in this turn
+      const prevToolCalls = state.current?.toolCalls || []
       return {
         ...state,
-        current: { role: 'assistant', thinking: false, thinkingDone: false, text: '', toolCalls: [] },
+        current: {
+          role: 'assistant',
+          thinking: false,
+          thinkingDone: false,
+          text: '',
+          toolCalls: prevToolCalls, // carry over tool calls within the same turn
+          thinkingText: '',
+        },
       }
     }
 
