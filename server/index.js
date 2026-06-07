@@ -135,7 +135,29 @@ app.post('/api/upload', upload.array('files', 10), (req, res) => {
   res.json({ files })
 })
 
-// ═══ STATIC FILES (production only) ═══
+app.get('/api/test-image', async (_req, res) => {
+  const { getOrCreateSession, setEventBroadcaster } = await import('./pi-session.js')
+  const session = await getOrCreateSession()
+  setEventBroadcaster((type, data) => broadcast(type, data))
+
+  const fs = await import('node:fs')
+  const path = await import('node:path')
+  const uploadsDir = path.join(__dirname, '..', 'uploads')
+  const files = fs.readdirSync(uploadsDir).filter(f => /\.(png|jpg|jpeg|gif|webp)$/i.test(f))
+  if (!files.length) return res.status(404).json({ error: 'no images in uploads/' })
+
+  const file = files[files.length - 1] // latest image
+  const imgPath = path.join(uploadsDir, file)
+  const ext = path.extname(file).toLowerCase().replace('.', '')
+  const mimeMap = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' }
+  const mediaType = mimeMap[ext] || 'image/png'
+  const data = fs.readFileSync(imgPath).toString('base64')
+
+  res.json({ ok: true, file, mediaType, size: data.length })
+  await session.prompt(`Describe this image: ${file}`, {
+    images: [{ type: 'image', source: { type: 'base64', mediaType, data } }],
+  })
+})
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '..', 'dist')))
 }
