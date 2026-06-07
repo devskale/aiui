@@ -173,6 +173,46 @@ location /aiui/ {
 }
 ```
 
+## Session Status
+
+The frontend tracks two levels of connection state:
+
+- **`connected`** — SSE (`EventSource`) connection is open to the server
+- **`sessionAlive`** — the pi SDK session has been created (happens on first prompt)
+- **`sessionModel`** — the model the session is using (e.g. `amd@tu@qwen-3.5-397b`)
+
+The server broadcasts `session_status` SSE events with `{ alive, streaming, model }`:
+- Immediately on SSE connect (so new tabs get current state)
+- After session creation
+- After each prompt completes
+
+A green status dot in the topbar indicates an alive session. "New Chat" clears the message entries but preserves `connected`, `sessionAlive`, and `sessionModel`.
+
+## Deployment
+
+Deploy to lubu with one command:
+
+```bash
+./deploy.sh          # Build, rsync, restart systemd service
+```
+
+This runs `vite build` with `VITE_BASE=/aiui/`, rsyncs to `lubu:/home/woodmastr/code/webuis/aiui/`, and restarts the `aiui` systemd user service.
+
+### Lubuntu Setup
+
+- **Service:** `~/.config/systemd/user/aiui.service` (port 8082)
+- **Nginx:** `/etc/nginx/sites-enabled/default` — `location /aiui/` proxies to `127.0.0.1:8082`
+- **Models:** `~/.pi/agent/models.json` — provider `amd` with TU Aqueduct models
+- **Settings:** Project `.pi/settings.json` sets `defaultProvider`/`defaultModel`
+- **Logs:** `journalctl --user -u aiui -f`
+
+## UI Design
+
+- **Icons:** Lucide (SVG, Feather-style) — paperclip for attach, send-horizontal for send
+- **Colors:** Emerald green accent (`#10b981`), dark background (`#0c0c0e`)
+- **Input:** Multiline textarea, auto-grows on input (Shift+Enter for newline, Enter to send)
+- **Status:** Green dot = session alive, in topbar next to model name
+
 ## Boundaries
 
 - ✅ **Always:** Run `pnpm dev` to verify changes before committing
