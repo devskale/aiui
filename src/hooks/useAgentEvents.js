@@ -85,15 +85,16 @@ function reducer(state, action) {
     }
 
     case 'tool_execution_start': {
-      if (!state.current) return state
-      const cur = { ...state.current }
-      // Check if we already have this tool from tool_call_start, otherwise add it
+      // Create current if needed (tool events can arrive between messages)
+      const cur = state.current
+        ? { ...state.current }
+        : { role: 'assistant', thinking: false, thinkingDone: false, text: '', toolCalls: [] }
       const name = action.toolName || action.tool || 'unknown'
       const existing = cur.toolCalls.find(tc => tc.name === name && tc.status === 'running')
       if (!existing) {
         cur.toolCalls = [...cur.toolCalls, {
           name,
-          args: action.args || '',
+          args: typeof action.args === 'string' ? action.args : JSON.stringify(action.args || {}),
           status: 'running',
           output: '',
         }]
@@ -102,45 +103,47 @@ function reducer(state, action) {
     }
 
     case 'tool_execution_update': {
-      if (!state.current) return state
-      const cur = { ...state.current }
-      // Update last running tool
-      const idx = cur.toolCalls.findLastIndex(tc => tc.status === 'running')
-      if (idx >= 0) {
-        const updated = { ...cur.toolCalls[idx] }
-        if (action.output || action.delta) updated.output += (action.output || action.delta || '')
-        cur.toolCalls = [...cur.toolCalls.slice(0, idx), updated, ...cur.toolCalls.slice(idx + 1)]
+      const cur2 = state.current
+        ? { ...state.current }
+        : { role: 'assistant', thinking: false, thinkingDone: false, text: '', toolCalls: [] }
+      const idx2 = cur2.toolCalls.findLastIndex(tc => tc.status === 'running')
+      if (idx2 >= 0) {
+        const updated = { ...cur2.toolCalls[idx2] }
+        if (action.output || action.partialResult) updated.output += (action.output || action.partialResult?.text || '')
+        cur2.toolCalls = [...cur2.toolCalls.slice(0, idx2), updated, ...cur2.toolCalls.slice(idx2 + 1)]
       }
-      return { ...state, current: cur }
+      return { ...state, current: cur2 }
     }
 
     case 'tool_execution_end': {
-      if (!state.current) return state
-      const cur = { ...state.current }
-      const name = action.toolName || action.tool
-      // Find the tool (by name match or last running)
-      let idx = name ? cur.toolCalls.findLastIndex(tc => tc.name === name && tc.status === 'running') : -1
-      if (idx < 0) idx = cur.toolCalls.findLastIndex(tc => tc.status === 'running')
-      if (idx >= 0) {
-        const updated = { ...cur.toolCalls[idx], status: action.isError ? 'error' : 'done' }
-        if (action.output) updated.output = action.output
-        cur.toolCalls = [...cur.toolCalls.slice(0, idx), updated, ...cur.toolCalls.slice(idx + 1)]
+      const cur3 = state.current
+        ? { ...state.current }
+        : { role: 'assistant', thinking: false, thinkingDone: false, text: '', toolCalls: [] }
+      const name3 = action.toolName || action.tool
+      let idx3 = name3 ? cur3.toolCalls.findLastIndex(tc => tc.name === name3 && tc.status === 'running') : -1
+      if (idx3 < 0) idx3 = cur3.toolCalls.findLastIndex(tc => tc.status === 'running')
+      if (idx3 >= 0) {
+        const updated = { ...cur3.toolCalls[idx3], status: action.isError ? 'error' : 'done' }
+        // Extract output from result content
+        const result = action.result
+        if (result?.content) {
+          const texts = result.content.filter(c => c.type === 'text').map(c => c.text)
+          if (texts.length) updated.output = texts.join('\n')
+        }
+        cur3.toolCalls = [...cur3.toolCalls.slice(0, idx3), updated, ...cur3.toolCalls.slice(idx3 + 1)]
       }
-      return { ...state, current: cur }
+      return { ...state, current: cur3 }
     }
 
     case 'message_end': {
-      // Commit current to entries if it has content
+      // DON'T commit current yet — tool_execution events may follow before next message_start
+      // Just mark the current turn's message as complete
       if (!state.current) return state
-      const cur = state.current
-      if (cur.text.trim() || cur.toolCalls.length > 0 || cur.thinkingDone) {
-        return { ...state, entries: [...state.entries, cur], current: null }
-      }
-      return { ...state, current: null }
+      return { ...state, current: { ...state.current, messageComplete: true } }
     }
 
     case 'turn_end': {
-      // Commit any remaining current
+      // Commit current to entries — the turn is fully done
       let entries = state.entries
       if (state.current && (state.current.text.trim() || state.current.toolCalls.length > 0)) {
         entries = [...entries, state.current]
