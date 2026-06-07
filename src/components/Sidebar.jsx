@@ -24,8 +24,8 @@ export function Sidebar({ open, onToggle, connected, sessionAlive, onNewChat }) 
     <aside className={`sidebar ${open ? '' : 'collapsed'}`}>
       <div className="sb-header">
         <div className="sb-brand">
-          <span className="sb-logo">π</span>
-          <span className="sb-title">πui</span>
+          <div className="sb-logo">π</div>
+          <span className="sb-title">ui</span>
         </div>
         <button className="sb-icon-btn" onClick={onToggle}>◀</button>
       </div>
@@ -66,8 +66,8 @@ export function Sidebar({ open, onToggle, connected, sessionAlive, onNewChat }) 
       </div>
 
       <div className="sb-footer">
-        <div className="sb-avatar">π</div>
         <span className="sb-version">v{__APP_VERSION__}</span>
+        <span className="sb-footer-link"><a href="https://skale.dev" target="_blank" rel="noopener">by skale.dev</a></span>
       </div>
     </aside>
   )
