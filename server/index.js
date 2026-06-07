@@ -136,5 +136,5 @@ app.use((_req, res, next) => {
 // Binds to 0.0.0.0 so it's reachable from LAN, but NOT from the internet.
 // For extra safety, use a firewall rule or reverse proxy to restrict further.
 const PORT = process.env.PORT || 3001
-const HOST = process.env.HOST || '0.0.0.0'
+const HOST = process.env.HOST || '127.0.0.1'
 app.listen(PORT, HOST, () => console.log(`πui server running on http://${HOST}:${PORT}`))
