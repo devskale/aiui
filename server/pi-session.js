@@ -16,7 +16,7 @@ export async function getOrCreateSession() {
     modelRegistry = ModelRegistry.create(authStorage)
 
     const { session: s } = await createAgentSession({
-      cwd: sessionDir,
+      cwd: path.join(__dirname, '..'),
       sessionManager: SessionManager.inMemory(sessionDir),
       authStorage,
       modelRegistry,
@@ -47,7 +47,7 @@ export async function prompt(text, attachments = []) {
       const match = a.dataUrl.match(/^data:([^;]+);base64,(.+)$/)
       return {
         type: 'image',
-        source: { type: 'base64', mediaType: match?.[1] || 'image/png', data: match?.[2] || a.dataUrl },
+        source: { type: 'base64', mediaType: match?.[1] || 'image/png', data: match?.[2] },
       }
     })
   return s.prompt(promptText, { images })
