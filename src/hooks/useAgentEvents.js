@@ -17,6 +17,8 @@ const initialState = {
   current: null,     // in-progress assistant turn being streamed
   streaming: false,
   connected: false,
+  sessionAlive: false,
+  sessionModel: null,
 }
 
 function reducer(state, action) {
@@ -26,7 +28,10 @@ function reducer(state, action) {
       return { ...state, connected: true }
 
     case 'disconnected':
-      return { ...state, connected: false }
+      return { ...state, connected: false, sessionAlive: false, sessionModel: null }
+
+    case 'session_status':
+      return { ...state, sessionAlive: action.alive, sessionModel: action.model, streaming: action.streaming ?? state.streaming }
 
     case 'user_prompt': {
       const entry = { role: 'user', text: action.text, attachments: action.attachments }
@@ -203,6 +208,7 @@ export function useAgentEvents() {
       'queue_update',
       'compaction_start', 'compaction_end',
       'auto_retry_start', 'auto_retry_end',
+      'session_status',
       'error',
     ]
 

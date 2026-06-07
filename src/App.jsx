@@ -10,7 +10,7 @@ import { EmptyState } from './components/EmptyState'
 import { UserEntry, AssistantEntry, ErrorEntry } from './components/StreamEntry'
 
 export default function App() {
-  const { entries, current, streaming, connected, sendPrompt, abortAgent, dispatch } = useAgentEvents()
+  const { entries, current, streaming, connected, sessionAlive, sessionModel, sendPrompt, abortAgent, dispatch } = useAgentEvents()
   const { attachments, addFiles, remove: removeAttachment, clear: clearAttachments, buildPayload } = useAttachments()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [showModelPicker, setShowModelPicker] = useState(false)
@@ -63,9 +63,8 @@ export default function App() {
       <Sidebar
         open={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
-        model={model}
-        streaming={streaming}
         connected={connected}
+        sessionAlive={sessionAlive}
         onNewChat={() => dispatch({ type: 'reset' })}
       />
 
@@ -75,7 +74,8 @@ export default function App() {
             <button className="tb-btn" onClick={() => setSidebarOpen(true)}>☰</button>
           )}
           <button className="tb-model" onClick={() => setShowModelPicker(true)}>
-            {model || 'select model'}
+            {connected && sessionAlive && <span className="status-dot alive" title="Session alive" />}
+            {sessionModel || model || 'select model'}
           </button>
           <div style={{ flex: 1 }} />
         </header>

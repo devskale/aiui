@@ -4,7 +4,7 @@ import { v4 as uuid } from 'uuid'
 import path from 'node:path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { getOrCreateSession, prompt, abort, setModel, getAvailableModels, getCommands, setEventBroadcaster } from './pi-session.js'
+import { getOrCreateSession, prompt, abort, setModel, getAvailableModels, getCommands, setEventBroadcaster, getSessionInfo } from './pi-session.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const uploadsDir = path.join(__dirname, '..', 'uploads')
@@ -47,6 +47,9 @@ app.get('/api/events', (req, res) => {
   })
   res.write('\n')
   clients.add(res)
+  // Send current session status immediately on connect
+  const info = getSessionInfo()
+  res.write(`event: session_status\ndata: ${JSON.stringify(info)}\n\n`)
   // Keepalive every 30s to prevent idle proxy/bridge disconnects
   const keepalive = setInterval(() => {
     try { res.write(': keepalive\n\n') } catch { clearInterval(keepalive) }
@@ -66,6 +69,7 @@ app.post('/api/prompt', async (req, res) => {
     // Wire up broadcaster if not yet done
     setEventBroadcaster((type, data) => broadcast(type, data))
     await prompt(text, attachments)
+    broadcast('session_status', getSessionInfo())
   } catch (err) {
     broadcast('error', { message: err.message })
   }

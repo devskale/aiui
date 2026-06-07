@@ -44,6 +44,8 @@ export async function getOrCreateSession() {
   })
   session = s
   console.log('π agent session created')
+  // Notify SSE clients of new session
+  if (eventBroadcaster) eventBroadcaster('session_status', getSessionInfo())
 
   // Wire broadcaster if already set
   if (eventBroadcaster && !unsubscribe) {
@@ -112,6 +114,14 @@ export async function getAvailableModels() {
     grouped[provider].push(m.id)
   }
   return grouped
+}
+
+export function getSessionInfo() {
+  return {
+    alive: session !== null,
+    streaming: session?.isStreaming ?? false,
+    model: session?.model ? `${session.model.provider}@${session.model.id}` : null,
+  }
 }
 
 export async function getCommands() {

@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react'
 import { apiUrl } from '../lib/api'
 
-export function Sidebar({ open, onToggle, model, streaming, connected, onNewChat }) {
+export function Sidebar({ open, onToggle, connected, sessionAlive, onNewChat }) {
   const [commands, setCommands] = useState(null)
 
   useEffect(() => {
@@ -52,17 +52,21 @@ export function Sidebar({ open, onToggle, model, streaming, connected, onNewChat
       </div>
 
       <div className="sb-content">
-        {!connected && (
+        {!connected ? (
           <div className="connecting">
             <span className="thinking-dot" />
             <span>Connecting...</span>
           </div>
-        )}
+        ) : !sessionAlive ? (
+          <div className="connecting">
+            <span className="thinking-dot" />
+            <span>No session</span>
+          </div>
+        ) : null}
       </div>
 
       <div className="sb-footer">
         <div className="sb-avatar">π</div>
-        <span className="sb-model-name">{model || 'loading...'}</span>
         <span className="sb-version">v{__APP_VERSION__}</span>
       </div>
     </aside>
