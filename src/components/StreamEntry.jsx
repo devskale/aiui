@@ -8,7 +8,7 @@ import remarkGfm from 'remark-gfm'
 
 // ── Tool metadata ──
 const TOOL_META = {
-  bash:      { icon: '$',  color: '#eab308', label: cmd => cmd ? `$ ${cmd}` : '$ ...' },
+  bash:      { icon: '$',  color: '#eab308', label: args => args?.command ? `$ ${args.command}` : '$ ...' },
   read:      { icon: '📖', color: '#60a5fa', label: args => formatPath(args?.file_path || args?.path) },
   write:     { icon: '✏️', color: '#22c55e', label: args => formatPath(args?.file_path || args?.path) },
   edit:      { icon: '✂️', color: '#f97316', label: args => formatPath(args?.file_path || args?.path) },
