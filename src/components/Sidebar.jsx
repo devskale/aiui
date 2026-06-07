@@ -2,12 +2,13 @@
 // Sidebar — new chat, model info, collapsible skills/prompts/extensions
 // ════════════════════════════════════════════════════════════════════
 import { useState, useEffect } from 'react'
+import { apiUrl } from '../lib/api'
 
 export function Sidebar({ open, onToggle, model, streaming, connected, onNewChat }) {
   const [commands, setCommands] = useState(null)
 
   useEffect(() => {
-    fetch('/api/commands')
+    fetch(apiUrl('/api/commands'))
       .then(r => r.json())
       .then(setCommands)
       .catch(() => {})

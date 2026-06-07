@@ -2,12 +2,13 @@
 // CommandPanel — shows skills, prompts, extensions from agent
 // ════════════════════════════════════════════════════════════════════
 import { useState, useEffect } from 'react'
+import { apiUrl } from '../lib/api'
 
 export function CommandPanel() {
   const [commands, setCommands] = useState(null)
 
   useEffect(() => {
-    fetch('/api/commands')
+    fetch(apiUrl('/api/commands'))
       .then(r => r.json())
       .then(setCommands)
       .catch(() => {})

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useAgentEvents } from './hooks/useAgentEvents'
 import { useAttachments } from './hooks/useAttachments'
+import { apiUrl } from './lib/api'
 import { Sidebar } from './components/Sidebar'
 import { ModelPicker } from './components/ModelPicker'
 import { CommandPanel } from './components/CommandPanel'
@@ -19,7 +20,7 @@ export default function App() {
 
   // Fetch current model on mount
   useEffect(() => {
-    fetch('/api/models')
+    fetch(apiUrl('/api/models'))
       .then(r => r.json())
       .then(data => {
         // Try to find the active model — flatten grouped models

@@ -10,6 +10,7 @@
 //   queue_update, compaction_start/end, auto_retry_start/end
 // ════════════════════════════════════════════════════════════════════
 import { useReducer, useEffect } from 'react'
+import { apiUrl } from '../lib/api'
 
 const initialState = {
   entries: [],       // committed entries (user + assistant turns)
@@ -189,7 +190,7 @@ export function useAgentEvents() {
   const [state, dispatch] = useReducer(reducer, initialState)
 
   useEffect(() => {
-    const es = new EventSource('/api/events')
+    const es = new EventSource(apiUrl('/api/events'))
 
     es.onopen = () => dispatch({ type: 'connected' })
     es.onerror = () => dispatch({ type: 'disconnected' })
@@ -224,7 +225,7 @@ export function useAgentEvents() {
 
   const sendPrompt = async (text, attachments = []) => {
     dispatch({ type: 'user_prompt', text, attachments })
-    await fetch('/api/prompt', {
+    await fetch(apiUrl('/api/prompt'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, attachments }),
@@ -232,7 +233,7 @@ export function useAgentEvents() {
   }
 
   const abortAgent = async () => {
-    await fetch('/api/abort', { method: 'POST' })
+    await fetch(apiUrl('/api/abort'), { method: 'POST' })
   }
 
   return { ...state, sendPrompt, abortAgent, dispatch }

@@ -2,6 +2,7 @@
 // useAttachments — file upload handling (drag, paste, picker)
 // ════════════════════════════════════════════════════════════════════
 import { useState, useCallback } from 'react'
+import { apiUrl } from '../lib/api'
 
 const IMG_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
 
@@ -31,7 +32,7 @@ export function useAttachments() {
         const fd = new FormData()
         fd.append('file', file)
         try {
-          const res = await fetch('/api/upload', { method: 'POST', body: fd })
+          const res = await fetch(apiUrl('/api/upload'), { method: 'POST', body: fd })
           if (res.ok) {
             const data = await res.json()
             newAtts.push({ id, file, name: file.name, type: 'file', serverFile: data.files?.[0] })

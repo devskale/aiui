@@ -2,6 +2,7 @@
 // ModelPicker — full-screen model selection overlay
 // ════════════════════════════════════════════════════════════════════
 import { useState, useEffect, useRef } from 'react'
+import { apiUrl } from '../lib/api'
 
 export function ModelPicker({ activeModel, onSelect, onClose }) {
   const [models, setModels] = useState([])
@@ -11,7 +12,7 @@ export function ModelPicker({ activeModel, onSelect, onClose }) {
 
   useEffect(() => {
     inputRef.current?.focus()
-    fetch('/api/models')
+    fetch(apiUrl('/api/models'))
       .then(r => r.json())
       .then(data => {
         // data is an object: { provider: [{ id, name }] }
@@ -36,7 +37,7 @@ export function ModelPicker({ activeModel, onSelect, onClose }) {
     : models
 
   const handleSelect = (model) => {
-    fetch('/api/model', {
+    fetch(apiUrl('/api/model'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model }),
