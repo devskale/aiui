@@ -22,12 +22,12 @@ export default function App() {
     fetch('/api/models')
       .then(r => r.json())
       .then(data => {
-        // Try to find the active model from settings
-        if (typeof data === 'object' && !Array.isArray(data)) {
-          const all = Object.values(data).flat()
-          const first = all[0]
-          setModel(typeof first === 'string' ? first : first?.id || first?.name || '')
-        }
+        // Try to find the active model — flatten grouped models
+        const all = Object.values(data).flat()
+        // Prefer the settings default
+        const preferred = all.find(m => m === 'tu@qwen-3.5-397b')
+        if (preferred) setModel(preferred)
+        else if (all[0]) setModel(typeof all[0] === 'string' ? all[0] : all[0]?.id || '')
       })
       .catch(() => {})
   }, [])
