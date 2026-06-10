@@ -146,6 +146,7 @@ pre code { background: none; padding: 0; font-size: 13px; }
   max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .tb-model:hover { background: #1a1a1e; color: #555; }
+.tb-btn.copy:hover { color: #10b981; }
 
 /* ── Content area ── */
 .content { flex: 1; overflow-y: auto; padding: 16px 20px; }
@@ -220,6 +221,20 @@ pre code { background: none; padding: 0; font-size: 13px; }
   border-radius: 1px; animation: cursor-blink 0.8s step-end infinite; vertical-align: text-bottom; margin-left: 2px;
 }
 @keyframes cursor-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+/* ═══ PER-ENTRY COPY BUTTON ═══ */
+.entry-user,
+.entry-assistant { position: relative; }
+.copy-entry {
+  position: absolute; right: 0; top: 0;
+  background: none; border: none; color: #444; cursor: pointer;
+  padding: 3px 5px; border-radius: 4px; opacity: 0;
+  transition: opacity .12s, color .1s;
+  display: flex; align-items: center;
+}
+.entry-user:hover .copy-entry,
+.entry-assistant:hover .copy-entry { opacity: 1; }
+.copy-entry:hover { color: #10b981; }
 
 /* ═══ INPUT BAR ═══ */
 .input-area {

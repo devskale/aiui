@@ -56,6 +56,15 @@ export default function App() {
 
   const hasContent = entries.length > 0 || current
 
+  const copyEntry = (el) => {
+    // Clone node, strip UI chrome, extract clean textContent
+    const clone = el.cloneNode(true)
+    clone.querySelectorAll('.tc-line, .think-line, .entry-streaming, .copy-btn, .copy-entry').forEach(n => n.remove())
+    let text = clone.textContent || ''
+    text = text.replace(/[ \t]+/g, ' ').replace(/\s+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
+    navigator.clipboard.writeText(text)
+  }
+
   return (
     <div className="app" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
       {dragOver && <div className="drop-zone"><span>Drop files here</span></div>}
@@ -84,11 +93,11 @@ export default function App() {
           {hasContent ? (
             <div className="entries">
               {entries.map((entry, i) => {
-                if (entry.role === 'user') return <UserEntry key={i} text={entry.text} />
-                if (entry.role === 'error') return <ErrorEntry key={i} text={entry.text} />
-                return <AssistantEntry key={i} entry={entry} isStreaming={false} />
+                if (entry.role === 'user') return <UserEntry key={i} text={entry.text} onCopy={copyEntry} />
+                if (entry.role === 'error') return <ErrorEntry key={i} text={entry.text} onCopy={copyEntry} />
+                return <AssistantEntry key={i} entry={entry} isStreaming={false} onCopy={copyEntry} />
               })}
-              {current && <AssistantEntry entry={current} isStreaming={true} />}
+              {current && <AssistantEntry entry={current} isStreaming={true} onCopy={copyEntry} />}
               <div ref={endRef} />
             </div>
           ) : (
