@@ -1,0 +1,162 @@
+#!/usr/bin/env node
+// ════════════════════════════════════════════════════════════════════
+// generate-image — generate an image from a text prompt via TU Aqueduct.
+//
+// Self-contained: uses only Node builtins (global fetch in Node >= 18).
+// Key resolution: TU_API_KEY env → `credgoo tu` → ~/.pi/agent/auth.json (tu-aqueduct).
+//
+// Install: symlink or copy to ~/.local/bin/generate-image
+// Usage:   generate-image "<prompt>" [-s 1024x1024] [-m z-image-turbo] [-o path.png]
+// ════════════════════════════════════════════════════════════════════
+import os from 'node:os'
+import fs from 'node:fs'
+import path from 'node:path'
+import { execSync } from 'node:child_process'
+import process from 'node:process'
+
+const TU_BASE_URL = 'https://aqueduct.ai.datalab.tuwien.ac.at/v1'
+const DEFAULT_MODEL = 'z-image-turbo'
+const DEFAULT_SIZE = '1024x1024'
+const SIZES = ['512x512', '768x768', '1024x1024', '1024x1792', '1792x1024']
+
+function die(msg, code = 1) {
+  console.error(`generate-image: ${msg}`)
+  process.exit(code)
+}
+
+function usage() {
+  console.error(`Usage: generate-image "<prompt>" [options]
+
+Options:
+  -s, --size SIZE      Image size (default: ${DEFAULT_SIZE}). One of: ${SIZES.join(', ')}
+  -m, --model MODEL    Model id (default: ${DEFAULT_MODEL})
+  -o, --output PATH    Output file path (default: auto in uploads/ or cwd)
+  -d, --dir DIR        Output directory (default: uploads/ if present, else cwd)
+  -n, --number N       Number of images (default: 1, max 4)
+  --json               Emit JSON {images:[...]} to stdout instead of paths
+  -h, --help           Show this help
+
+Key resolution: TU_API_KEY env → \`credgoo tu\` → ~/.pi/agent/auth.json (tu-aqueduct).`)
+  process.exit(0)
+}
+
+function parseArgs(argv) {
+  const opts = { prompt: '', size: DEFAULT_SIZE, model: DEFAULT_MODEL, output: '', dir: '', n: 1, json: false }
+  const args = argv.slice(2)
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]
+    switch (a) {
+      case '-h': case '--help': usage(); break
+      case '-s': case '--size': opts.size = args[++i]; break
+      case '-m': case '--model': opts.model = args[++i]; break
+      case '-o': case '--output': opts.output = args[++i]; break
+      case '-d': case '--dir': opts.dir = args[++i]; break
+      case '-n': case '--number': opts.n = parseInt(args[++i], 10) || 1; break
+      case '--json': opts.json = true; break
+      default:
+        if (a.startsWith('-')) die(`unknown option: ${a}`)
+        opts.prompt = opts.prompt ? `${opts.prompt} ${a}` : a
+    }
+  }
+  return opts
+}
+
+function getKey() {
+  if (process.env.TU_API_KEY) return process.env.TU_API_KEY
+  for (const cmd of ['credgoo', path.join(os.homedir(), '.local', 'bin', 'credgoo')]) {
+    try {
+      const k = execSync(`${cmd} tu`, { encoding: 'utf8', timeout: 5000 }).trim()
+      if (k) return k
+    } catch {}
+  }
+  try {
+    const auth = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.pi', 'agent', 'auth.json'), 'utf8'))
+    if (auth?.['tu-aqueduct']?.key) return auth['tu-aqueduct'].key
+  } catch {}
+  return null
+}
+
+function guessMime(b64, url) {
+  if (b64?.startsWith('/9j/')) return 'image/jpeg'
+  if (/\.(jpe?g)(\?|$)/i.test(url || '')) return 'image/jpeg'
+  return 'image/png'
+}
+
+function defaultOutDir() {
+  // Prefer uploads/ (web-served in πui); fall back to cwd.
+  const cwd = process.cwd()
+  const uploads = path.join(cwd, 'uploads')
+  if (fs.existsSync(uploads) && fs.statSync(uploads).isDirectory()) return uploads
+  return cwd
+}
+
+async function main() {
+  const opts = parseArgs(process.argv)
+  if (!opts.prompt.trim()) usage()
+
+  if (!SIZES.includes(opts.size)) die(`invalid size "${opts.size}". One of: ${SIZES.join(', ')}`)
+  opts.n = Math.max(1, Math.min(4, opts.n))
+
+  const key = getKey()
+  if (!key) die('No TU API key. Set TU_API_KEY, run `credgoo tu`, or log in via pi (tu-aqueduct).', 1)
+
+  let resp
+  try {
+    resp = await fetch(`${TU_BASE_URL}/images/generations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      body: JSON.stringify({ model: opts.model, prompt: opts.prompt, n: opts.n, size: opts.size }),
+    })
+  } catch (e) {
+    die(`request failed: ${e.message}`, 1)
+  }
+  if (!resp.ok) {
+    const t = await resp.text().catch(() => '')
+    die(`TU error ${resp.status} ${resp.statusText}${t ? ` — ${t}` : ''}`, 1)
+  }
+  const data = await resp.json()
+  const items = Array.isArray(data?.data) ? data.data : []
+  if (!items.length) die('no images returned', 1)
+
+  const outDir = opts.dir || (opts.output ? path.dirname(opts.output) : defaultOutDir())
+  fs.mkdirSync(outDir, { recursive: true })
+
+  // If saving into the project's uploads/ dir, the web path is /uploads/<file>.
+  // Detect by checking if outDir basename is 'uploads'.
+  const inUploads = path.basename(outDir) === 'uploads'
+
+  const EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' }
+  const ts = Date.now()
+  const saved = []
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+    let b64 = item.b64_json
+    const url = item.url
+    if (!b64 && url) {
+      const r = await fetch(url)
+      if (!r.ok) die(`failed to fetch image from ${url}: ${r.status}`, 1)
+      b64 = Buffer.from(await r.arrayBuffer()).toString('base64')
+    }
+    if (!b64) continue
+    const mime = guessMime(b64, url)
+    const ext = EXT[mime] || 'png'
+    const file = opts.output
+      ? (items.length === 1 ? opts.output : `${path.basename(opts.output, path.extname(opts.output))}-${i}.${ext}`)
+      : `generated-${ts}-${i}.${ext}`
+    const abs = path.resolve(outDir, file)
+    fs.writeFileSync(abs, Buffer.from(b64, 'base64'))
+    // Web URL when in uploads/, else absolute path.
+    const webUrl = inUploads ? `/uploads/${file}` : abs
+    saved.push({ path: abs, url: webUrl, mimeType: mime, size: fs.statSync(abs).size })
+  }
+
+  if (opts.json) {
+    process.stdout.write(JSON.stringify({ model: opts.model, prompt: opts.prompt, images: saved }) + '\n')
+  } else {
+    // Print web URLs (or paths) — one per line. Embeddable directly in markdown.
+    saved.forEach(s => process.stdout.write(s.url + '\n'))
+  }
+}
+
+main().catch(e => die(e?.message || String(e), 1))
