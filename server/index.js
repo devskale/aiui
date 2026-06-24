@@ -113,6 +113,15 @@ app.get('/api/commands', async (_req, res) => {
   }
 })
 
+// ── Release notes / changelog ──
+app.get('/api/changelog', (_req, res) => {
+  const file = path.join(__dirname, '..', 'CHANGELOG.md')
+  fs.readFile(file, 'utf8', (err, data) => {
+    if (err) return res.status(404).json({ error: 'CHANGELOG.md not found' })
+    res.type('text/markdown').send(data)
+  })
+})
+
 // ── File upload ──
 const IMG_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
 const EXT_TO_MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' }

@@ -1,12 +1,14 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useAgentEvents } from './hooks/useAgentEvents'
 import { useAttachments } from './hooks/useAttachments'
+import { useHashRoute } from './hooks/useHashRoute'
 import { apiUrl } from './lib/api'
 import { Sidebar } from './components/Sidebar'
 import { ModelPicker } from './components/ModelPicker'
 import { CommandPanel } from './components/CommandPanel'
 import { InputBar } from './components/InputBar'
 import { EmptyState } from './components/EmptyState'
+import { ReleaseNotes } from './components/ReleaseNotes'
 import { UserEntry, AssistantEntry, ErrorEntry } from './components/StreamEntry'
 
 export default function App() {
@@ -14,6 +16,7 @@ export default function App() {
   const { attachments, addFiles, remove: removeAttachment, clear: clearAttachments, buildPayload } = useAttachments()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [showModelPicker, setShowModelPicker] = useState(false)
+  const { route, navigate } = useHashRoute()
   const [model, setModel] = useState('')
   const endRef = useRef(null)
   const scrollContainerRef = useRef(null)
@@ -96,6 +99,7 @@ export default function App() {
         connected={connected}
         sessionAlive={sessionAlive}
         onNewChat={() => dispatch({ type: 'reset' })}
+        onShowReleaseNotes={() => navigate('releases')}
       />
 
       <main className={`main ${!sidebarOpen ? 'full' : ''}`}>
@@ -142,6 +146,9 @@ export default function App() {
           onSelect={setModel}
           onClose={() => setShowModelPicker(false)}
         />
+      )}
+      {route === 'releases' && (
+        <ReleaseNotes onClose={() => navigate('')} />
       )}
     </div>
   )

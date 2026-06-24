@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react'
 import { apiUrl } from '../lib/api'
 
-export function Sidebar({ open, onToggle, connected, sessionAlive, onNewChat }) {
+export function Sidebar({ open, onToggle, connected, sessionAlive, onNewChat, onShowReleaseNotes }) {
   const [commands, setCommands] = useState(null)
 
   useEffect(() => {
@@ -66,7 +66,7 @@ export function Sidebar({ open, onToggle, connected, sessionAlive, onNewChat }) 
       </div>
 
       <div className="sb-footer">
-        <span className="sb-version">v{__APP_VERSION__}</span>
+        <button className="sb-version" onClick={onShowReleaseNotes} title="Release notes">v{__APP_VERSION__}</button>
         <span className="sb-footer-link"><a href="https://skale.dev" target="_blank" rel="noopener">by skale.dev</a></span>
       </div>
     </aside>
