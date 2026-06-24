@@ -166,7 +166,10 @@ if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '..', 'dist')))
 }
 const base = process.env.VITE_BASE || ''
+// Mount uploads at both the base-prefixed path (direct access) and bare /uploads
+// (nginx proxy_pass with trailing slash strips the /aiui/ prefix before reaching us).
 app.use(`${base}/uploads`, express.static(uploadsDir))
+app.use(`/uploads`, express.static(uploadsDir))
 
 // ── Security headers ──
 app.use((_req, res, next) => {
