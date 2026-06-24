@@ -83,6 +83,21 @@ function ThinkingBlock({ thinking, thinkingDone, thinkingText }) {
   )
 }
 
+// ── Markdown image renderer — prefixes BASE_URL so prod sub-paths (/aiui/) work ──
+const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, '')
+const mdComponents = {
+  img: ({ src, alt, ...props }) => {
+    const full = (src && !src.startsWith('http') && !src.startsWith('data:'))
+      ? `${BASE_URL}${src.startsWith('/') ? '' : '/'}${src}`
+      : src
+    return <img className="md-img" src={full} alt={alt} {...props} />
+  },
+  // Open links in a new tab so the chat view isn't navigated away.
+  a: ({ href, children, ...props }) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" {...props}>{children}</a>
+  ),
+}
+
 // ── Entry Components ──
 
 const COPY_ICON = <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
@@ -113,7 +128,7 @@ export function AssistantEntry({ entry, isStreaming, onCopy }) {
       {hasTools && entry.toolCalls.map((tc, i) => <ToolCall key={i} tc={tc} />)}
       {hasText && (
         <div className="entry-text">
-          <Markdown remarkPlugins={[remarkGfm]}>{entry.text}</Markdown>
+          <Markdown remarkPlugins={[remarkGfm]} components={mdComponents}>{entry.text}</Markdown>
           {isStreaming && <span className="entry-streaming" />}
         </div>
       )}
@@ -140,6 +155,62 @@ export function ErrorEntry({ text, onCopy }) {
           {COPY_ICON}
         </button>
       )}
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════
+// ImageEntry — renders an inline image-generation result (/image command)
+// entry.status: 'generating' | 'done' | 'error'
+// ════════════════════════════════════════════════════════════════════
+const DOWNLOAD_ICON = <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+
+export function ImageEntry({ entry }) {
+  const BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
+  const resolveSrc = (url) => (url.startsWith('http') || url.startsWith('data:')) ? url : `${BASE}${url}`
+
+  if (entry.status === 'generating') {
+    return (
+      <div className="entry-image">
+        <div className="think-line">
+          <span className="think-dot" />
+          <span className="think-label">Generating image…</span>
+        </div>
+        <div className="image-prompt">🖼️ {entry.prompt}</div>
+      </div>
+    )
+  }
+
+  if (entry.status === 'error') {
+    return (
+      <div className="entry-image">
+        <div className="think-line"><span className="think-dot" style={{ background: '#ef4444' }} /></div>
+        <div className="image-prompt error">⚠️ {entry.error}</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="entry-image">
+      <div className="image-prompt">🖼️ {entry.prompt}</div>
+      <div className="tc-images">
+        {entry.images.map((img, i) => {
+          const src = resolveSrc(img.url)
+          const ext = (img.mimeType || 'image/png').split('/')[1]
+          const download = () => {
+            const a = document.createElement('a')
+            a.href = src
+            a.download = `generated-${Date.now()}-${i}.${ext}`
+            document.body.appendChild(a); a.click(); document.body.removeChild(a)
+          }
+          return (
+            <div className="tc-image-card" key={i}>
+              <img src={src} alt={entry.prompt} onClick={() => window.open(src, '_blank')} />
+              <button className="tc-image-dl" title="Download" onClick={download}>{DOWNLOAD_ICON}</button>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

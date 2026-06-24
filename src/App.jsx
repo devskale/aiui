@@ -16,27 +16,48 @@ export default function App() {
   const [showModelPicker, setShowModelPicker] = useState(false)
   const [model, setModel] = useState('')
   const endRef = useRef(null)
+  const scrollContainerRef = useRef(null)
+  const stickToBottomRef = useRef(true)  // stick to bottom unless the user scrolled up
   const [dragOver, setDragOver] = useState(false)
 
-  // Fetch current model on mount
+  // Fetch current model on mount — only tu@* models are usable on lubu
   useEffect(() => {
     fetch(apiUrl('/api/models'))
       .then(r => r.json())
       .then(data => {
-        // Try to find the active model — flatten grouped models
-        const all = Object.values(data).flat()
-        // Prefer the settings default
-        const preferred = all.find(m => m === 'tu@qwen-3.5-397b')
-        if (preferred) setModel(preferred)
-        else if (all[0]) setModel(typeof all[0] === 'string' ? all[0] : all[0]?.id || '')
+        // Flatten to "provider@id" and keep only ids starting with "tu@"
+        const flat = []
+        if (Array.isArray(data)) {
+          data.forEach(m => flat.push(typeof m === 'string' ? m : (m.id || m.name || '')))
+        } else if (typeof data === 'object') {
+          for (const [provider, list] of Object.entries(data)) {
+            if (Array.isArray(list)) list.forEach(m => {
+              const id = typeof m === 'string' ? m : (m.id || m.name || '')
+              flat.push(id ? `${provider}@${id}` : '')
+            })
+          }
+        }
+        const tuModels = flat.filter(m => m.startsWith('tu@'))
+        const preferred = tuModels.find(m => m === 'tu@qwen-3.5-397b')
+        setModel(preferred || tuModels[0] || '')
       })
       .catch(() => {})
   }, [])
 
-  // Auto-scroll
+  // Auto-scroll only when the user is near the bottom.
+  // Scrolling up to read pauses auto-scroll; scrolling back down resumes it.
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (stickToBottomRef.current) {
+      endRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
   }, [entries, current])
+
+  const handleScroll = useCallback(() => {
+    const el = scrollContainerRef.current
+    if (!el) return
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    stickToBottomRef.current = distFromBottom < 80  // resume only when near bottom
+  }, [])
 
   // Global drag/drop
   const handleDragOver = useCallback((e) => { e.preventDefault(); setDragOver(true) }, [])
@@ -89,7 +110,7 @@ export default function App() {
           <div style={{ flex: 1 }} />
         </header>
 
-        <div className="content">
+        <div className="content" ref={scrollContainerRef} onScroll={handleScroll}>
           {hasContent ? (
             <div className="entries">
               {entries.map((entry, i) => {
