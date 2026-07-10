@@ -3,6 +3,7 @@
 // ════════════════════════════════════════════════════════════════════
 import { useState, useEffect, useRef } from 'react'
 import { apiUrl } from '../lib/api'
+import { flattenModels, isModelAllowed, getAllowedModels } from '../lib/models'
 
 export function ModelPicker({ activeModel, onSelect, onClose }) {
   const [models, setModels] = useState([])
@@ -15,20 +16,9 @@ export function ModelPicker({ activeModel, onSelect, onClose }) {
     fetch(apiUrl('/api/models'))
       .then(r => r.json())
       .then(data => {
-        // Flatten to "provider@id" and keep only ids starting with "tu@"
-        const flat = []
-        const push = (provider, m) => {
-          const id = typeof m === 'string' ? m : (m.id || m.name)
-          if (id) flat.push(provider ? `${provider}@${id}` : id)
-        }
-        if (Array.isArray(data)) {
-          data.forEach(m => push(null, m))
-        } else if (typeof data === 'object') {
-          for (const [provider, list] of Object.entries(data)) {
-            if (Array.isArray(list)) list.forEach(m => push(provider, m))
-          }
-        }
-        setModels(flat.filter(m => m.startsWith('tu@')))
+        const flat = flattenModels(data)
+        const allowed = getAllowedModels()
+        setModels(flat.filter(m => isModelAllowed(m, allowed)))
         setLoading(false)
       })
       .catch(() => setLoading(false))

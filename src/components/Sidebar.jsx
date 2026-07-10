@@ -3,8 +3,9 @@
 // ════════════════════════════════════════════════════════════════════
 import { useState, useEffect } from 'react'
 import { apiUrl } from '../lib/api'
+import { Settings } from 'lucide-react'
 
-export function Sidebar({ open, onToggle, connected, sessionAlive, onNewChat, onShowReleaseNotes }) {
+export function Sidebar({ open, onToggle, connected, sessionAlive, onNewChat, onShowReleaseNotes, onShowSettings }) {
   const [commands, setCommands] = useState(null)
 
   useEffect(() => {
@@ -66,6 +67,11 @@ export function Sidebar({ open, onToggle, connected, sessionAlive, onNewChat, on
       </div>
 
       <div className="sb-footer">
+        {onShowSettings && (
+          <button className="sb-settings-btn" onClick={onShowSettings} title="Settings">
+            <Settings size={16} />
+          </button>
+        )}
         <button className="sb-version" onClick={onShowReleaseNotes} title="Release notes">v{__APP_VERSION__}</button>
         <span className="sb-footer-link"><a href="https://skale.dev" target="_blank" rel="noopener">by skale.dev</a></span>
       </div>

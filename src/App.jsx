@@ -3,6 +3,7 @@ import { useAgentEvents } from './hooks/useAgentEvents'
 import { useAttachments } from './hooks/useAttachments'
 import { useHashRoute } from './hooks/useHashRoute'
 import { apiUrl } from './lib/api'
+import { flattenModels, isModelAllowed, getAllowedModels } from './lib/models'
 import { Sidebar } from './components/Sidebar'
 import { ModelPicker } from './components/ModelPicker'
 import { CommandPanel } from './components/CommandPanel'
@@ -10,6 +11,7 @@ import { InputBar } from './components/InputBar'
 import { StatsFooter } from './components/StatsFooter'
 import { EmptyState } from './components/EmptyState'
 import { ReleaseNotes } from './components/ReleaseNotes'
+import { SettingsPanel } from './components/SettingsPanel'
 import { UserEntry, AssistantEntry, ErrorEntry } from './components/StreamEntry'
 
 export default function App() {
@@ -17,6 +19,7 @@ export default function App() {
   const { attachments, addFiles, remove: removeAttachment, clear: clearAttachments, buildPayload } = useAttachments()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [showModelPicker, setShowModelPicker] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const { route, navigate } = useHashRoute()
   const [model, setModel] = useState('')
   const endRef = useRef(null)
@@ -24,29 +27,19 @@ export default function App() {
   const stickToBottomRef = useRef(true)  // stick to bottom unless the user scrolled up
   const [dragOver, setDragOver] = useState(false)
 
-  // Fetch current model on mount — only tu@* models are usable on lubu
+  // Fetch current model on mount — respect the allow-list from settings
   useEffect(() => {
     fetch(apiUrl('/api/models'))
       .then(r => r.json())
       .then(data => {
-        // Flatten to "provider@id" and keep only ids starting with "tu@"
-        const flat = []
-        if (Array.isArray(data)) {
-          data.forEach(m => flat.push(typeof m === 'string' ? m : (m.id || m.name || '')))
-        } else if (typeof data === 'object') {
-          for (const [provider, list] of Object.entries(data)) {
-            if (Array.isArray(list)) list.forEach(m => {
-              const id = typeof m === 'string' ? m : (m.id || m.name || '')
-              flat.push(id ? `${provider}@${id}` : '')
-            })
-          }
-        }
-        const tuModels = flat.filter(m => m.startsWith('tu@'))
-        const preferred = tuModels.find(m => m === 'tu@qwen-3.5-397b')
-        setModel(preferred || tuModels[0] || '')
+        const flat = flattenModels(data)
+        const allowed = getAllowedModels()
+        const visible = flat.filter(m => isModelAllowed(m, allowed))
+        const preferred = visible.find(m => m === 'amd-local@tu@qwen-3.5-397b')
+        setModel(preferred || visible[0] || '')
       })
       .catch(() => {})
-  }, [])
+  }, [showSettings])
 
   // Auto-scroll only when the user is near the bottom.
   // Scrolling up to read pauses auto-scroll; scrolling back down resumes it.
@@ -101,6 +94,7 @@ export default function App() {
         sessionAlive={sessionAlive}
         onNewChat={() => dispatch({ type: 'reset' })}
         onShowReleaseNotes={() => navigate('releases')}
+        onShowSettings={() => setShowSettings(true)}
       />
 
       <main className={`main ${!sidebarOpen ? 'full' : ''}`}>
@@ -151,6 +145,9 @@ export default function App() {
       )}
       {route === 'releases' && (
         <ReleaseNotes onClose={() => navigate('')} />
+      )}
+      {showSettings && (
+        <SettingsPanel onClose={() => setShowSettings(false)} />
       )}
     </div>
   )
