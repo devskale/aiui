@@ -4,7 +4,7 @@ import { v4 as uuid } from 'uuid'
 import path from 'node:path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { getOrCreateSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, getAvailableModels, getCommands, setEventBroadcaster, getSessionInfo, getSessionStats, getSessionHistory, newSession } from './pi-session.js'
+import { getOrCreateSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, listSessions, switchToSession, getAvailableModels, getCommands, setEventBroadcaster, getSessionInfo, getSessionStats, getSessionHistory, newSession } from './pi-session.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const uploadsDir = path.join(__dirname, '..', 'uploads')
@@ -194,6 +194,30 @@ app.post('/api/compaction/auto', (req, res) => {
   setAutoCompaction(enabled)
   broadcast('session_status', getSessionInfo())
   res.json({ ok: true })
+})
+
+// ── Session list + switching ──
+app.get('/api/sessions', async (_req, res) => {
+  try {
+    const sessions = await listSessions()
+    res.json(sessions)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/session/switch', async (req, res) => {
+  const { path: sessionPath } = req.body
+  if (!sessionPath) return res.status(400).json({ error: 'no path' })
+  try {
+    res.json({ ok: true })
+    await switchToSession(sessionPath)
+    broadcast('session_status', getSessionInfo())
+    broadcast('session_history', { entries: getSessionHistory() })
+    broadcast('session_stats', getSessionStats())
+  } catch (err) {
+    broadcast('error', { message: err.message })
+  }
 })
 
 // ── Release notes / changelog ──

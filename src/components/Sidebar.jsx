@@ -1,12 +1,24 @@
 // ════════════════════════════════════════════════════════════════════
-// Sidebar — new chat, model info, collapsible skills/prompts/extensions
+// Sidebar — new chat, sessions, skills/prompts/extensions
 // ════════════════════════════════════════════════════════════════════
 import { useState, useEffect } from 'react'
 import { apiUrl } from '../lib/api'
 import { Settings } from 'lucide-react'
 
-export function Sidebar({ open, onToggle, connected, sessionAlive, onNewChat, onShowReleaseNotes, onShowSettings }) {
+function timeAgo(dateStr) {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'now'
+  if (mins < 60) return `${mins}m`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h`
+  const days = Math.floor(hours / 24)
+  return `${days}d`
+}
+
+export function Sidebar({ open, onToggle, connected, sessionAlive, sessionId, onNewChat, onSwitchSession, onShowReleaseNotes, onShowSettings, refreshTrigger }) {
   const [commands, setCommands] = useState(null)
+  const [sessions, setSessions] = useState([])
 
   useEffect(() => {
     fetch(apiUrl('/api/commands'))
@@ -14,6 +26,13 @@ export function Sidebar({ open, onToggle, connected, sessionAlive, onNewChat, on
       .then(setCommands)
       .catch(() => {})
   }, [])
+
+  useEffect(() => {
+    fetch(apiUrl('/api/sessions'))
+      .then(r => r.json())
+      .then(setSessions)
+      .catch(() => {})
+  }, [refreshTrigger])
 
   const groups = [
     { key: 'skills', label: 'Skills', icon: '⚡' },
@@ -37,6 +56,30 @@ export function Sidebar({ open, onToggle, connected, sessionAlive, onNewChat, on
         </button>
       </nav>
 
+      {/* Session list */}
+      <div className="sb-section sb-sessions">
+        <span className="sb-label">Recent</span>
+        <div className="sb-session-list">
+          {!connected ? (
+            <div className="connecting"><span className="thinking-dot" /><span>Connecting…</span></div>
+          ) : sessions.length === 0 ? (
+            <div className="connecting"><span className="thinking-dot" /><span>No sessions</span></div>
+          ) : (
+            sessions.map(s => (
+              <button
+                key={s.id}
+                className={`sb-session ${s.id === sessionId ? 'active' : ''}`}
+                onClick={() => onSwitchSession?.(s.path)}
+                title={s.firstMessage}
+              >
+                <span className="sb-session-title">{s.firstMessage || 'New session'}</span>
+                <span className="sb-session-meta">{timeAgo(s.modified)} · {s.messageCount} msgs</span>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+
       {/* Collapsible command groups */}
       <div className="sb-section">
         {groups.map(({ key, label }) => {
@@ -46,24 +89,6 @@ export function Sidebar({ open, onToggle, connected, sessionAlive, onNewChat, on
             <CollapsibleGroup key={key} label={label} items={items} />
           )
         })}
-      </div>
-
-      <div className="sb-section">
-        <span className="sb-label">Recent</span>
-      </div>
-
-      <div className="sb-content">
-        {!connected ? (
-          <div className="connecting">
-            <span className="thinking-dot" />
-            <span>Connecting...</span>
-          </div>
-        ) : !sessionAlive ? (
-          <div className="connecting">
-            <span className="thinking-dot" />
-            <span>No session</span>
-          </div>
-        ) : null}
       </div>
 
       <div className="sb-footer">

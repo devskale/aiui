@@ -16,11 +16,12 @@ import { SettingsPanel } from './components/SettingsPanel'
 import { UserEntry, AssistantEntry, ErrorEntry } from './components/StreamEntry'
 
 export default function App() {
-  const { entries, current, steerQueue, streaming, connected, sessionAlive, sessionModel, sessionStats, thinkingLevel, isCompacting, autoCompactionEnabled, sendPrompt, sendSteer, abortAgent, startNewChat, dispatch } = useAgentEvents()
+  const { entries, current, steerQueue, streaming, connected, sessionAlive, sessionModel, sessionId, sessionStats, thinkingLevel, isCompacting, autoCompactionEnabled, sendPrompt, sendSteer, abortAgent, startNewChat, dispatch } = useAgentEvents()
   const { attachments, addFiles, remove: removeAttachment, clear: clearAttachments, buildPayload } = useAttachments()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [showModelPicker, setShowModelPicker] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [sessionRefresh, setSessionRefresh] = useState(0)
   const { route, navigate } = useHashRoute()
   const [model, setModel] = useState('')
   const endRef = useRef(null)
@@ -79,6 +80,20 @@ export default function App() {
     clearAttachments()
   }
 
+  const handleSwitchSession = async (path) => {
+    await fetch(apiUrl('/api/session/switch'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path }),
+    })
+    setSessionRefresh(n => n + 1)
+  }
+
+  const handleNewChat = async () => {
+    await startNewChat()
+    setSessionRefresh(n => n + 1)
+  }
+
   const hasContent = entries.length > 0 || current
 
   const copyEntry = (el) => {
@@ -99,9 +114,12 @@ export default function App() {
         onToggle={() => setSidebarOpen(!sidebarOpen)}
         connected={connected}
         sessionAlive={sessionAlive}
-        onNewChat={startNewChat}
+        sessionId={sessionId}
+        onNewChat={handleNewChat}
+        onSwitchSession={handleSwitchSession}
         onShowReleaseNotes={() => navigate('releases')}
         onShowSettings={() => setShowSettings(true)}
+        refreshTrigger={sessionRefresh}
       />
 
       <main className={`main ${!sidebarOpen ? 'full' : ''}`}>

@@ -131,6 +131,7 @@ export function getSessionInfo() {
     thinkingLevel: session?.thinkingLevel ?? null,
     isCompacting: session?.isCompacting ?? false,
     autoCompactionEnabled: session?.autoCompactionEnabled ?? true,
+    sessionId: session?.sessionId ?? null,
   }
 }
 
@@ -166,6 +167,47 @@ export function abortCompaction() {
 export function setAutoCompaction(enabled) {
   if (!session) return
   session.setAutoCompactionEnabled(enabled)
+}
+
+// ── Session list + switching ──
+
+export async function listSessions() {
+  await initShared()
+  try {
+    const sessions = await SessionManager.list(cwd)
+    // Sort by modified desc, strip heavy fields
+    return sessions
+      .sort((a, b) => new Date(b.modified) - new Date(a.modified))
+      .map(s => ({
+        path: s.path,
+        id: s.id,
+        name: s.name || '',
+        created: s.created,
+        modified: s.modified,
+        messageCount: s.messageCount,
+        firstMessage: (s.firstMessage || '').slice(0, 100),
+      }))
+  } catch {
+    return []
+  }
+}
+
+export async function switchToSession(sessionPath) {
+  disposeSession()
+  await initShared()
+  const { session: s } = await createAgentSession({
+    cwd,
+    authStorage,
+    modelRegistry,
+    sessionManager: SessionManager.open(sessionPath),
+  })
+  session = s
+  console.log('π agent session switched:', sessionPath)
+  if (eventBroadcaster) {
+    eventBroadcaster('session_status', getSessionInfo())
+    wireBroadcaster()
+  }
+  return session
 }
 
 // ── Session history (for replay on page load) ──
