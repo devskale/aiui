@@ -19,6 +19,7 @@ const initialState = {
   connected: false,
   sessionAlive: false,
   sessionModel: null,
+  sessionStats: null,
 }
 
 function reducer(state, action) {
@@ -32,6 +33,9 @@ function reducer(state, action) {
 
     case 'session_status':
       return { ...state, sessionAlive: action.alive, sessionModel: action.model, streaming: action.streaming ?? state.streaming }
+
+    case 'session_stats':
+      return { ...state, sessionStats: action }
 
     case 'user_prompt': {
       const entry = { role: 'user', text: action.text, attachments: action.attachments }
@@ -195,7 +199,7 @@ function reducer(state, action) {
     }
 
     case 'reset':
-      return { ...initialState, connected: state.connected, sessionAlive: state.sessionAlive, sessionModel: state.sessionModel }
+      return { ...initialState, connected: state.connected, sessionAlive: state.sessionAlive, sessionModel: state.sessionModel, sessionStats: state.sessionStats }
 
     default:
       return state
@@ -219,7 +223,7 @@ export function useAgentEvents() {
       'queue_update',
       'compaction_start', 'compaction_end',
       'auto_retry_start', 'auto_retry_end',
-      'session_status',
+      'session_status', 'session_stats',
       'error',
     ]
 

@@ -4,7 +4,7 @@ import { v4 as uuid } from 'uuid'
 import path from 'node:path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { getOrCreateSession, prompt, abort, setModel, getAvailableModels, getCommands, setEventBroadcaster, getSessionInfo } from './pi-session.js'
+import { getOrCreateSession, prompt, abort, setModel, getAvailableModels, getCommands, setEventBroadcaster, getSessionInfo, getSessionStats } from './pi-session.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const uploadsDir = path.join(__dirname, '..', 'uploads')
@@ -50,6 +50,9 @@ app.get('/api/events', (req, res) => {
   // Send current session status immediately on connect
   const info = getSessionInfo()
   res.write(`event: session_status\ndata: ${JSON.stringify(info)}\n\n`)
+  // Send stats too if session is alive
+  const stats = getSessionStats()
+  if (stats) res.write(`event: session_stats\ndata: ${JSON.stringify(stats)}\n\n`)
   // Keepalive every 30s to prevent idle proxy/bridge disconnects
   const keepalive = setInterval(() => {
     try { res.write(': keepalive\n\n') } catch { clearInterval(keepalive) }
@@ -70,6 +73,7 @@ app.post('/api/prompt', async (req, res) => {
     setEventBroadcaster((type, data) => broadcast(type, data))
     await prompt(text, attachments)
     broadcast('session_status', getSessionInfo())
+    broadcast('session_stats', getSessionStats())
   } catch (err) {
     broadcast('error', { message: err.message })
   }
@@ -111,6 +115,13 @@ app.get('/api/commands', async (_req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
+})
+
+// ── Session stats ──
+app.get('/api/stats', (_req, res) => {
+  const stats = getSessionStats()
+  if (!stats) return res.json(null)
+  res.json(stats)
 })
 
 // ── Release notes / changelog ──

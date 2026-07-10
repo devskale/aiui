@@ -7,12 +7,13 @@ import { Sidebar } from './components/Sidebar'
 import { ModelPicker } from './components/ModelPicker'
 import { CommandPanel } from './components/CommandPanel'
 import { InputBar } from './components/InputBar'
+import { StatsFooter } from './components/StatsFooter'
 import { EmptyState } from './components/EmptyState'
 import { ReleaseNotes } from './components/ReleaseNotes'
 import { UserEntry, AssistantEntry, ErrorEntry } from './components/StreamEntry'
 
 export default function App() {
-  const { entries, current, streaming, connected, sessionAlive, sessionModel, sendPrompt, abortAgent, dispatch } = useAgentEvents()
+  const { entries, current, streaming, connected, sessionAlive, sessionModel, sessionStats, sendPrompt, abortAgent, dispatch } = useAgentEvents()
   const { attachments, addFiles, remove: removeAttachment, clear: clearAttachments, buildPayload } = useAttachments()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [showModelPicker, setShowModelPicker] = useState(false)
@@ -130,6 +131,7 @@ export default function App() {
           )}
         </div>
 
+        <StatsFooter stats={sessionStats} />
         <InputBar
           onSend={handleSend}
           onStop={abortAgent}

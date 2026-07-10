@@ -121,6 +121,11 @@ export function getSessionInfo() {
   }
 }
 
+export function getSessionStats() {
+  if (!session) return null
+  try { return session.getSessionStats() } catch { return null }
+}
+
 export async function getCommands() {
   const s = await getOrCreateSession()
   const loader = s.resourceLoader
