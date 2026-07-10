@@ -4,7 +4,7 @@ import { v4 as uuid } from 'uuid'
 import path from 'node:path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { getOrCreateSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, getAvailableModels, getCommands, setEventBroadcaster, getSessionInfo, getSessionStats } from './pi-session.js'
+import { getOrCreateSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, getAvailableModels, getCommands, setEventBroadcaster, getSessionInfo, getSessionStats, getSessionHistory, newSession } from './pi-session.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const uploadsDir = path.join(__dirname, '..', 'uploads')
@@ -47,12 +47,22 @@ app.get('/api/events', (req, res) => {
   })
   res.write('\n')
   clients.add(res)
-  // Send current session status immediately on connect
-  const info = getSessionInfo()
-  res.write(`event: session_status\ndata: ${JSON.stringify(info)}\n\n`)
-  // Send stats too if session is alive
-  const stats = getSessionStats()
-  if (stats) res.write(`event: session_stats\ndata: ${JSON.stringify(stats)}\n\n`)
+
+  // Eagerly create/resume session so history is available immediately
+  getOrCreateSession().then(() => {
+    // Send current session status
+    res.write(`event: session_status\ndata: ${JSON.stringify(getSessionInfo())}\n\n`)
+    // Send conversation history
+    const history = getSessionHistory()
+    if (history.length) {
+      res.write(`event: session_history\ndata: ${JSON.stringify({ entries: history })}\n\n`)
+    }
+    // Send stats if session is alive
+    const stats = getSessionStats()
+    if (stats) res.write(`event: session_stats\ndata: ${JSON.stringify(stats)}\n\n`)
+  }).catch(err => {
+    res.write(`event: error\ndata: ${JSON.stringify({ message: err.message })}\n\n`)
+  })
   // Keepalive every 30s to prevent idle proxy/bridge disconnects
   const keepalive = setInterval(() => {
     try { res.write(': keepalive\n\n') } catch { clearInterval(keepalive) }
@@ -139,6 +149,24 @@ app.get('/api/stats', (_req, res) => {
   const stats = getSessionStats()
   if (!stats) return res.json(null)
   res.json(stats)
+})
+
+// ── Session history ──
+app.get('/api/history', (_req, res) => {
+  res.json({ entries: getSessionHistory() })
+})
+
+// ── New session ──
+app.post('/api/session/new', async (_req, res) => {
+  try {
+    await newSession()
+    broadcast('session_status', getSessionInfo())
+    broadcast('session_history', { entries: [] })
+    broadcast('session_stats', getSessionStats())
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
 })
 
 // ── Release notes / changelog ──

@@ -1,10 +1,9 @@
 import { createAgentSession, AuthStorage, ModelRegistry, SessionManager } from '@earendil-works/pi-coding-agent'
 import path from 'node:path'
-import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const sessionDir = path.join(__dirname, '..', 'session')
+const cwd = path.join(__dirname, '..')
 
 let authStorage = null
 let modelRegistry = null
@@ -20,50 +19,61 @@ async function initShared() {
   }
 }
 
-// Create a fresh session, destroying the old one
-async function resetSession() {
+function disposeSession() {
   if (unsubscribe) { unsubscribe(); unsubscribe = null }
   if (session) {
     try { session.dispose?.() } catch {}
     session = null
   }
-  // Wipe session files so no bad state persists
-  fs.rmSync(sessionDir, { recursive: true, force: true })
-  fs.mkdirSync(sessionDir, { recursive: true })
 }
 
-export async function getOrCreateSession() {
-  if (session) return session
-  await initShared()
-  await resetSession()
-
-  const { session: s } = await createAgentSession({
-    cwd: path.join(__dirname, '..'),
-    authStorage,
-    modelRegistry,
-  })
-  session = s
-  console.log('π agent session created')
-  // Notify SSE clients of new session
-  if (eventBroadcaster) eventBroadcaster('session_status', getSessionInfo())
-
-  // Wire broadcaster if already set
-  if (eventBroadcaster && !unsubscribe) {
+function wireBroadcaster() {
+  if (session && eventBroadcaster && !unsubscribe) {
     unsubscribe = session.subscribe((event) => {
       eventBroadcaster(event.type, event)
     })
+  }
+}
+
+// Resume the most recent session, or create new if none exists
+export async function getOrCreateSession() {
+  if (session) return session
+  await initShared()
+  const { session: s } = await createAgentSession({
+    cwd,
+    authStorage,
+    modelRegistry,
+    sessionManager: SessionManager.continueRecent(cwd),
+  })
+  session = s
+  console.log('π agent session ready (resumed recent)')
+  if (eventBroadcaster) eventBroadcaster('session_status', getSessionInfo())
+  wireBroadcaster()
+  return session
+}
+
+// Start a brand-new session (for "New Chat")
+export async function newSession() {
+  disposeSession()
+  await initShared()
+  const { session: s } = await createAgentSession({
+    cwd,
+    authStorage,
+    modelRegistry,
+    sessionManager: SessionManager.create(cwd),
+  })
+  session = s
+  console.log('π agent new session created')
+  if (eventBroadcaster) {
+    eventBroadcaster('session_status', getSessionInfo())
+    wireBroadcaster()
   }
   return session
 }
 
 export function setEventBroadcaster(fn) {
   eventBroadcaster = fn
-  // Wire if session already exists
-  if (session && !unsubscribe) {
-    unsubscribe = session.subscribe((event) => {
-      eventBroadcaster(event.type, event)
-    })
-  }
+  wireBroadcaster()
 }
 
 export async function prompt(text, attachments = []) {
@@ -139,6 +149,52 @@ export function getThinkingInfo() {
     available: session.getAvailableThinkingLevels(),
     supportsThinking: session.supportsThinking(),
   }
+}
+
+// ── Session history (for replay on page load) ──
+
+function extractText(content) {
+  if (!content) return ''
+  if (typeof content === 'string') return content
+  return content.filter(c => c.type === 'text').map(c => c.text).join('\n')
+}
+
+function extractThinking(content) {
+  if (!content || typeof content === 'string') return ''
+  return content.filter(c => c.type === 'thinking').map(c => c.thinking).join('\n')
+}
+
+export function getSessionHistory() {
+  if (!session?.messages) return []
+  const entries = []
+  for (const msg of session.messages) {
+    if (msg.role === 'user') {
+      const text = extractText(msg.content)
+      if (text) entries.push({ role: 'user', text })
+    } else if (msg.role === 'assistant') {
+      const toolCalls = (msg.content || [])
+        .filter(c => c.type === 'toolCall')
+        .map(c => ({ name: c.name, args: c.arguments, status: 'done', output: '' }))
+      const entry = {
+        role: 'assistant',
+        text: extractText(msg.content),
+        thinkingText: extractThinking(msg.content),
+        toolCalls,
+      }
+      if (entry.text || entry.toolCalls.length) entries.push(entry)
+    } else if (msg.role === 'toolResult') {
+      // Attach output to the preceding assistant's matching tool call
+      const last = entries[entries.length - 1]
+      if (last?.role === 'assistant') {
+        const tc = last.toolCalls.find(t => t.name === msg.toolName)
+        if (tc) {
+          tc.output = extractText(msg.content)
+          tc.status = msg.isError ? 'error' : 'done'
+        }
+      }
+    }
+  }
+  return entries
 }
 
 export async function getCommands() {

@@ -39,6 +39,9 @@ function reducer(state, action) {
     case 'session_stats':
       return { ...state, sessionStats: action }
 
+    case 'session_history':
+      return { ...state, entries: action.entries || [], current: null, steerQueue: [] }
+
     case 'thinking_level_changed':
       return { ...state, thinkingLevel: action.level }
 
@@ -238,6 +241,7 @@ export function useAgentEvents() {
       'compaction_start', 'compaction_end',
       'auto_retry_start', 'auto_retry_end',
       'session_status', 'session_stats',
+      'session_history',
       'thinking_level_changed',
       'error',
     ]
@@ -281,5 +285,10 @@ export function useAgentEvents() {
     await fetch(apiUrl('/api/abort'), { method: 'POST' })
   }
 
-  return { ...state, sendPrompt, sendSteer, abortAgent, dispatch }
+  const startNewChat = async () => {
+    dispatch({ type: 'reset' })
+    await fetch(apiUrl('/api/session/new'), { method: 'POST' })
+  }
+
+  return { ...state, sendPrompt, sendSteer, abortAgent, startNewChat, dispatch }
 }
