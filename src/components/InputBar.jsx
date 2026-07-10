@@ -3,7 +3,7 @@
 // ════════════════════════════════════════════════════════════════════
 import { useState, useRef, useEffect } from 'react'
 
-export function InputBar({ onSend, onStop, streaming, attachments, onRemoveAttachment, onAddFiles }) {
+export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRemoveAttachment, onAddFiles }) {
   const [text, setText] = useState('')
   const ref = useRef(null)
   const fileRef = useRef(null)
@@ -21,8 +21,11 @@ export function InputBar({ onSend, onStop, streaming, attachments, onRemoveAttac
 
   const handleSend = () => {
     if (!text.trim() && attachments.length === 0) return
-    if (streaming) return
-    onSend(text)
+    if (streaming) {
+      onSteer(text)
+    } else {
+      onSend(text)
+    }
     setText('')
     if (ref.current) ref.current.style.height = 'auto'
   }
@@ -67,7 +70,7 @@ export function InputBar({ onSend, onStop, streaming, attachments, onRemoveAttac
           }}
           onKeyDown={handleKey}
           onPaste={handlePaste}
-          placeholder="Ask π anything…"
+          placeholder={streaming ? 'Steer π… (queued after current turn)' : 'Ask π anything…'}
           rows={1}
         />
         <button className="ib-btn" onClick={() => fileRef.current?.click()} title="Attach file">

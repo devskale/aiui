@@ -15,6 +15,7 @@ import { apiUrl } from '../lib/api'
 const initialState = {
   entries: [],       // committed entries (user + assistant turns)
   current: null,     // in-progress assistant turn being streamed
+  steerQueue: [],    // transient steer messages shown while streaming
   streaming: false,
   connected: false,
   sessionAlive: false,
@@ -42,8 +43,17 @@ function reducer(state, action) {
       return { ...state, entries: [...state.entries, entry], streaming: true, current: null }
     }
 
+    case 'user_steer': {
+      // Queued while streaming — shown transiently, cleared on next turn_start
+      return { ...state, steerQueue: [...state.steerQueue, action.text] }
+    }
+
     case 'agent_start':
       return { ...state, streaming: true }
+
+    case 'queue_update':
+      // SDK source of truth for queued steer/follow-up messages
+      return { ...state, steerQueue: action.steering || [] }
 
     case 'message_start': {
       // New assistant message starting
@@ -253,9 +263,18 @@ export function useAgentEvents() {
     })
   }
 
+  const sendSteer = async (text, attachments = []) => {
+    dispatch({ type: 'user_steer', text })
+    await fetch(apiUrl('/api/prompt'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, attachments }),
+    })
+  }
+
   const abortAgent = async () => {
     await fetch(apiUrl('/api/abort'), { method: 'POST' })
   }
 
-  return { ...state, sendPrompt, abortAgent, dispatch }
+  return { ...state, sendPrompt, sendSteer, abortAgent, dispatch }
 }

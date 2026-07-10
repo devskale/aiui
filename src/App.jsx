@@ -15,7 +15,7 @@ import { SettingsPanel } from './components/SettingsPanel'
 import { UserEntry, AssistantEntry, ErrorEntry } from './components/StreamEntry'
 
 export default function App() {
-  const { entries, current, streaming, connected, sessionAlive, sessionModel, sessionStats, sendPrompt, abortAgent, dispatch } = useAgentEvents()
+  const { entries, current, steerQueue, streaming, connected, sessionAlive, sessionModel, sessionStats, sendPrompt, sendSteer, abortAgent, dispatch } = useAgentEvents()
   const { attachments, addFiles, remove: removeAttachment, clear: clearAttachments, buildPayload } = useAttachments()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [showModelPicker, setShowModelPicker] = useState(false)
@@ -72,6 +72,12 @@ export default function App() {
     clearAttachments()
   }
 
+  const handleSteer = async (text) => {
+    const payload = buildPayload()
+    await sendSteer(text, payload)
+    clearAttachments()
+  }
+
   const hasContent = entries.length > 0 || current
 
   const copyEntry = (el) => {
@@ -118,6 +124,13 @@ export default function App() {
                 return <AssistantEntry key={i} entry={entry} isStreaming={false} onCopy={copyEntry} />
               })}
               {current && <AssistantEntry entry={current} isStreaming={true} onCopy={copyEntry} />}
+              {steerQueue.map((text, i) => (
+                <div key={`steer-${i}`} className="steer-msg">
+                  <span className="steer-arrow">↳</span>
+                  <span className="steer-text">{text}</span>
+                  <span className="steer-badge">queued</span>
+                </div>
+              ))}
               <div ref={endRef} />
             </div>
           ) : (
@@ -128,6 +141,7 @@ export default function App() {
         <StatsFooter stats={sessionStats} />
         <InputBar
           onSend={handleSend}
+          onSteer={handleSteer}
           onStop={abortAgent}
           streaming={streaming}
           attachments={attachments}
