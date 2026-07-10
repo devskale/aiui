@@ -2,30 +2,20 @@
 // StreamEntry — renders a single stream entry (user, assistant, error)
 // Tool calls rendered pi-TUI-style: icon + name + args, expandable output
 // ════════════════════════════════════════════════════════════════════
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
-// ── Tool metadata ──
-const TOOL_META = {
-  bash:      { icon: '$',  color: '#eab308', label: args => args?.command ? `$ ${args.command}` : '$ ...' },
-  read:      { icon: '📖', color: '#60a5fa', label: args => formatPath(args?.file_path || args?.path) },
-  write:     { icon: '✏️', color: '#22c55e', label: args => formatPath(args?.file_path || args?.path) },
-  edit:      { icon: '✂️', color: '#f97316', label: args => formatPath(args?.file_path || args?.path) },
-  grep:      { icon: '🔍', color: '#a78bfa', label: args => args?.pattern || 'grep' },
-  find:      { icon: '📁', color: '#a78bfa', label: args => args?.pattern || 'find' },
-  ls:        { icon: '📂', color: '#a78bfa', label: args => formatPath(args?.path) },
-  mcp:       { icon: '🔗', color: '#38bdf8', label: () => 'mcp' },
-  fetch_url: { icon: '🌐', color: '#2dd4bf', label: args => args?.url || 'fetch' },
-  web_search:{ icon: '🔎', color: '#2dd4bf', label: args => args?.query || 'search' },
-}
-
-function getToolMeta(name) {
+// ── Tool labels (monochrome, no emoji) ──
+function getToolLabel(name, args) {
   const lower = (name || '').toLowerCase()
-  for (const [key, meta] of Object.entries(TOOL_META)) {
-    if (lower.includes(key)) return meta
-  }
-  return { icon: '🔧', color: '#888', label: () => name || 'tool' }
+  if (lower.includes('bash')) return args?.command ? `$ ${args.command.slice(0, 80)}` : ''
+  if (lower.includes('read') || lower.includes('write') || lower.includes('edit'))
+    return formatPath(args?.file_path || args?.path)
+  if (lower.includes('grep')) return args?.pattern || ''
+  if (lower.includes('find') || lower.includes('glob')) return args?.pattern || ''
+  if (lower.includes('ls')) return formatPath(args?.path)
+  return ''
 }
 
 function formatPath(p) {
@@ -41,29 +31,36 @@ function parseArgs(args) {
   try { return JSON.parse(args) } catch { return { raw: String(args) } }
 }
 
-// ── ThinkingBlock — simple muted one-liner, expandable ──
-function ToolCall({ tc }) {
-  const [expanded, setExpanded] = useState(false)
+// ── ToolGroup — dim tool calls, connected by left border, no header ──
+function ToolGroup({ toolCalls }) {
+  return (
+    <div className="tc-group-body">
+      {toolCalls.map((tc, i) => <ToolCallDim key={i} tc={tc} />)}
+    </div>
+  )
+}
+
+// ── ToolCallDim — single dim tool call line with expandable output ──
+function ToolCallDim({ tc }) {
+  const [showOutput, setShowOutput] = useState(false)
+  const args = parseArgs(tc.args)
+  const label = getToolLabel(tc.name, args)
   const isError = tc.status === 'error'
   const isRunning = tc.status === 'running'
-  const meta = getToolMeta(tc.name)
-  const args = parseArgs(tc.args)
-  const label = meta.label(args)
   const output = tc.output || ''
+  const isBash = tc.name.toLowerCase().includes('bash')
+
+  // One clean line: bash shows "$ cmd", others show "name detail"
+  const line = isBash ? label : `${tc.name}${label ? ' ' + label : ''}`
 
   return (
     <div
-      className={`tc-line ${isError ? 'error' : ''} ${output ? 'clickable' : ''}`}
-      onClick={() => output && setExpanded(!expanded)}
+      className={`tc-dim ${isError ? 'err' : ''} ${isRunning ? 'running' : ''}`}
+      onClick={() => output && setShowOutput(!showOutput)}
     >
-      <span className="tc-dot" style={{ color: isError ? '#ef4444' : isRunning ? '#eab308' : meta.color }}>
-        {isRunning ? '⋯' : isError ? '✗' : '✓'}
-      </span>
-      <span className="tc-name" style={{ color: meta.color }}>{tc.name}</span>
-      {label && label !== tc.name && <span className="tc-detail">{label}</span>}
-      {expanded && output && (
-        <pre className="tc-output-inline">{output}</pre>
-      )}
+      <span className="tc-dim-line">{line}</span>
+      {isRunning && <span className="tc-dim-running" />}
+      {showOutput && output && <pre className="tc-dim-output">{output}</pre>}
     </div>
   )
 }
@@ -125,7 +122,7 @@ export function AssistantEntry({ entry, isStreaming, onCopy }) {
       {hasThinking && (
         <ThinkingBlock thinking={entry.thinking} thinkingDone={entry.thinkingDone} thinkingText={entry.thinkingText} />
       )}
-      {hasTools && entry.toolCalls.map((tc, i) => <ToolCall key={i} tc={tc} />)}
+      {hasTools && <ToolGroup toolCalls={entry.toolCalls} />}
       {hasText && (
         <div className="entry-text">
           <Markdown remarkPlugins={[remarkGfm]} components={mdComponents}>{entry.text}</Markdown>
