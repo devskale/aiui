@@ -152,6 +152,35 @@ pre code { background: none; padding: 0; font-size: 13px; }
   max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .tb-model:hover { background: #1a1a1e; color: #555; }
+
+/* ── Thinking picker ── */
+.tp-wrapper { position: relative; }
+.tp-btn {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 12px; color: #999; cursor: pointer; padding: 4px 8px;
+  border-radius: 6px; border: 1px solid #1a1a1e; background: none;
+  text-transform: capitalize; transition: all .1s;
+}
+.tp-btn:hover:not(:disabled) { background: #1a1a1e; color: #ccc; border-color: #222; }
+.tp-btn:disabled { opacity: .4; cursor: default; }
+.tp-dropdown {
+  position: absolute; top: calc(100% + 4px); left: 0; z-index: 40;
+  background: #111113; border: 1px solid #222; border-radius: 8px;
+  padding: 4px; min-width: 140px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.tp-label {
+  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .6px;
+  color: #555; padding: 4px 8px 2px;
+}
+.tp-option {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 5px 8px; background: none; border: none; color: #999;
+  cursor: pointer; border-radius: 5px; font-size: 13px; text-align: left;
+  text-transform: capitalize; transition: all .1s;
+}
+.tp-option:hover { background: #1a1a1e; color: #eee; }
+.tp-option.active { color: #10b981; }
+.tp-check { width: 14px; font-size: 12px; }
 .tb-btn.copy:hover { color: #10b981; }
 
 /* ── Content area ── */

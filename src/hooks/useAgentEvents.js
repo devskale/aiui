@@ -21,6 +21,7 @@ const initialState = {
   sessionAlive: false,
   sessionModel: null,
   sessionStats: null,
+  thinkingLevel: null,
 }
 
 function reducer(state, action) {
@@ -33,10 +34,13 @@ function reducer(state, action) {
       return { ...state, connected: false, sessionAlive: false, sessionModel: null }
 
     case 'session_status':
-      return { ...state, sessionAlive: action.alive, sessionModel: action.model, streaming: action.streaming ?? state.streaming }
+      return { ...state, sessionAlive: action.alive, sessionModel: action.model, streaming: action.streaming ?? state.streaming, thinkingLevel: action.thinkingLevel ?? state.thinkingLevel }
 
     case 'session_stats':
       return { ...state, sessionStats: action }
+
+    case 'thinking_level_changed':
+      return { ...state, thinkingLevel: action.level }
 
     case 'user_prompt': {
       const entry = { role: 'user', text: action.text, attachments: action.attachments }
@@ -234,6 +238,7 @@ export function useAgentEvents() {
       'compaction_start', 'compaction_end',
       'auto_retry_start', 'auto_retry_end',
       'session_status', 'session_stats',
+      'thinking_level_changed',
       'error',
     ]
 

@@ -118,12 +118,27 @@ export function getSessionInfo() {
     alive: session !== null,
     streaming: session?.isStreaming ?? false,
     model: session?.model ? `${session.model.provider}@${session.model.id}` : null,
+    thinkingLevel: session?.thinkingLevel ?? null,
   }
 }
 
 export function getSessionStats() {
   if (!session) return null
   try { return session.getSessionStats() } catch { return null }
+}
+
+export function setThinkingLevel(level) {
+  if (!session) throw new Error('no session')
+  session.setThinkingLevel(level)
+}
+
+export function getThinkingInfo() {
+  if (!session) return null
+  return {
+    current: session.thinkingLevel,
+    available: session.getAvailableThinkingLevels(),
+    supportsThinking: session.supportsThinking(),
+  }
 }
 
 export async function getCommands() {

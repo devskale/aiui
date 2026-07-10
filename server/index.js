@@ -4,7 +4,7 @@ import { v4 as uuid } from 'uuid'
 import path from 'node:path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { getOrCreateSession, prompt, abort, setModel, getAvailableModels, getCommands, setEventBroadcaster, getSessionInfo, getSessionStats } from './pi-session.js'
+import { getOrCreateSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, getAvailableModels, getCommands, setEventBroadcaster, getSessionInfo, getSessionStats } from './pi-session.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const uploadsDir = path.join(__dirname, '..', 'uploads')
@@ -101,6 +101,23 @@ app.post('/api/model', async (req, res) => {
   if (!model) return res.status(400).json({ error: 'no model' })
   try {
     await setModel(model)
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── Thinking level ──
+app.get('/api/thinking-level', (_req, res) => {
+  res.json(getThinkingInfo())
+})
+
+app.post('/api/thinking-level', (req, res) => {
+  const { level } = req.body
+  if (!level) return res.status(400).json({ error: 'no level' })
+  try {
+    setThinkingLevel(level)
+    broadcast('session_status', getSessionInfo())
     res.json({ ok: true })
   } catch (err) {
     res.status(500).json({ error: err.message })
