@@ -67,12 +67,6 @@ export function setEventBroadcaster(fn) {
 }
 
 export async function prompt(text, attachments = []) {
-  // If there are images, create a fresh session to avoid replaying failed image state
-  const hasImages = attachments.some(a => a.isImage && a.dataUrl)
-  if (hasImages && session) {
-    await resetSession()
-    session = null
-  }
   const s = await getOrCreateSession()
   const promptText = text?.trim() || 'Describe this image.'
   const images = attachments
@@ -85,7 +79,10 @@ export async function prompt(text, attachments = []) {
         data: match?.[2],
       }
     })
-  return s.prompt(promptText, { images })
+  // SDK 0.80.x requires streamingBehavior when prompting while a turn is in flight
+  const options = { images }
+  if (s.isStreaming) options.streamingBehavior = 'steer'
+  return s.prompt(promptText, options)
 }
 
 export async function abort() {

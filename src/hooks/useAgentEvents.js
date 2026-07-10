@@ -2,7 +2,7 @@
 // useAgentEvents — SSE event reducer for the pi agent stream
 //
 // SDK events:
-//   agent_start, agent_end
+//   agent_start, agent_end, agent_settled
 //   turn_start, turn_end
 //   message_start, message_end
 //   message_update (assistantMessageEvent: text_delta, thinking_delta, thinking_start, thinking_end, tool_call_start, tool_call_end)
@@ -171,6 +171,17 @@ function reducer(state, action) {
       if (state.current && (state.current.text.trim() || state.current.toolCalls.length > 0)) {
         entries = [...entries, state.current]
       }
+      // Stay streaming until agent_settled (SDK 0.80.4+): tool calls or
+      // steering messages may still be pending after agent_end.
+      return { ...state, entries, current: null }
+    }
+
+    case 'agent_settled': {
+      // Agent is fully settled — no pending tool calls or steering messages.
+      let entries = state.entries
+      if (state.current && (state.current.text.trim() || state.current.toolCalls.length > 0)) {
+        entries = [...entries, state.current]
+      }
       return { ...state, entries, current: null, streaming: false }
     }
 
@@ -201,7 +212,7 @@ export function useAgentEvents() {
     es.onerror = () => dispatch({ type: 'disconnected' })
 
     const events = [
-      'agent_start', 'agent_end',
+      'agent_start', 'agent_end', 'agent_settled',
       'turn_start', 'turn_end',
       'message_start', 'message_end', 'message_update',
       'tool_execution_start', 'tool_execution_update', 'tool_execution_end',
