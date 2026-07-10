@@ -1,30 +1,95 @@
 // ════════════════════════════════════════════════════════════════════
-// InputBar — bottom input with attachment support
+// InputBar — bottom input with attachment support + skill autocomplete
 // ════════════════════════════════════════════════════════════════════
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
+import { apiUrl } from '../lib/api'
 
 export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRemoveAttachment, onAddFiles }) {
   const [text, setText] = useState('')
+  const [skills, setSkills] = useState([])
+  const [acIndex, setAcIndex] = useState(0)
+  const [acDismissed, setAcDismissed] = useState(false)
   const ref = useRef(null)
   const fileRef = useRef(null)
+
+  // Fetch available skills for autocomplete
+  useEffect(() => {
+    fetch(apiUrl('/api/commands'))
+      .then(r => r.json())
+      .then(data => setSkills(data?.skills || []))
+      .catch(() => {})
+  }, [])
+
+  // Autocomplete: show when typing /skillname (no space yet)
+  const firstWord = text.startsWith('/') ? text.slice(1).split(/\s/)[0] : ''
+  const acItems = useMemo(() => {
+    if (!text.startsWith('/') || text.includes(' ')) return []
+    if (!firstWord) return skills
+    return skills.filter(s => s.name.startsWith(firstWord))
+  }, [text, skills, firstWord])
+
+  const acOpen = !acDismissed && acItems.length > 0 && text.startsWith('/') && !text.includes(' ')
+
+  // Reset index + dismissed when items change
+  useEffect(() => { setAcIndex(0) }, [firstWord])
+  useEffect(() => { setAcDismissed(false) }, [text])
 
   useEffect(() => {
     if (!streaming) ref.current?.focus()
   }, [streaming])
 
+  const completeSkill = (skillName) => {
+    setText(`/${skillName} `)
+    ref.current?.focus()
+  }
+
   const handleKey = (e) => {
+    // Autocomplete navigation
+    if (acOpen) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setAcIndex(i => Math.min(i + 1, acItems.length - 1))
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setAcIndex(i => Math.max(i - 1, 0))
+        return
+      }
+      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+        e.preventDefault()
+        completeSkill(acItems[acIndex]?.name || acItems[0]?.name)
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setAcDismissed(true)
+        return
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSend()
     }
   }
 
+  // Rewrite /skillname → /skill:skillname if it matches a known skill
+  const rewriteSkillCommand = (input) => {
+    const match = input.match(/^\/([\w][\w-]*)/)
+    if (match && skills.some(s => s.name === match[1])) {
+      return '/skill:' + input.slice(1)
+    }
+    return input
+  }
+
   const handleSend = () => {
     if (!text.trim() && attachments.length === 0) return
+    const textToSend = rewriteSkillCommand(text)
     if (streaming) {
-      onSteer(text)
+      onSteer(textToSend)
     } else {
-      onSend(text)
+      onSend(textToSend)
     }
     setText('')
     if (ref.current) ref.current.style.height = 'auto'
@@ -48,6 +113,26 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
 
   return (
     <div className="input-area" onDrop={handleDrop} onDragOver={e => e.preventDefault()}>
+      {/* Skill autocomplete dropdown */}
+      {acOpen && (
+        <div className="ac-dropdown">
+          {acItems.map((skill, i) => (
+            <button
+              key={skill.name}
+              className={`ac-item ${i === acIndex ? 'active' : ''}`}
+              onMouseDown={(e) => { e.preventDefault(); completeSkill(skill.name) }}
+            >
+              <span className="ac-name">/{skill.name}</span>
+              {skill.description && (
+                <span className="ac-desc">
+                  {skill.description.length > 55 ? skill.description.slice(0, 55) + '…' : skill.description}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
       {attachments.length > 0 && (
         <div className="attachment-bar">
           {attachments.map(a => (
@@ -70,7 +155,7 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
           }}
           onKeyDown={handleKey}
           onPaste={handlePaste}
-          placeholder={streaming ? 'Steer π… (queued after current turn)' : 'Ask π anything…'}
+          placeholder={streaming ? 'Steer π… (queued after current turn)' : 'Ask π anything…  (type / for skills)'}
           rows={1}
         />
         <button className="ib-btn" onClick={() => fileRef.current?.click()} title="Attach file">

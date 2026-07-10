@@ -280,7 +280,27 @@ pre code { background: none; padding: 0; font-size: 13px; }
 /* ═══ INPUT BAR ═══ */
 .input-area {
   padding: 12px 20px 16px; border-top: 1px solid #1a1a1e; background: #0a0a0b;
+  position: relative;
 }
+
+/* ── Skill autocomplete ── */
+.ac-dropdown {
+  position: absolute; bottom: calc(100% + 4px); left: 20px; right: 20px;
+  background: #111113; border: 1px solid #222; border-radius: 10px;
+  max-height: 240px; overflow-y: auto; z-index: 30;
+  box-shadow: 0 -8px 24px rgba(0,0,0,0.4); padding: 4px;
+}
+.ac-item {
+  display: flex; align-items: baseline; gap: 10px; width: 100%;
+  padding: 6px 10px; background: none; border: none; color: #999;
+  cursor: pointer; border-radius: 6px; font-size: 13px; text-align: left;
+  transition: all .08s;
+}
+.ac-item:hover { background: #1a1a1e; }
+.ac-item.active { background: #10b9811a; }
+.ac-item.active .ac-name { color: #10b981; }
+.ac-name { font-weight: 500; color: #ccc; white-space: nowrap; flex-shrink: 0; }
+.ac-desc { color: #555; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ── Stats footer ── */
 .stats-footer {
