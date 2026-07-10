@@ -4,7 +4,7 @@ import { v4 as uuid } from 'uuid'
 import path from 'node:path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { getOrCreateSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, getAvailableModels, getCommands, setEventBroadcaster, getSessionInfo, getSessionStats, getSessionHistory, newSession } from './pi-session.js'
+import { getOrCreateSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, getAvailableModels, getCommands, setEventBroadcaster, getSessionInfo, getSessionStats, getSessionHistory, newSession } from './pi-session.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const uploadsDir = path.join(__dirname, '..', 'uploads')
@@ -167,6 +167,33 @@ app.post('/api/session/new', async (_req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
+})
+
+// ── Compaction ──
+app.post('/api/compact', async (_req, res) => {
+  try {
+    res.json({ ok: true })
+    await compactSession()
+    broadcast('session_status', getSessionInfo())
+    broadcast('session_stats', getSessionStats())
+  } catch (err) {
+    // "Nothing to compact" is benign — don't pollute the chat with it
+    if (!err.message.includes('Nothing to compact')) {
+      broadcast('error', { message: err.message })
+    }
+  }
+})
+
+app.post('/api/compact/abort', (_req, res) => {
+  abortCompaction()
+  res.json({ ok: true })
+})
+
+app.post('/api/compaction/auto', (req, res) => {
+  const { enabled } = req.body
+  setAutoCompaction(enabled)
+  broadcast('session_status', getSessionInfo())
+  res.json({ ok: true })
 })
 
 // ── Release notes / changelog ──

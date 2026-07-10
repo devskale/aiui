@@ -129,6 +129,8 @@ export function getSessionInfo() {
     streaming: session?.isStreaming ?? false,
     model: session?.model ? `${session.model.provider}@${session.model.id}` : null,
     thinkingLevel: session?.thinkingLevel ?? null,
+    isCompacting: session?.isCompacting ?? false,
+    autoCompactionEnabled: session?.autoCompactionEnabled ?? true,
   }
 }
 
@@ -149,6 +151,21 @@ export function getThinkingInfo() {
     available: session.getAvailableThinkingLevels(),
     supportsThinking: session.supportsThinking(),
   }
+}
+
+export async function compactSession() {
+  const s = await getOrCreateSession()
+  return s.compact()
+}
+
+export function abortCompaction() {
+  if (!session) return
+  session.abortCompaction()
+}
+
+export function setAutoCompaction(enabled) {
+  if (!session) return
+  session.setAutoCompactionEnabled(enabled)
 }
 
 // ── Session history (for replay on page load) ──

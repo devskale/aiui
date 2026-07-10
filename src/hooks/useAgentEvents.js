@@ -22,6 +22,8 @@ const initialState = {
   sessionModel: null,
   sessionStats: null,
   thinkingLevel: null,
+  isCompacting: false,
+  autoCompactionEnabled: true,
 }
 
 function reducer(state, action) {
@@ -34,7 +36,15 @@ function reducer(state, action) {
       return { ...state, connected: false, sessionAlive: false, sessionModel: null }
 
     case 'session_status':
-      return { ...state, sessionAlive: action.alive, sessionModel: action.model, streaming: action.streaming ?? state.streaming, thinkingLevel: action.thinkingLevel ?? state.thinkingLevel }
+      return {
+        ...state,
+        sessionAlive: action.alive,
+        sessionModel: action.model,
+        streaming: action.streaming ?? state.streaming,
+        thinkingLevel: action.thinkingLevel ?? state.thinkingLevel,
+        isCompacting: action.isCompacting ?? state.isCompacting,
+        autoCompactionEnabled: action.autoCompactionEnabled ?? state.autoCompactionEnabled,
+      }
 
     case 'session_stats':
       return { ...state, sessionStats: action }
@@ -44,6 +54,12 @@ function reducer(state, action) {
 
     case 'thinking_level_changed':
       return { ...state, thinkingLevel: action.level }
+
+    case 'compaction_start':
+      return { ...state, isCompacting: true }
+
+    case 'compaction_end':
+      return { ...state, isCompacting: false }
 
     case 'user_prompt': {
       const entry = { role: 'user', text: action.text, attachments: action.attachments }

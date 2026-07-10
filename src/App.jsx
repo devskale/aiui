@@ -16,7 +16,7 @@ import { SettingsPanel } from './components/SettingsPanel'
 import { UserEntry, AssistantEntry, ErrorEntry } from './components/StreamEntry'
 
 export default function App() {
-  const { entries, current, steerQueue, streaming, connected, sessionAlive, sessionModel, sessionStats, thinkingLevel, sendPrompt, sendSteer, abortAgent, startNewChat, dispatch } = useAgentEvents()
+  const { entries, current, steerQueue, streaming, connected, sessionAlive, sessionModel, sessionStats, thinkingLevel, isCompacting, autoCompactionEnabled, sendPrompt, sendSteer, abortAgent, startNewChat, dispatch } = useAgentEvents()
   const { attachments, addFiles, remove: removeAttachment, clear: clearAttachments, buildPayload } = useAttachments()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [showModelPicker, setShowModelPicker] = useState(false)
@@ -140,7 +140,7 @@ export default function App() {
           )}
         </div>
 
-        <StatsFooter stats={sessionStats} />
+        <StatsFooter stats={sessionStats} isCompacting={isCompacting} autoCompactionEnabled={autoCompactionEnabled} />
         <InputBar
           onSend={handleSend}
           onSteer={handleSteer}

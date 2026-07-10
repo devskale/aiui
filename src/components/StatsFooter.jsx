@@ -1,6 +1,8 @@
 // ════════════════════════════════════════════════════════════════════
-// StatsFooter — slim bar showing token usage, cost, and context %
+// StatsFooter — slim bar showing token usage, cost, context %, compaction
 // ════════════════════════════════════════════════════════════════════
+import { Archive, Loader2 } from 'lucide-react'
+import { apiUrl } from '../lib/api'
 
 function formatTokens(n) {
   if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M'
@@ -8,7 +10,7 @@ function formatTokens(n) {
   return String(n)
 }
 
-export function StatsFooter({ stats }) {
+export function StatsFooter({ stats, isCompacting, autoCompactionEnabled }) {
   if (!stats) return null
 
   const { tokens, cost, contextUsage } = stats
@@ -25,19 +27,22 @@ export function StatsFooter({ stats }) {
   if (cost > 0) parts.push({ label: '$', value: cost.toFixed(3), title: 'Total cost' })
 
   // Context usage (always available when a model is set)
-  if (contextUsage) {
-    const { percent, contextWindow } = contextUsage
-    const pct = percent !== null ? percent.toFixed(1) : '?'
-    const cls = percent === null ? '' : percent > 90 ? 'danger' : percent > 70 ? 'warn' : ''
-    parts.push({
-      label: 'ctx',
-      value: `${pct}%/${formatTokens(contextWindow)}`,
-      title: 'Context window usage',
-      cls,
-    })
+  const contextPercent = contextUsage?.percent
+  const contextHigh = contextPercent !== null && contextPercent > 70
+
+  if (!parts.length && !contextUsage) return null
+
+  const handleCompact = () => {
+    fetch(apiUrl('/api/compact'), { method: 'POST' })
   }
 
-  if (!parts.length) return null
+  const handleToggleAuto = () => {
+    fetch(apiUrl('/api/compaction/auto'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: !autoCompactionEnabled }),
+    })
+  }
 
   return (
     <footer className="stats-footer">
@@ -47,6 +52,40 @@ export function StatsFooter({ stats }) {
           <span className="stat-value">{p.value}</span>
         </span>
       ))}
+
+      {contextUsage && (
+        <>
+          <span className={`stat-item ${contextHigh ? 'warn' : ''}`} title="Context window usage">
+            <span className="stat-label">ctx</span>
+            <span className="stat-value">
+              {contextPercent !== null ? contextPercent.toFixed(1) : '?'}%/{formatTokens(contextUsage.contextWindow)}
+            </span>
+          </span>
+
+          {isCompacting ? (
+            <span className="stat-item compacting" title="Compacting…">
+              <Loader2 size={11} className="spin" />
+              <span className="stat-value">compacting…</span>
+            </span>
+          ) : (
+            <button
+              className="compact-btn"
+              onClick={handleCompact}
+              title="Compact conversation (summarize old context)"
+            >
+              <Archive size={11} />
+            </button>
+          )}
+
+          <button
+            className={`auto-toggle ${autoCompactionEnabled ? 'on' : 'off'}`}
+            onClick={handleToggleAuto}
+            title={`Auto-compaction ${autoCompactionEnabled ? 'enabled' : 'disabled'}`}
+          >
+            auto
+          </button>
+        </>
+      )}
     </footer>
   )
 }
