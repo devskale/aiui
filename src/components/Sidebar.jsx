@@ -19,6 +19,7 @@ function timeAgo(dateStr) {
 export function Sidebar({ open, onToggle, connected, sessionAlive, sessionId, onNewChat, onSwitchSession, onShowReleaseNotes, onShowSettings, refreshTrigger }) {
   const [commands, setCommands] = useState(null)
   const [sessions, setSessions] = useState([])
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     fetch(apiUrl('/api/commands'))
@@ -33,6 +34,10 @@ export function Sidebar({ open, onToggle, connected, sessionAlive, sessionId, on
       .then(setSessions)
       .catch(() => {})
   }, [refreshTrigger])
+
+  const filtered = search
+    ? sessions.filter(s => (s.firstMessage || s.id || '').toLowerCase().includes(search.toLowerCase()))
+    : sessions
 
   const groups = [
     { key: 'skills', label: 'Skills', icon: '⚡' },
@@ -58,14 +63,23 @@ export function Sidebar({ open, onToggle, connected, sessionAlive, sessionId, on
 
       {/* Session list */}
       <div className="sb-section sb-sessions">
-        <span className="sb-label">Recent</span>
+        <div className="sb-sessions-head">
+          <span className="sb-label">Recent</span>
+          <input
+            className="sb-search"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search…"
+            aria-label="Search sessions"
+          />
+        </div>
         <div className="sb-session-list">
           {!connected ? (
             <div className="connecting"><span className="thinking-dot" /><span>Connecting…</span></div>
-          ) : sessions.length === 0 ? (
-            <div className="connecting"><span className="thinking-dot" /><span>No sessions</span></div>
+          ) : filtered.length === 0 ? (
+            <div className="connecting"><span className="thinking-dot" /><span>{search ? 'No matches' : 'No sessions'}</span></div>
           ) : (
-            sessions.map(s => (
+            filtered.map(s => (
               <button
                 key={s.id}
                 className={`sb-session ${s.id === sessionId ? 'active' : ''}`}

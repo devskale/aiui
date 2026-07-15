@@ -3,12 +3,56 @@ import multer from 'multer'
 import { v4 as uuid } from 'uuid'
 import path from 'node:path'
 import fs from 'node:fs'
+import { exec } from 'node:child_process'
+import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { getOrCreateSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, listSessions, switchToSession, getAvailableModels, getCommands, setEventBroadcaster, getSessionInfo, getSessionStats, getSessionHistory, newSession } from './pi-session.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const cwd = path.join(__dirname, '..')
 const uploadsDir = path.join(__dirname, '..', 'uploads')
 fs.mkdirSync(uploadsDir, { recursive: true })
+
+const execAsync = promisify(exec)
+
+// ── Workspace file listing (for @-mention autocomplete) ──
+// Git-aware: uses `git ls-files` so ignored dirs (node_modules, etc.) are excluded.
+// Falls back to a bounded recursive walk if git is unavailable.
+const IGNORED_DIRS = new Set(['node_modules', '.git', 'dist', 'uploads', 'session', 'test-results', 'coverage'])
+
+async function gitListFiles() {
+  const { stdout } = await execAsync('git ls-files', { cwd, maxBuffer: 32 * 1024 * 1024 })
+  return stdout.split('\n').filter(Boolean)
+}
+
+function walkFiles(dir, base, out, depth) {
+  if (depth > 6 || out.length >= 3000) return
+  let entries
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
+  for (const e of entries) {
+    if (e.name.startsWith('.')) continue
+    if (IGNORED_DIRS.has(e.name)) continue
+    const full = path.join(dir, e.name)
+    const rel = base ? path.join(base, e.name) : e.name
+    if (e.isDirectory()) walkFiles(full, rel, out, depth + 1)
+    else if (out.length < 3000) out.push(rel.split(path.sep).join('/'))
+  }
+}
+
+async function listWorkspaceFiles(query) {
+  let files
+  try {
+    files = await gitListFiles()
+  } catch {
+    files = []
+    walkFiles(cwd, '', files, 0)
+  }
+  if (query) {
+    const q = query.toLowerCase()
+    files = files.filter(f => f.toLowerCase().includes(q))
+  }
+  return files.slice(0, 40)
+}
 
 const app = express()
 app.use(express.json({ limit: '50mb' }))
@@ -141,6 +185,16 @@ app.get('/api/commands', async (_req, res) => {
     res.json(cmds)
   } catch (err) {
     res.status(500).json({ error: err.message })
+  }
+})
+
+// ── Workspace files (for @-mention autocomplete) ──
+app.get('/api/files', async (req, res) => {
+  try {
+    const files = await listWorkspaceFiles((req.query.q || '').toString())
+    res.json({ files })
+  } catch {
+    res.json({ files: [] })
   }
 })
 

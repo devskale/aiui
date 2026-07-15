@@ -6,61 +6,120 @@ import { useState, useEffect } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
-// ── Tool labels (monochrome, no emoji) ──
-function getToolLabel(name, args) {
-  const lower = (name || '').toLowerCase()
-  if (lower.includes('bash')) return args?.command ? `$ ${args.command.slice(0, 80)}` : ''
-  if (lower.includes('read') || lower.includes('write') || lower.includes('edit'))
-    return formatPath(args?.file_path || args?.path)
-  if (lower.includes('grep')) return args?.pattern || ''
-  if (lower.includes('find') || lower.includes('glob')) return args?.pattern || ''
-  if (lower.includes('ls')) return formatPath(args?.path)
-  return ''
-}
-
-function formatPath(p) {
-  if (!p) return ''
-  // Shorten path: keep last 2 segments
-  const parts = p.split('/')
-  return parts.length > 2 ? '…/' + parts.slice(-2).join('/') : p
-}
-
+// ── Tool helpers (ported from pi-gui timeline-item.tsx patterns) ──
 function parseArgs(args) {
   if (!args) return {}
   if (typeof args === 'object') return args
   try { return JSON.parse(args) } catch { return { raw: String(args) } }
 }
 
-// ── ToolGroup — dim tool calls, connected by left border, no header ──
+function shortenPath(p) {
+  const parts = p.split('/')
+  return parts.length > 3 ? '…/' + parts.slice(-3).join('/') : p
+}
+
+function extractToolPath(args) {
+  if (!args || typeof args !== 'object') return ''
+  return args.file_path || args.filePath || args.path || args.filename || ''
+}
+
+function isWriteTool(name) { return /write|edit|patch|apply/i.test(name) }
+function isBashTool(name) { return /bash|shell|exec|terminal|command|run/i.test(name) }
+function isReadTool(name) { return /read|grep|glob|find|ls|view|search|cat/i.test(name) }
+
+function countDiffStats(text) {
+  let added = 0, removed = 0
+  for (const line of text.split('\n')) {
+    if (line.startsWith('+') && !line.startsWith('+++')) added++
+    else if (line.startsWith('-') && !line.startsWith('---')) removed++
+  }
+  return { added, removed }
+}
+
+function prettyArgs(args) {
+  if (!args) return ''
+  if (typeof args === 'string') {
+    try { return JSON.stringify(JSON.parse(args), null, 2) } catch { return args }
+  }
+  return JSON.stringify(args, null, 2)
+}
+
+const GlyphFile = () => (<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>)
+const GlyphTerm = () => (<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>)
+const GlyphPen = () => (<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>)
+const GlyphSpark = () => (<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/></svg>)
+
+function ToolGlyph({ name }) {
+  if (isWriteTool(name)) return <GlyphPen />
+  if (isBashTool(name)) return <GlyphTerm />
+  if (isReadTool(name)) return <GlyphFile />
+  return <GlyphSpark />
+}
+
+// ── ToolGroup — subtle tool calls with per-tool glyph + expandable output ──
 function ToolGroup({ toolCalls }) {
   return (
     <div className="tc-group-body">
-      {toolCalls.map((tc, i) => <ToolCallDim key={i} tc={tc} />)}
+      {toolCalls.map((tc, i) => <ToolCallCard key={i} tc={tc} />)}
     </div>
   )
 }
 
-// ── ToolCallDim — single dim tool call line with expandable output ──
-function ToolCallDim({ tc }) {
-  const [showOutput, setShowOutput] = useState(false)
+// ── ToolCallCard — one tool call: glyph + name + path + status, expandable ──
+function ToolCallCard({ tc }) {
+  const [open, setOpen] = useState(false)
   const args = parseArgs(tc.args)
-  const label = getToolLabel(tc.name, args)
+  const isWrite = isWriteTool(tc.name)
+  const isBash = isBashTool(tc.name)
   const isError = tc.status === 'error'
   const isRunning = tc.status === 'running'
+  const filePath = extractToolPath(args)
   const output = tc.output || ''
-  const isBash = tc.name.toLowerCase().includes('bash')
+  const hasContent = output || (args && Object.keys(args).length > 0)
+  const diffStats = isWrite && output ? countDiffStats(output) : null
+  const label = isBash && args.command
+    ? `$ ${args.command.length > 80 ? args.command.slice(0, 80) + '…' : args.command}`
+    : filePath ? shortenPath(filePath)
+    : tc.name
+  const [copied, setCopied] = useState(false)
 
-  // One clean line: bash shows "$ cmd", others show "name detail"
-  const line = isBash ? label : `${tc.name}${label ? ' ' + label : ''}`
+  const copy = () => {
+    navigator.clipboard.writeText(output || prettyArgs(args)).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1200)
+    }).catch(() => {})
+  }
 
   return (
-    <div
-      className={`tc-dim ${isError ? 'err' : ''} ${isRunning ? 'running' : ''}`}
-      onClick={() => output && setShowOutput(!showOutput)}
-    >
-      <span className="tc-dim-line">{line}</span>
-      {isRunning && <span className="tc-dim-running" />}
-      {showOutput && output && <pre className="tc-dim-output">{output}</pre>}
+    <div className={`tc-card ${isError ? 'err' : ''} ${isRunning ? 'running' : ''}`}>
+      <div className="tc-card-head" onClick={() => hasContent && setOpen(!open)}>
+        <span className="tc-glyph"><ToolGlyph name={tc.name} /></span>
+        <span className="tc-name">{tc.name}</span>
+        {label && <span className="tc-path">{label}</span>}
+        {diffStats && (
+          <span className="tc-diff-stats">
+            <span className="add">+{diffStats.added}</span>{' '}
+            <span className="del">-{diffStats.removed}</span>
+          </span>
+        )}
+        <span className="tc-status">{isRunning ? 'running' : isError ? 'failed' : 'done'}</span>
+        {hasContent && (
+          <button
+            className="tc-copy"
+            onClick={(e) => { e.stopPropagation(); copy() }}
+            title="Copy"
+          >{copied ? 'copied' : 'copy'}</button>
+        )}
+        {isRunning && <span className="tc-running" />}
+      </div>
+      {open && hasContent && (
+        <div className="tc-card-body">
+          {args && Object.keys(args).length > 0 && (
+            <pre className="tc-args">{prettyArgs(args)}</pre>
+          )}
+          {output && <pre className="tc-output">{output}</pre>}
+        </div>
+      )}
     </div>
   )
 }
@@ -82,6 +141,16 @@ function ThinkingBlock({ thinking, thinkingDone, thinkingText }) {
 
 // ── Markdown image renderer — prefixes BASE_URL so prod sub-paths (/aiui/) work ──
 const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, '')
+
+// Walk a react-markdown code node to recover its raw text (for copy)
+function extractCodeText(node) {
+  if (node == null) return ''
+  if (typeof node === 'string') return node
+  if (Array.isArray(node)) return node.map(extractCodeText).join('')
+  if (node.props) return extractCodeText(node.props.children)
+  return ''
+}
+
 const mdComponents = {
   img: ({ src, alt, ...props }) => {
     const full = (src && !src.startsWith('http') && !src.startsWith('data:'))
@@ -93,6 +162,32 @@ const mdComponents = {
   a: ({ href, children, ...props }) => (
     <a href={href} target="_blank" rel="noopener noreferrer" {...props}>{children}</a>
   ),
+  // Code block: language label + copy button in a header bar
+  pre: ({ children }) => {
+    const codeEl = Array.isArray(children) ? children[0] : children
+    const className = codeEl?.props?.className || ''
+    const langMatch = /language-([\w+#-]+)/.exec(className)
+    const lang = langMatch?.[1]
+    const raw = extractCodeText(codeEl?.props?.children)
+    const [copied, setCopied] = useState(false)
+    const copy = () => {
+      navigator.clipboard.writeText(raw).then(() => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1200)
+      }).catch(() => {})
+    }
+    return (
+      <div className="md-codeblock">
+        <div className="md-codeblock-head">
+          <span className="md-codeblock-lang">{lang || 'code'}</span>
+          <button className="md-codeblock-copy" onClick={copy} title="Copy code">
+            {copied ? 'copied' : 'copy'}
+          </button>
+        </div>
+        <pre>{children}</pre>
+      </div>
+    )
+  },
 }
 
 // ── Entry Components ──
