@@ -6,6 +6,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 The latest version is shown in the UI under `#/releases`.
 
+## [0.2.0] — 2026-07-15
+
+### Added
+- **@-mention file autocomplete** in the composer — type `@` to insert a
+  workspace file; the server exposes a new `GET /api/files` endpoint that lists
+  files git-aware (ignored dirs such as `node_modules` are excluded).
+- **Richer tool-call rendering** — each tool call now shows a per-tool glyph
+  (edit / terminal / file / spark), the affected file path, `+added/-removed`
+  diff stats for write/edit tools, a copy-output button, and running/error
+  states.
+- **Code-block header** — fenced code blocks show a language label and a copy
+  button.
+- **Session search** — filter the Recent list in the sidebar.
+
+### Fixed
+- **Windows launch** — dropped the `PORT=3001` bash-ism from `dev:server` so the
+  Express backend starts under `cmd.exe` (the server already defaults to port
+  3001).
+
 ## [0.1.5] — 2026-06-24
 
 ### Added
