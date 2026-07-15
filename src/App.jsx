@@ -14,9 +14,23 @@ import { EmptyState } from './components/EmptyState'
 import { ReleaseNotes } from './components/ReleaseNotes'
 import { SettingsPanel } from './components/SettingsPanel'
 import { UserEntry, AssistantEntry, ErrorEntry } from './components/StreamEntry'
+import { Folder, Clock } from 'lucide-react'
+
+// Format an elapsed duration (ms) as a compact uptime string
+function formatUptime(ms) {
+  if (!ms || ms < 0) ms = 0
+  const s = Math.floor(ms / 1000)
+  const m = Math.floor(s / 60)
+  const h = Math.floor(m / 60)
+  const d = Math.floor(h / 24)
+  if (d > 0) return `${d}d ${h % 24}h`
+  if (h > 0) return `${h}h ${m % 60}m`
+  if (m > 0) return `${m}m ${s % 60}s`
+  return `${s}s`
+}
 
 export default function App() {
-  const { entries, current, steerQueue, streaming, connected, sessionAlive, sessionModel, sessionId, sessionStats, thinkingLevel, isCompacting, autoCompactionEnabled, sendPrompt, sendSteer, abortAgent, startNewChat, dispatch } = useAgentEvents()
+  const { entries, current, steerQueue, streaming, connected, sessionAlive, sessionModel, sessionId, sessionCwd, sessionCwdShort, sessionStartedAt, sessionStats, thinkingLevel, isCompacting, autoCompactionEnabled, sendPrompt, sendSteer, abortAgent, startNewChat, dispatch } = useAgentEvents()
   const { attachments, addFiles, remove: removeAttachment, clear: clearAttachments, buildPayload } = useAttachments()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [showModelPicker, setShowModelPicker] = useState(false)
@@ -28,6 +42,14 @@ export default function App() {
   const scrollContainerRef = useRef(null)
   const stickToBottomRef = useRef(true)  // stick to bottom unless the user scrolled up
   const [dragOver, setDragOver] = useState(false)
+  const [now, setNow] = useState(() => Date.now())
+
+  // Tick every second while a session is alive, so the uptime stays live.
+  useEffect(() => {
+    if (!sessionAlive || !sessionStartedAt) return
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [sessionAlive, sessionStartedAt])
 
   // Fetch current model on mount — respect the allow-list from settings
   useEffect(() => {
@@ -136,6 +158,20 @@ export default function App() {
             {sessionModel || model || 'select model'}
           </button>
           <ThinkingPicker thinkingLevel={thinkingLevel} sessionAlive={sessionAlive} />
+          <div className="tb-session">
+            {sessionCwd && (
+              <span className="tb-pill" title={sessionCwd}>
+                <Folder size={13} />
+                <span className="tb-pill-text">{sessionCwdShort || sessionCwd}</span>
+              </span>
+            )}
+            {sessionAlive && sessionStartedAt && (
+              <span className="tb-pill" title="Agent uptime">
+                <Clock size={13} />
+                <span className="tb-pill-text">{formatUptime(now - sessionStartedAt)}</span>
+              </span>
+            )}
+          </div>
           <div style={{ flex: 1 }} />
         </header>
 

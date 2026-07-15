@@ -186,6 +186,18 @@ pre code { background: none; padding: 0; font-size: 13px; }
 }
 .tb-model:hover { background: var(--bg-hover); border-color: var(--bg-active); }
 
+/* ── Session info pills (cwd + uptime) ── */
+.tb-session { display: flex; align-items: center; gap: 6px; }
+.tb-pill {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums;
+  padding: 4px 9px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--bg-surface);
+  max-width: 200px; white-space: nowrap;
+}
+.tb-pill svg { flex-shrink: 0; opacity: .8; }
+.tb-pill-text { overflow: hidden; text-overflow: ellipsis; }
+
 /* ── Thinking picker ── */
 .tp-wrapper { position: relative; }
 .tp-btn {

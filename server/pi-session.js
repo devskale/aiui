@@ -132,6 +132,7 @@ const customTools = SANDBOX_ENABLED ? [
 let authStorage = null
 let modelRegistry = null
 let session = null
+let sessionStartedAt = null  // epoch ms when the current session was created (for uptime)
 let unsubscribe = null
 let eventBroadcaster = null
 
@@ -149,6 +150,7 @@ function disposeSession() {
     try { session.dispose?.() } catch {}
     session = null
   }
+  sessionStartedAt = null
 }
 
 function wireBroadcaster() {
@@ -171,6 +173,7 @@ export async function getOrCreateSession() {
     sessionManager: SessionManager.continueRecent(cwd, SESSION_DIR),
   })
   session = s
+  sessionStartedAt = Date.now()
   console.log('π agent session ready (resumed recent)')
   if (eventBroadcaster) eventBroadcaster('session_status', getSessionInfo())
   wireBroadcaster()
@@ -189,6 +192,7 @@ export async function newSession() {
     sessionManager: SessionManager.create(cwd, SESSION_DIR),
   })
   session = s
+  sessionStartedAt = Date.now()
   console.log('π agent new session created')
   if (eventBroadcaster) {
     eventBroadcaster('session_status', getSessionInfo())
@@ -249,6 +253,15 @@ export async function getAvailableModels() {
   return grouped
 }
 
+// Abbreviate an absolute path for compact UI display: $HOME → ~
+function shortenForDisplay(p) {
+  if (!p) return null
+  const home = os.homedir()
+  if (p === home) return '~'
+  if (home && p.startsWith(home + '/')) return '~' + p.slice(home.length)
+  return p
+}
+
 export function getSessionInfo() {
   return {
     alive: session !== null,
@@ -258,6 +271,9 @@ export function getSessionInfo() {
     isCompacting: session?.isCompacting ?? false,
     autoCompactionEnabled: session?.autoCompactionEnabled ?? true,
     sessionId: session?.sessionId ?? null,
+    cwd,                // agent working directory (the scoped workspace)
+    cwdShort: shortenForDisplay(cwd),  // ~-abbreviated form for the UI
+    startedAt: sessionStartedAt,  // epoch ms when this session was created
   }
 }
 
@@ -329,6 +345,7 @@ export async function switchToSession(sessionPath) {
     sessionManager: SessionManager.open(sessionPath, SESSION_DIR, cwd),
   })
   session = s
+  sessionStartedAt = Date.now()
   console.log('π agent session switched:', sessionPath)
   if (eventBroadcaster) {
     eventBroadcaster('session_status', getSessionInfo())
