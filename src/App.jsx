@@ -16,17 +16,21 @@ import { SettingsPanel } from './components/SettingsPanel'
 import { UserEntry, AssistantEntry, ErrorEntry } from './components/StreamEntry'
 import { Folder, Clock } from 'lucide-react'
 
-// Format an elapsed duration (ms) as a compact uptime string
+// Format an elapsed duration (ms) as a single largest-unit token.
+// Ladder: <1m → m → h → d → w → mo  (only the largest unit is shown).
 function formatUptime(ms) {
   if (!ms || ms < 0) ms = 0
-  const s = Math.floor(ms / 1000)
-  const m = Math.floor(s / 60)
+  const m = Math.floor(ms / 60000)
   const h = Math.floor(m / 60)
   const d = Math.floor(h / 24)
-  if (d > 0) return `${d}d ${h % 24}h`
-  if (h > 0) return `${h}h ${m % 60}m`
-  if (m > 0) return `${m}m ${s % 60}s`
-  return `${s}s`
+  const w = Math.floor(d / 7)
+  const mo = Math.floor(d / 30)
+  if (mo > 0) return `${mo}mo`
+  if (w > 0) return `${w}w`
+  if (d > 0) return `${d}d`
+  if (h > 0) return `${h}h`
+  if (m > 0) return `${m}m`
+  return '<1m'
 }
 
 export default function App() {
@@ -44,10 +48,11 @@ export default function App() {
   const [dragOver, setDragOver] = useState(false)
   const [now, setNow] = useState(() => Date.now())
 
-  // Tick every second while a session is alive, so the uptime stays live.
+  // Re-check once a minute — the uptime shows only the largest unit (w/d/h/m),
+  // so a 1-minute tick is enough to keep it current.
   useEffect(() => {
     if (!sessionAlive || !sessionStartedAt) return
-    const id = setInterval(() => setNow(Date.now()), 1000)
+    const id = setInterval(() => setNow(Date.now()), 60000)
     return () => clearInterval(id)
   }, [sessionAlive, sessionStartedAt])
 
