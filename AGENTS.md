@@ -53,7 +53,10 @@ src/
     useAgentEvents.js  # SSE event reducer — core state machine for the chat stream
     useAttachments.js  # File upload state (images as dataURL, others via /api/upload)
 uploads/            # Uploaded files (gitignored)
-session/            # pi agent session data (gitignored)
+workspace/          # Agent's sandbox: cwd + local sessions + its own git (gitignored)
+                    #   Sandboxed by default (macOS seatbelt): agent can read/write ONLY here
+                    #   + temp/caches. Your Home (Documents, .ssh, other projects) is blocked.
+                    #   Set AIUI_SANDBOX=0 to disable. See server/pi-session.js.
 vite.config.js      # Vite config with /api proxy to Express
 ```
 
@@ -218,5 +221,5 @@ This runs `vite build` with `VITE_BASE=/aiui/`, rsyncs to `lubu:/home/woodmastr/
 - ✅ **Always:** Run `pnpm dev` to verify changes before committing
 - ✅ **Always:** Keep `useAgentEvents` reducer logic in sync with SDK event types
 - ⚠️ **Ask first:** Adding new npm dependencies, changing the SSE protocol
-- 🚫 **Never:** Modify `node_modules/`, commit `uploads/` or `session/`, hardcode API keys
+- 🚫 **Never:** Modify `node_modules/`, commit `uploads/` or `workspace/`, hardcode API keys
 - 🚫 **Never:** Add a CSS framework (Tailwind, etc.) without discussion — keep single-file CSS

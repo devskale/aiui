@@ -1,9 +1,133 @@
-import { createAgentSession, AuthStorage, ModelRegistry, SessionManager } from '@earendil-works/pi-coding-agent'
+import { createAgentSession, AuthStorage, ModelRegistry, SessionManager, createBashTool, createReadTool, createWriteTool, createEditTool } from '@earendil-works/pi-coding-agent'
 import path from 'node:path'
+import fs from 'node:fs'
+import { readFile as fsReadFile, writeFile as fsWriteFile, mkdir as fsMkdir, access as fsAccess } from 'node:fs/promises'
+import { constants as fsConstants } from 'node:fs'
+import { execSync } from 'node:child_process'
+import os from 'node:os'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const cwd = path.join(__dirname, '..')
+const PROJECT_ROOT = path.join(__dirname, '..')
+
+// ══ Scoped workspace ══
+// The agent's entire world. cwd + local session storage live here — fully
+// self-contained and gitignored. The agent cannot see or touch aiui's own
+// source by default (that is the "scope"), and sessions are stored locally
+// (workspace/sessions) instead of globally (~/.pi/agent/sessions). Settings +
+// skills are still inherited from aiui/.pi via the SDK's walk-up discovery.
+const cwd = path.join(PROJECT_ROOT, 'workspace')
+const SESSION_DIR = path.join(cwd, 'sessions')
+fs.mkdirSync(SESSION_DIR, { recursive: true })
+
+// ══ Pseudo-sandbox (ON by default on macOS) ══
+// The agent is confined to its workspace data directory on every dimension we
+// can enforce without a VM:
+//   • bash        → macOS seatbelt (sandbox-exec): file METADATA may be stat'd,
+//                   but the user's HOME content (Documents, Desktop, Downloads,
+//                   Pictures, .ssh, other projects, browser data) is unreadable
+//                   AND unwritable. Only workspace + temp + dev toolchain/caches
+//                   are accessible. Network stays open (LLM API, installs).
+//   • read/write/edit → fs operations are path-validated to the workspace.
+// ON by default; set AIUI_SANDBOX=0 to disable. Auto-degrades on Linux/prod
+// (no sandbox-exec) → unsandboxed with a warning. NOT a hard boundary (symlinks,
+// and grep/find/ls if manually enabled, can still escape) — for real isolation
+// use Docker/Gondolin/OpenShell. If a tool breaks, widen buildSandboxProfile()
+// or set AIUI_SANDBOX=0.
+const SANDBOX_AVAILABLE = fs.existsSync('/usr/bin/sandbox-exec')
+const SANDBOX_ENABLED = process.env.AIUI_SANDBOX !== '0' && SANDBOX_AVAILABLE
+
+function shellQuote(s) {
+  return "'" + String(s).replace(/'/g, "'\\''") + "'"
+}
+
+function buildSandboxProfile() {
+  const home = os.homedir()
+  return `(version 1)
+(allow default)
+;; stat/traverse anywhere (no content revealed) so tools resolve paths
+(allow file-read-metadata)
+;; ── Confine HOME content; reopen only the data dir + dev toolchain/caches ──
+(deny file-read* file-write* (subpath "${home}"))
+(allow file-read* file-write*
+  (subpath "${cwd}")                              ; the DATA directory
+  (subpath "${home}/.pi/agent")                   ; auth/models/rg
+  (subpath "${home}/.local")                      ; fnm / pnpm store
+  (subpath "${home}/Library/pnpm")                ; pnpm
+  (subpath "${home}/Library/Caches")
+  (subpath "${home}/.cache") (subpath "${home}/.npm"))
+;; system temp
+(allow file-read* file-write*
+  (subpath "/tmp") (subpath "/private/tmp")
+  (subpath "/var/folders") (subpath "/private/var/folders"))
+`
+}
+
+let SANDBOX_PROFILE_PATH = null
+if (SANDBOX_ENABLED) {
+  SANDBOX_PROFILE_PATH = path.join(cwd, '.sandbox.sb')
+  fs.writeFileSync(SANDBOX_PROFILE_PATH, buildSandboxProfile())
+  // give the workspace its own git repo so git stays inside the sandbox
+  if (!fs.existsSync(path.join(cwd, '.git'))) {
+    try {
+      execSync('git init -q', { cwd, env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' } })
+    } catch {}
+  }
+  console.log(`πui sandbox ON (macOS seatbelt) — agent confined to ${cwd}`)
+} else {
+  console.log(process.env.AIUI_SANDBOX === '0'
+    ? 'πui sandbox OFF (disabled by AIUI_SANDBOX=0)'
+    : 'πui sandbox OFF (sandbox-exec not found — unsandboxed; macOS required for confinement)')
+}
+
+function sandboxSpawnHook({ command, cwd: workdir, env }) {
+  return {
+    command: `sandbox-exec -f ${shellQuote(SANDBOX_PROFILE_PATH)} /bin/bash -c ${shellQuote(command)}`,
+    cwd: workdir,
+    env: {
+      ...env,
+      // keep git from reading the user's global config under HOME (denied)
+      GIT_CONFIG_GLOBAL: '/dev/null',
+      GIT_CONFIG_SYSTEM: '/dev/null',
+    },
+  }
+}
+
+// ── Confine read/write/edit to the workspace via path-validated operations ──
+function assertInWorkspace(absolutePath) {
+  const rel = path.relative(cwd, path.resolve(absolutePath))
+  if (rel === '..' || rel.startsWith('..') || path.isAbsolute(rel)) {
+    throw new Error(`Sandbox: path outside workspace denied: ${absolutePath}`)
+  }
+}
+
+const IMG_EXT = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp' }
+async function detectImageMimeByExt(absolutePath) {
+  return IMG_EXT[path.extname(absolutePath).toLowerCase().replace('.', '')] || null
+}
+
+const confinedReadOps = {
+  readFile: async (p) => { assertInWorkspace(p); return fsReadFile(p) },
+  access: async (p) => { assertInWorkspace(p); return fsAccess(p, fsConstants.R_OK) },
+  detectImageMimeType: detectImageMimeByExt,
+}
+const confinedWriteOps = {
+  writeFile: async (p, c) => { assertInWorkspace(p); return fsWriteFile(p, c, 'utf-8') },
+  mkdir: async (d) => { assertInWorkspace(d); return fsMkdir(d, { recursive: true }) },
+}
+const confinedEditOps = {
+  readFile: async (p) => { assertInWorkspace(p); return fsReadFile(p) },
+  writeFile: async (p, c) => { assertInWorkspace(p); return fsWriteFile(p, c, 'utf-8') },
+  access: async (p) => { assertInWorkspace(p); return fsAccess(p, fsConstants.R_OK | fsConstants.W_OK) },
+}
+
+// Override the built-in file tools with sandboxed variants when enabled.
+const customTools = SANDBOX_ENABLED ? [
+  createBashTool(cwd, { spawnHook: sandboxSpawnHook }),
+  createReadTool(cwd, { operations: confinedReadOps }),
+  createWriteTool(cwd, { operations: confinedWriteOps }),
+  createEditTool(cwd, { operations: confinedEditOps }),
+] : undefined
 
 let authStorage = null
 let modelRegistry = null
@@ -43,7 +167,8 @@ export async function getOrCreateSession() {
     cwd,
     authStorage,
     modelRegistry,
-    sessionManager: SessionManager.continueRecent(cwd),
+    customTools,
+    sessionManager: SessionManager.continueRecent(cwd, SESSION_DIR),
   })
   session = s
   console.log('π agent session ready (resumed recent)')
@@ -60,7 +185,8 @@ export async function newSession() {
     cwd,
     authStorage,
     modelRegistry,
-    sessionManager: SessionManager.create(cwd),
+    customTools,
+    sessionManager: SessionManager.create(cwd, SESSION_DIR),
   })
   session = s
   console.log('π agent new session created')
@@ -174,7 +300,7 @@ export function setAutoCompaction(enabled) {
 export async function listSessions() {
   await initShared()
   try {
-    const sessions = await SessionManager.list(cwd)
+    const sessions = await SessionManager.list(cwd, SESSION_DIR)
     // Sort by modified desc, strip heavy fields
     return sessions
       .sort((a, b) => new Date(b.modified) - new Date(a.modified))
@@ -199,7 +325,8 @@ export async function switchToSession(sessionPath) {
     cwd,
     authStorage,
     modelRegistry,
-    sessionManager: SessionManager.open(sessionPath),
+    customTools,
+    sessionManager: SessionManager.open(sessionPath, SESSION_DIR, cwd),
   })
   session = s
   console.log('π agent session switched:', sessionPath)
