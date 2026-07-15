@@ -56,6 +56,51 @@ function ToolGlyph({ name }) {
   return <GlyphSpark />
 }
 
+// ── Inline diff viewer (ported from pi-gui diff-inline.tsx) ──
+// Extract a unified diff from a tool result if present.
+function extractDiffFromOutput(output) {
+  if (typeof output === 'string' && (output.includes('@@') || output.startsWith('diff '))) return output
+  if (output && typeof output === 'object') {
+    if (typeof output.diff === 'string') return output.diff
+    if (output.details && typeof output.details.diff === 'string') return output.details.diff
+  }
+  return undefined
+}
+
+function parseDiff(diff) {
+  const lines = diff.split('\n')
+  const result = []
+  let lineNumber = 0
+  for (const line of lines) {
+    if (line.startsWith('@@')) {
+      const m = /^@@ -\d+(?:,\d+)? \+(\d+)/.exec(line)
+      lineNumber = m ? parseInt(m[1] || '0', 10) : 0
+      result.push({ type: 'header', content: line })
+      continue
+    }
+    if (line.startsWith('---') || line.startsWith('+++')) continue
+    if (line.startsWith('+')) { result.push({ type: 'added', content: line.slice(1), lineNumber }); lineNumber++ }
+    else if (line.startsWith('-')) { result.push({ type: 'removed', content: line.slice(1) }) }
+    else if (line.startsWith(' ') || line === '') { result.push({ type: 'context', content: line.slice(1), lineNumber }); lineNumber++ }
+  }
+  return result
+}
+
+function InlineDiff({ diff }) {
+  const lines = parseDiff(diff)
+  if (!lines.length) return null
+  return (
+    <pre className="diff-inline">
+      {lines.map((l, i) => (
+        <div key={i} className={`diff-line diff-line--${l.type}`}>
+          <span className="diff-line__number">{l.lineNumber !== undefined ? l.lineNumber : ''}</span>
+          <span className="diff-line__content">{l.content || ' '}</span>
+        </div>
+      ))}
+    </pre>
+  )
+}
+
 // ── ToolGroup — subtle tool calls with per-tool glyph + expandable output ──
 function ToolGroup({ toolCalls }) {
   return (
@@ -117,7 +162,9 @@ function ToolCallCard({ tc }) {
           {args && Object.keys(args).length > 0 && (
             <pre className="tc-args">{prettyArgs(args)}</pre>
           )}
-          {output && <pre className="tc-output">{output}</pre>}
+          {output && (isWrite && extractDiffFromOutput(output)
+            ? <InlineDiff diff={extractDiffFromOutput(output)} />
+            : <pre className="tc-output">{output}</pre>)}
         </div>
       )}
     </div>

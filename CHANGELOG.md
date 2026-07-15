@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 The latest version is shown in the UI under `#/releases`.
 
+## [0.2.1] — 2026-07-15
+
+### Added
+- **Slash command menu** in the composer — type `/` to open a palette of
+  commands (skills, prompts, extensions) plus host actions (`/compact`,
+  `/new`, `/model`), with descriptions and live filtering.
+- **Inline diff viewer** — write/edit tool calls render a unified diff inline
+  (added/removed lines with line numbers) when the tool result contains one.
+
 ## [0.2.0] — 2026-07-15
 
 ### Added

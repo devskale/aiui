@@ -1,14 +1,14 @@
 // ════════════════════════════════════════════════════════════════════
-// InputBar — bottom input with attachment support, skill + @-file autocomplete
+// InputBar — bottom input with attachments, @-file + /command autocomplete
 // ════════════════════════════════════════════════════════════════════
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { apiUrl } from '../lib/api'
 
-export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRemoveAttachment, onAddFiles }) {
+export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRemoveAttachment, onAddFiles, onCompact, onNewChat, onOpenModelPicker }) {
   const [text, setText] = useState('')
-  const [skills, setSkills] = useState([])
-  const [acIndex, setAcIndex] = useState(0)
-  const [acDismissed, setAcDismissed] = useState(false)
+  const [commands, setCommands] = useState({ skills: [], prompts: [], extensions: [] })
+  const [slashIndex, setSlashIndex] = useState(0)
+  const [slashDismissed, setSlashDismissed] = useState(false)
 
   // ── @-mention (file) autocomplete state ──
   const [mention, setMention] = useState(null)     // { query, atIndex } or null
@@ -19,27 +19,52 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
   const ref = useRef(null)
   const fileRef = useRef(null)
 
-  // Fetch available skills for autocomplete
+  // Fetch available commands (skills/prompts/extensions) for the slash menu
   useEffect(() => {
     fetch(apiUrl('/api/commands'))
       .then(r => r.json())
-      .then(data => setSkills(data?.skills || []))
+      .then(d => setCommands({ skills: d?.skills || [], prompts: d?.prompts || [], extensions: d?.extensions || [] }))
       .catch(() => {})
   }, [])
 
-  // ── Skill autocomplete: show when typing /skillname (no space yet) ──
-  const firstWord = text.startsWith('/') ? text.slice(1).split(/\s/)[0] : ''
-  const acItems = useMemo(() => {
-    if (!text.startsWith('/') || text.includes(' ')) return []
-    if (!firstWord) return skills
-    return skills.filter(s => s.name.startsWith(firstWord))
-  }, [text, skills, firstWord])
+  // ── Host actions available in the slash menu ──
+  const HOST_ACTIONS = useMemo(() => ([
+    { id: 'compact', command: '/compact', title: '/compact', description: 'Compact conversation context now', run: 'compact' },
+    { id: 'new', command: '/new', title: '/new', description: 'Start a new chat', run: 'new' },
+    { id: 'model', command: '/model', title: '/model', description: 'Change model', run: 'model' },
+  ]), [])
 
-  const acOpen = !acDismissed && acItems.length > 0 && text.startsWith('/') && !text.includes(' ') && !mention
+  // ── Slash menu: detect trailing "/query" (at start or after whitespace) ──
+  const slashMatch = useMemo(() => {
+    if (slashDismissed) return null
+    const m = /(?:^|\s)(\/[^\s]*)$/.exec(text)
+    if (!m) return null
+    return { query: m[1], start: m.index + (m[0].length - m[1].length) }
+  }, [text, slashDismissed])
 
-  // Reset index + dismissed when items change
-  useEffect(() => { setAcIndex(0) }, [firstWord])
-  useEffect(() => { setAcDismissed(false) }, [text])
+  const slashItems = useMemo(() => {
+    if (!slashMatch) return []
+    const q = slashMatch.query.replace(/^\/+/, '').toLowerCase()
+    const items = []
+    for (const a of HOST_ACTIONS) {
+      if (!q || a.command.toLowerCase().includes(q) || a.title.toLowerCase().includes(q)) items.push(a)
+    }
+    const groups = [['skills', 'skill'], ['prompts', 'prompt'], ['extensions', 'extension']]
+    for (const [key, prefix] of groups) {
+      for (const c of commands[key] || []) {
+        const cmd = `/${prefix}:${c.name}`
+        if (!q || c.name.toLowerCase().includes(q) || cmd.toLowerCase().includes(q)) {
+          items.push({ id: cmd, command: cmd, title: cmd, description: c.description, run: 'fill' })
+        }
+      }
+    }
+    return items
+  }, [slashMatch, commands, HOST_ACTIONS])
+
+  const slashOpen = slashItems.length > 0
+
+  useEffect(() => { setSlashIndex(0) }, [slashItems])
+  useEffect(() => { setSlashDismissed(false) }, [text])
 
   useEffect(() => {
     if (!streaming) ref.current?.focus()
@@ -51,7 +76,7 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
     const m = /(?:^|\s)@([^\s]*)$/.exec(text)
     if (!m) return null
     const query = m[1] ?? ''
-    const atIndex = text.length - query.length - 1
+    const atIndex = m.index + (m[0].length - query.length - 1)
     return { query, atIndex }
   }, [text, mentionDismissed])
 
@@ -89,58 +114,42 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
     })
   }
 
-  const completeSkill = (skillName) => {
-    setText(`/${skillName} `)
-    ref.current?.focus()
+  const applySlash = (item) => {
+    if (!slashMatch) return
+    if (item.run === 'compact') { onCompact?.(); setText(''); setSlashDismissed(true); return }
+    if (item.run === 'new') { onNewChat?.(); setText(''); setSlashDismissed(true); return }
+    if (item.run === 'model') { onOpenModelPicker?.(); setText(''); setSlashDismissed(true); return }
+    // fill the command text into the composer
+    const before = text.slice(0, slashMatch.start)
+    const after = text.slice(slashMatch.start + slashMatch.query.length)
+    const inserted = item.command + ' '
+    const newText = before + inserted + after
+    setText(newText)
+    setSlashDismissed(true)
+    requestAnimationFrame(() => {
+      const ta = ref.current
+      if (ta) {
+        const pos = before.length + inserted.length
+        ta.setSelectionRange(pos, pos)
+      }
+    })
   }
 
   const handleKey = (e) => {
     // ── @-mention navigation ──
     if (mentionOpen) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault()
-        setMentionIndex(i => Math.min(i + 1, mentionFiles.length - 1))
-        return
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        setMentionIndex(i => Math.max(i - 1, 0))
-        return
-      }
-      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
-        e.preventDefault()
-        insertMention(mentionFiles[mentionIndex])
-        return
-      }
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        setMentionDismissed(true)
-        return
-      }
+      if (e.key === 'ArrowDown') { e.preventDefault(); setMentionIndex(i => Math.min(i + 1, mentionFiles.length - 1)); return }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setMentionIndex(i => Math.max(i - 1, 0)); return }
+      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) { e.preventDefault(); insertMention(mentionFiles[mentionIndex]); return }
+      if (e.key === 'Escape') { e.preventDefault(); setMentionDismissed(true); return }
     }
 
-    // ── Skill autocomplete navigation ──
-    if (acOpen) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault()
-        setAcIndex(i => Math.min(i + 1, acItems.length - 1))
-        return
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        setAcIndex(i => Math.max(i - 1, 0))
-        return
-      }
-      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
-        e.preventDefault()
-        completeSkill(acItems[acIndex]?.name || acItems[0]?.name)
-        return
-      }
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        setAcDismissed(true)
-        return
-      }
+    // ── Slash command navigation ──
+    if (slashOpen) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setSlashIndex(i => Math.min(i + 1, slashItems.length - 1)); return }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setSlashIndex(i => Math.max(i - 1, 0)); return }
+      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) { e.preventDefault(); applySlash(slashItems[slashIndex]); return }
+      if (e.key === 'Escape') { e.preventDefault(); setSlashDismissed(true); return }
     }
 
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -152,7 +161,7 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
   // Rewrite /skillname → /skill:skillname if it matches a known skill
   const rewriteSkillCommand = (input) => {
     const match = input.match(/^\/([\w][\w-]*)/)
-    if (match && skills.some(s => s.name === match[1])) {
+    if (match && (commands.skills || []).some(s => s.name === match[1])) {
       return '/skill:' + input.slice(1)
     }
     return input
@@ -168,7 +177,7 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
     }
     setText('')
     setMentionDismissed(false)
-    setAcDismissed(false)
+    setSlashDismissed(false)
     if (ref.current) ref.current.style.height = 'auto'
   }
 
@@ -195,21 +204,17 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
 
   return (
     <div className="input-area" onDrop={handleDrop} onDragOver={e => e.preventDefault()}>
-      {/* Skill autocomplete dropdown */}
-      {acOpen && (
-        <div className="ac-dropdown">
-          {acItems.map((skill, i) => (
+      {/* Slash command dropdown */}
+      {slashOpen && (
+        <div className="slash-dropdown">
+          {slashItems.map((item, i) => (
             <button
-              key={skill.name}
-              className={`ac-item ${i === acIndex ? 'active' : ''}`}
-              onMouseDown={(e) => { e.preventDefault(); completeSkill(skill.name) }}
+              key={item.id}
+              className={`slash-item ${i === slashIndex ? 'active' : ''} ${item.run !== 'fill' ? 'action' : ''}`}
+              onMouseDown={(e) => { e.preventDefault(); applySlash(item) }}
             >
-              <span className="ac-name">/{skill.name}</span>
-              {skill.description && (
-                <span className="ac-desc">
-                  {skill.description.length > 55 ? skill.description.slice(0, 55) + '…' : skill.description}
-                </span>
-              )}
+              <span className="slash-name">{item.title}</span>
+              {item.description && <span className="slash-desc">{item.description}</span>}
             </button>
           ))}
         </div>
@@ -255,7 +260,7 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
           }}
           onKeyDown={handleKey}
           onPaste={handlePaste}
-          placeholder={streaming ? 'Steer π… (queued after current turn)' : 'Ask π anything…  (type / for skills, @ for files)'}
+          placeholder={streaming ? 'Steer π… (queued after current turn)' : 'Ask π anything…  (type / for commands, @ for files)'}
           rows={1}
         />
         <button className="ib-btn" onClick={() => fileRef.current?.click()} title="Attach file">

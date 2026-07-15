@@ -94,6 +94,10 @@ export default function App() {
     setSessionRefresh(n => n + 1)
   }
 
+  const handleCompact = async () => {
+    await fetch(apiUrl('/api/compact'), { method: 'POST' }).catch(() => {})
+  }
+
   const hasContent = entries.length > 0 || current
 
   const copyEntry = (el) => {
@@ -167,6 +171,9 @@ export default function App() {
           attachments={attachments}
           onRemoveAttachment={removeAttachment}
           onAddFiles={addFiles}
+          onCompact={handleCompact}
+          onNewChat={handleNewChat}
+          onOpenModelPicker={() => setShowModelPicker(true)}
         />
       </main>
 

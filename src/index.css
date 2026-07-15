@@ -321,6 +321,24 @@ pre code { background: none; padding: 0; font-size: 13px; }
 }
 .tc-output { color: var(--text-4); }
 
+/* ── Inline diff viewer ── */
+.diff-inline {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 1.5;
+  background: rgba(0,0,0,0.25); border-radius: var(--radius-sm);
+  padding: 4px 0; margin: 0; overflow-x: auto; max-height: 320px;
+}
+.diff-line {
+  display: flex; gap: 8px; padding: 0 10px; white-space: pre;
+}
+.diff-line--added { background: rgba(34,197,94,0.10); color: #86efac; }
+.diff-line--removed { background: rgba(239,68,68,0.10); color: #fca5a5; }
+.diff-line--header { color: var(--text-3); background: rgba(255,255,255,0.04); }
+.diff-line__number {
+  flex-shrink: 0; width: 3ch; text-align: right; color: var(--text-4);
+  user-select: none; opacity: 0.6;
+}
+.diff-line__content { flex: 1; min-width: 0; }
+
 .entry-text {
   font-size: 14.5px; color: var(--text); line-height: 1.7;
   word-break: break-word;
@@ -421,6 +439,31 @@ pre code { background: none; padding: 0; font-size: 13px; }
 .mention-path {
   font-family: 'JetBrains Mono', monospace; font-size: 12px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ── Slash command dropdown ── */
+.slash-dropdown {
+  position: absolute; bottom: calc(100% + 6px); left: 24px; right: 24px;
+  background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  max-height: 280px; overflow-y: auto; z-index: 30;
+  box-shadow: 0 -8px 32px rgba(0,0,0,0.5); padding: 4px;
+}
+.slash-item {
+  display: flex; align-items: baseline; gap: 10px; width: 100%;
+  padding: 7px 10px; background: none; border: none; color: var(--text-2);
+  cursor: pointer; border-radius: var(--radius-sm); font-size: 13px; text-align: left;
+  transition: background .08s;
+}
+.slash-item:hover { background: var(--bg-hover); }
+.slash-item.active { background: var(--bg-active); }
+.slash-name {
+  font-family: 'JetBrains Mono', monospace; font-weight: 500; color: var(--text);
+  white-space: nowrap; flex-shrink: 0;
+}
+.slash-item.action .slash-name { color: var(--accent); }
+.slash-desc {
+  color: var(--text-4); font-size: 11px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
 }
 
 .input-bar {
