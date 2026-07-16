@@ -11,6 +11,7 @@
 // ════════════════════════════════════════════════════════════════════
 import { useReducer, useEffect } from 'react'
 import { apiUrl } from '../lib/api'
+import * as Entry from '../../shared/entry.js'
 
 const initialState = {
   entries: [],       // committed entries (user + assistant turns)
@@ -70,7 +71,7 @@ function reducer(state, action) {
       return { ...state, isCompacting: false }
 
     case 'user_prompt': {
-      const entry = { role: 'user', text: action.text, attachments: action.attachments }
+      const entry = Entry.fromUser(action.text, action.attachments)
       return { ...state, entries: [...state.entries, entry], streaming: true, current: null }
     }
 
@@ -87,112 +88,37 @@ function reducer(state, action) {
       return { ...state, steerQueue: action.steering || [] }
 
     case 'message_start': {
-      // New assistant message starting
-      // Preserve tool calls from previous message in this turn
+      // Orchestration (reducer owns): seed `current`, carrying tool calls from
+      // the previous message in this turn. The value shape comes from Entry.
       const prevToolCalls = state.current?.toolCalls || []
       return {
         ...state,
-        current: {
-          role: 'assistant',
-          thinking: false,
-          thinkingDone: false,
-          text: '',
-          toolCalls: prevToolCalls, // carry over tool calls within the same turn
-          thinkingText: '',
-        },
+        current: { ...Entry.empty(prevToolCalls), thinking: false, thinkingDone: false },
       }
     }
 
     case 'message_update': {
       if (!state.current) return state
-      const cur = { ...state.current }
       const ae = action.assistantMessageEvent || action
       const kind = ae.type
-
-      if (kind === 'thinking_start') {
-        cur.thinking = true
-        cur.thinkingDone = false
-      }
-      if (kind === 'thinking_end') {
-        cur.thinking = false
-        cur.thinkingDone = true
-      }
-      if (kind === 'thinking_delta' && ae.delta) {
-        cur.thinkingText = (cur.thinkingText || '') + ae.delta
-      }
-      if (kind === 'text_delta' && ae.delta) {
-        cur.text += ae.delta
-      }
-      if (kind === 'tool_call_start') {
-        cur.toolCalls = [...cur.toolCalls, {
-          name: ae.toolName || ae.name || 'unknown',
-          args: ae.args || ae.arguments || '',
-          status: 'running',
-          output: '',
-        }]
-      }
-      if (kind === 'tool_call_end') {
-        // Find running tool and mark done
-        const idx = cur.toolCalls.length - 1
-        if (idx >= 0) {
-          const updated = { ...cur.toolCalls[idx], status: ae.isError ? 'error' : 'done' }
-          if (ae.output) updated.output = ae.output
-          cur.toolCalls = [...cur.toolCalls.slice(0, idx), updated]
-        }
-      }
-
-      return { ...state, current: cur }
+      // Phase (reducer owns): thinking-in-progress flags are transient view state.
+      const phase = {}
+      if (kind === 'thinking_start') { phase.thinking = true; phase.thinkingDone = false }
+      if (kind === 'thinking_end') { phase.thinking = false; phase.thinkingDone = true }
+      // Value (Entry owns): text/thinking deltas + tool calls. fold ignores
+      // phase sub-events, so it's safe to call for every message_update.
+      const folded = Entry.fold(state.current, action)
+      return { ...state, current: { ...folded, ...phase } }
     }
 
-    case 'tool_execution_start': {
-      // Create current if needed (tool events can arrive between messages)
-      const cur = state.current
-        ? { ...state.current }
-        : { role: 'assistant', thinking: false, thinkingDone: false, text: '', toolCalls: [] }
-      const name = action.toolName || action.tool || 'unknown'
-      const existing = cur.toolCalls.find(tc => tc.name === name && tc.status === 'running')
-      if (!existing) {
-        cur.toolCalls = [...cur.toolCalls, {
-          name,
-          args: typeof action.args === 'object' ? action.args : (action.args || {}),
-          status: 'running',
-          output: '',
-        }]
-      }
-      return { ...state, current: cur }
-    }
-
-    case 'tool_execution_update': {
-      const cur2 = state.current
-        ? { ...state.current }
-        : { role: 'assistant', thinking: false, thinkingDone: false, text: '', toolCalls: [] }
-      const idx2 = cur2.toolCalls.findLastIndex(tc => tc.status === 'running')
-      if (idx2 >= 0) {
-        const updated = { ...cur2.toolCalls[idx2] }
-        if (action.output || action.partialResult) updated.output += (action.output || action.partialResult?.text || '')
-        cur2.toolCalls = [...cur2.toolCalls.slice(0, idx2), updated, ...cur2.toolCalls.slice(idx2 + 1)]
-      }
-      return { ...state, current: cur2 }
-    }
-
+    case 'tool_execution_start':
+    case 'tool_execution_update':
     case 'tool_execution_end': {
-      const cur3 = state.current
-        ? { ...state.current }
-        : { role: 'assistant', thinking: false, thinkingDone: false, text: '', toolCalls: [] }
-      const name3 = action.toolName || action.tool
-      let idx3 = name3 ? cur3.toolCalls.findLastIndex(tc => tc.name === name3 && tc.status === 'running') : -1
-      if (idx3 < 0) idx3 = cur3.toolCalls.findLastIndex(tc => tc.status === 'running')
-      if (idx3 >= 0) {
-        const updated = { ...cur3.toolCalls[idx3], status: action.isError ? 'error' : 'done' }
-        // Extract output from result content
-        const result = action.result
-        if (result?.content) {
-          const texts = result.content.filter(c => c.type === 'text').map(c => c.text)
-          if (texts.length) updated.output = texts.join('\n')
-        }
-        cur3.toolCalls = [...cur3.toolCalls.slice(0, idx3), updated, ...cur3.toolCalls.slice(idx3 + 1)]
-      }
-      return { ...state, current: cur3 }
+      // Pure value events — Entry.fold owns all of it (matching, output, status).
+      const cur = state.current
+        ? state.current
+        : { ...Entry.empty(), thinking: false, thinkingDone: false }
+      return { ...state, current: Entry.fold(cur, action) }
     }
 
     case 'message_end': {
@@ -233,7 +159,7 @@ function reducer(state, action) {
     case 'error': {
       return {
         ...state,
-        entries: [...state.entries, { role: 'error', text: action.message || 'Unknown error' }],
+        entries: [...state.entries, Entry.error(action.message)],
         streaming: false,
         current: null,
       }

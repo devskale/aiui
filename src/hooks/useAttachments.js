@@ -5,8 +5,6 @@
 import { useState, useCallback } from 'react'
 import { apiUrl } from '../lib/api'
 
-const IMG_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
-
 export function useAttachments() {
   const [attachments, setAttachments] = useState([])
 

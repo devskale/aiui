@@ -255,14 +255,21 @@ export function UserEntry({ text, onCopy }) {
 }
 
 export function AssistantEntry({ entry, isStreaming, onCopy }) {
-  const hasThinking = entry.thinking || entry.thinkingDone
+  const thinkingText = entry.thinkingText || ''
+  const hasThinkingText = thinkingText.trim().length > 0
+  // Live entry: phase flags (reducer-owned) drive the indicator.
+  // Committed entry: derive from thinkingText — a historical row is always 'done'.
+  const showThinking = isStreaming
+    ? (entry.thinking || entry.thinkingDone)
+    : hasThinkingText
+  const thinkingDone = isStreaming ? entry.thinkingDone : true
   const hasTools = entry.toolCalls && entry.toolCalls.length > 0
   const hasText = entry.text && entry.text.trim()
 
   return (
     <div className="entry-assistant">
-      {hasThinking && (
-        <ThinkingBlock thinking={entry.thinking} thinkingDone={entry.thinkingDone} thinkingText={entry.thinkingText} />
+      {showThinking && (
+        <ThinkingBlock thinking={entry.thinking} thinkingDone={thinkingDone} thinkingText={thinkingText} />
       )}
       {hasTools && <ToolGroup toolCalls={entry.toolCalls} />}
       {hasText && (

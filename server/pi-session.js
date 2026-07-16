@@ -1,11 +1,11 @@
-import { createAgentSession, AuthStorage, ModelRegistry, SessionManager, createBashTool, createReadTool, createWriteTool, createEditTool } from '@earendil-works/pi-coding-agent'
+import { createAgentSession, AuthStorage, ModelRegistry, SessionManager } from '@earendil-works/pi-coding-agent'
 import path from 'node:path'
 import fs from 'node:fs'
-import { readFile as fsReadFile, writeFile as fsWriteFile, mkdir as fsMkdir, access as fsAccess } from 'node:fs/promises'
-import { constants as fsConstants } from 'node:fs'
-import { execSync } from 'node:child_process'
 import os from 'node:os'
 import { fileURLToPath } from 'node:url'
+import { bus } from './event-bus.js'
+import * as Entry from '../shared/entry.js'
+import * as Sandbox from './sandbox.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PROJECT_ROOT = path.join(__dirname, '..')
@@ -20,121 +20,15 @@ const cwd = path.join(PROJECT_ROOT, 'workspace')
 const SESSION_DIR = path.join(cwd, 'sessions')
 fs.mkdirSync(SESSION_DIR, { recursive: true })
 
-// ══ Pseudo-sandbox (ON by default on macOS) ══
-// The agent is confined to its workspace data directory on every dimension we
-// can enforce without a VM:
-//   • bash        → macOS seatbelt (sandbox-exec): file METADATA may be stat'd,
-//                   but the user's HOME content (Documents, Desktop, Downloads,
-//                   Pictures, .ssh, other projects, browser data) is unreadable
-//                   AND unwritable. Only workspace + temp + dev toolchain/caches
-//                   are accessible. Network stays open (LLM API, installs).
-//   • read/write/edit → fs operations are path-validated to the workspace.
-// ON by default; set AIUI_SANDBOX=0 to disable. Auto-degrades on Linux/prod
-// (no sandbox-exec) → unsandboxed with a warning. NOT a hard boundary (symlinks,
-// and grep/find/ls if manually enabled, can still escape) — for real isolation
-// use Docker/Gondolin/OpenShell. If a tool breaks, widen buildSandboxProfile()
-// or set AIUI_SANDBOX=0.
-const SANDBOX_AVAILABLE = fs.existsSync('/usr/bin/sandbox-exec')
-const SANDBOX_ENABLED = process.env.AIUI_SANDBOX !== '0' && SANDBOX_AVAILABLE
-
-function shellQuote(s) {
-  return "'" + String(s).replace(/'/g, "'\\''") + "'"
-}
-
-function buildSandboxProfile() {
-  const home = os.homedir()
-  return `(version 1)
-(allow default)
-;; stat/traverse anywhere (no content revealed) so tools resolve paths
-(allow file-read-metadata)
-;; ── Confine HOME content; reopen only the data dir + dev toolchain/caches ──
-(deny file-read* file-write* (subpath "${home}"))
-(allow file-read* file-write*
-  (subpath "${cwd}")                              ; the DATA directory
-  (subpath "${home}/.pi/agent")                   ; auth/models/rg
-  (subpath "${home}/.local")                      ; fnm / pnpm store
-  (subpath "${home}/Library/pnpm")                ; pnpm
-  (subpath "${home}/Library/Caches")
-  (subpath "${home}/.cache") (subpath "${home}/.npm"))
-;; system temp
-(allow file-read* file-write*
-  (subpath "/tmp") (subpath "/private/tmp")
-  (subpath "/var/folders") (subpath "/private/var/folders"))
-`
-}
-
-let SANDBOX_PROFILE_PATH = null
-if (SANDBOX_ENABLED) {
-  SANDBOX_PROFILE_PATH = path.join(cwd, '.sandbox.sb')
-  fs.writeFileSync(SANDBOX_PROFILE_PATH, buildSandboxProfile())
-  // give the workspace its own git repo so git stays inside the sandbox
-  if (!fs.existsSync(path.join(cwd, '.git'))) {
-    try {
-      execSync('git init -q', { cwd, env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' } })
-    } catch {}
-  }
-  console.log(`πui sandbox ON (macOS seatbelt) — agent confined to ${cwd}`)
-} else {
-  console.log(process.env.AIUI_SANDBOX === '0'
-    ? 'πui sandbox OFF (disabled by AIUI_SANDBOX=0)'
-    : 'πui sandbox OFF (sandbox-exec not found — unsandboxed; macOS required for confinement)')
-}
-
-function sandboxSpawnHook({ command, cwd: workdir, env }) {
-  return {
-    command: `sandbox-exec -f ${shellQuote(SANDBOX_PROFILE_PATH)} /bin/bash -c ${shellQuote(command)}`,
-    cwd: workdir,
-    env: {
-      ...env,
-      // keep git from reading the user's global config under HOME (denied)
-      GIT_CONFIG_GLOBAL: '/dev/null',
-      GIT_CONFIG_SYSTEM: '/dev/null',
-    },
-  }
-}
-
-// ── Confine read/write/edit to the workspace via path-validated operations ──
-function assertInWorkspace(absolutePath) {
-  const rel = path.relative(cwd, path.resolve(absolutePath))
-  if (rel === '..' || rel.startsWith('..') || path.isAbsolute(rel)) {
-    throw new Error(`Sandbox: path outside workspace denied: ${absolutePath}`)
-  }
-}
-
-const IMG_EXT = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp' }
-async function detectImageMimeByExt(absolutePath) {
-  return IMG_EXT[path.extname(absolutePath).toLowerCase().replace('.', '')] || null
-}
-
-const confinedReadOps = {
-  readFile: async (p) => { assertInWorkspace(p); return fsReadFile(p) },
-  access: async (p) => { assertInWorkspace(p); return fsAccess(p, fsConstants.R_OK) },
-  detectImageMimeType: detectImageMimeByExt,
-}
-const confinedWriteOps = {
-  writeFile: async (p, c) => { assertInWorkspace(p); return fsWriteFile(p, c, 'utf-8') },
-  mkdir: async (d) => { assertInWorkspace(d); return fsMkdir(d, { recursive: true }) },
-}
-const confinedEditOps = {
-  readFile: async (p) => { assertInWorkspace(p); return fsReadFile(p) },
-  writeFile: async (p, c) => { assertInWorkspace(p); return fsWriteFile(p, c, 'utf-8') },
-  access: async (p) => { assertInWorkspace(p); return fsAccess(p, fsConstants.R_OK | fsConstants.W_OK) },
-}
-
-// Override the built-in file tools with sandboxed variants when enabled.
-const customTools = SANDBOX_ENABLED ? [
-  createBashTool(cwd, { spawnHook: sandboxSpawnHook }),
-  createReadTool(cwd, { operations: confinedReadOps }),
-  createWriteTool(cwd, { operations: confinedWriteOps }),
-  createEditTool(cwd, { operations: confinedEditOps }),
-] : undefined
+// Confinement lives in ./sandbox.js. One call returns the overridden tools
+// (or undefined when off — the SDK then uses its own built-in tools, which is
+// the better "off" state; no no-op passthrough wrapper). See server/sandbox.js.
+const customTools = Sandbox.createTools(cwd)
 
 let authStorage = null
 let modelRegistry = null
 let session = null
 let sessionStartedAt = null  // epoch ms when the current session was created (for uptime)
-let unsubscribe = null
-let eventBroadcaster = null
 
 // Shared auth + registry (created once)
 async function initShared() {
@@ -145,20 +39,14 @@ async function initShared() {
 }
 
 function disposeSession() {
-  if (unsubscribe) { unsubscribe(); unsubscribe = null }
   if (session) {
     try { session.dispose?.() } catch {}
     session = null
   }
   sessionStartedAt = null
-}
-
-function wireBroadcaster() {
-  if (session && eventBroadcaster && !unsubscribe) {
-    unsubscribe = session.subscribe((event) => {
-      eventBroadcaster(event.type, event)
-    })
-  }
+  // Note: the session→bus subscription is owned by `bus.bind`, which swaps it
+  // idempotently on the next create/switch. No unbind needed here — the disposed
+  // session won't emit, and the upcoming bind unsubscribes it.
 }
 
 // Resume the most recent session, or create new if none exists
@@ -174,9 +62,9 @@ export async function getOrCreateSession() {
   })
   session = s
   sessionStartedAt = Date.now()
+  bus.bind(session)
   console.log('π agent session ready (resumed recent)')
-  if (eventBroadcaster) eventBroadcaster('session_status', getSessionInfo())
-  wireBroadcaster()
+  bus.push('session_status', getSessionInfo())
   return session
 }
 
@@ -193,18 +81,13 @@ export async function newSession() {
   })
   session = s
   sessionStartedAt = Date.now()
+  bus.bind(session)
   console.log('π agent new session created')
-  if (eventBroadcaster) {
-    eventBroadcaster('session_status', getSessionInfo())
-    wireBroadcaster()
-  }
+  bus.push('session_status', getSessionInfo())
   return session
 }
 
-export function setEventBroadcaster(fn) {
-  eventBroadcaster = fn
-  wireBroadcaster()
-}
+
 
 export async function prompt(text, attachments = []) {
   const s = await getOrCreateSession()
@@ -346,56 +229,30 @@ export async function switchToSession(sessionPath) {
   })
   session = s
   sessionStartedAt = Date.now()
+  bus.bind(session)
   console.log('π agent session switched:', sessionPath)
-  if (eventBroadcaster) {
-    eventBroadcaster('session_status', getSessionInfo())
-    wireBroadcaster()
-  }
+  bus.push('session_status', getSessionInfo())
   return session
 }
 
 // ── Session history (for replay on page load) ──
-
-function extractText(content) {
-  if (!content) return ''
-  if (typeof content === 'string') return content
-  return content.filter(c => c.type === 'text').map(c => c.text).join('\n')
-}
-
-function extractThinking(content) {
-  if (!content || typeof content === 'string') return ''
-  return content.filter(c => c.type === 'thinking').map(c => c.thinking).join('\n')
-}
-
+// The Entry shape is owned by shared/entry.js. This loop just walks stored SDK
+// messages and routes each through the module: fromMessage for user/assistant
+// rows, attachResult for toolResult messages (which attach to the preceding
+// assistant entry). No shape construction lives here.
 export function getSessionHistory() {
   if (!session?.messages) return []
   const entries = []
   for (const msg of session.messages) {
-    if (msg.role === 'user') {
-      const text = extractText(msg.content)
-      if (text) entries.push({ role: 'user', text })
-    } else if (msg.role === 'assistant') {
-      const toolCalls = (msg.content || [])
-        .filter(c => c.type === 'toolCall')
-        .map(c => ({ name: c.name, args: c.arguments, status: 'done', output: '' }))
-      const entry = {
-        role: 'assistant',
-        text: extractText(msg.content),
-        thinkingText: extractThinking(msg.content),
-        toolCalls,
-      }
-      if (entry.text || entry.toolCalls.length) entries.push(entry)
-    } else if (msg.role === 'toolResult') {
-      // Attach output to the preceding assistant's matching tool call
+    if (msg.role === 'toolResult') {
       const last = entries[entries.length - 1]
       if (last?.role === 'assistant') {
-        const tc = last.toolCalls.find(t => t.name === msg.toolName)
-        if (tc) {
-          tc.output = extractText(msg.content)
-          tc.status = msg.isError ? 'error' : 'done'
-        }
+        entries[entries.length - 1] = Entry.attachResult(last, msg.toolName, Entry.textOf(msg.content), msg.isError)
       }
+      continue
     }
+    const entry = Entry.fromMessage(msg)
+    if (entry) entries.push(entry)
   }
   return entries
 }

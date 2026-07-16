@@ -6,7 +6,9 @@ import fs from 'node:fs'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
-import { getOrCreateSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, listSessions, switchToSession, getAvailableModels, getCommands, setEventBroadcaster, getSessionInfo, getSessionStats, getSessionHistory, newSession } from './pi-session.js'
+import { bus } from './event-bus.js'
+import * as Mime from './mime.js'
+import { getOrCreateSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, listSessions, switchToSession, getAvailableModels, getCommands, getSessionInfo, getSessionStats, getSessionHistory, newSession } from './pi-session.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const cwd = path.join(__dirname, '..')
@@ -69,49 +71,27 @@ const storage = multer.diskStorage({
 })
 const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } })
 
-// ── SSE clients ──
-const clients = new Set()
-
-function broadcast(event, data) {
-  const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
-  for (const res of clients) {
-    try { res.write(msg) } catch { clients.delete(res) }
-  }
-}
+// ── SSE fan-out lives in ./event-bus.js (imported as `bus`) ──
 
 // ═══ API ROUTES (must be before Vite middleware) ═══
 
 // ── SSE stream ──
 app.get('/api/events', (req, res) => {
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    Connection: 'keep-alive',
-  'X-Accel-Buffering': 'no',
-  })
-  res.write('\n')
-  clients.add(res)
+  bus.attach(res)
 
-  // Eagerly create/resume session so history is available immediately
+  // Eagerly create/resume session so history is available immediately,
+  // then drive the connect snapshot through the bus (one sending path).
   getOrCreateSession().then(() => {
-    // Send current session status
-    res.write(`event: session_status\ndata: ${JSON.stringify(getSessionInfo())}\n\n`)
-    // Send conversation history
+    bus.send(res, 'session_status', getSessionInfo())
     const history = getSessionHistory()
-    if (history.length) {
-      res.write(`event: session_history\ndata: ${JSON.stringify({ entries: history })}\n\n`)
-    }
-    // Send stats if session is alive
+    if (history.length) bus.send(res, 'session_history', { entries: history })
     const stats = getSessionStats()
-    if (stats) res.write(`event: session_stats\ndata: ${JSON.stringify(stats)}\n\n`)
+    if (stats) bus.send(res, 'session_stats', stats)
   }).catch(err => {
-    res.write(`event: error\ndata: ${JSON.stringify({ message: err.message })}\n\n`)
+    bus.send(res, 'error', { message: err.message })
   })
-  // Keepalive every 30s to prevent idle proxy/bridge disconnects
-  const keepalive = setInterval(() => {
-    try { res.write(': keepalive\n\n') } catch { clearInterval(keepalive) }
-  }, 30000)
-  req.on('close', () => { clearInterval(keepalive); clients.delete(res) })
+
+  req.on('close', () => bus.detach(res))
 })
 
 // ── Prompt ──
@@ -122,14 +102,12 @@ app.post('/api/prompt', async (req, res) => {
   res.json({ ok: true })
 
   try {
-    const session = await getOrCreateSession()
-    // Wire up broadcaster if not yet done
-    setEventBroadcaster((type, data) => broadcast(type, data))
+    await getOrCreateSession()
     await prompt(text, attachments)
-    broadcast('session_status', getSessionInfo())
-    broadcast('session_stats', getSessionStats())
+    bus.push('session_status', getSessionInfo())
+    bus.push('session_stats', getSessionStats())
   } catch (err) {
-    broadcast('error', { message: err.message })
+    bus.push('error', { message: err.message })
   }
 })
 
@@ -171,7 +149,7 @@ app.post('/api/thinking-level', (req, res) => {
   if (!level) return res.status(400).json({ error: 'no level' })
   try {
     setThinkingLevel(level)
-    broadcast('session_status', getSessionInfo())
+    bus.push('session_status', getSessionInfo())
     res.json({ ok: true })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -214,9 +192,9 @@ app.get('/api/history', (_req, res) => {
 app.post('/api/session/new', async (_req, res) => {
   try {
     await newSession()
-    broadcast('session_status', getSessionInfo())
-    broadcast('session_history', { entries: [] })
-    broadcast('session_stats', getSessionStats())
+    bus.push('session_status', getSessionInfo())
+    bus.push('session_history', { entries: [] })
+    bus.push('session_stats', getSessionStats())
     res.json({ ok: true })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -228,12 +206,12 @@ app.post('/api/compact', async (_req, res) => {
   try {
     res.json({ ok: true })
     await compactSession()
-    broadcast('session_status', getSessionInfo())
-    broadcast('session_stats', getSessionStats())
+    bus.push('session_status', getSessionInfo())
+    bus.push('session_stats', getSessionStats())
   } catch (err) {
     // "Nothing to compact" is benign — don't pollute the chat with it
     if (!err.message.includes('Nothing to compact')) {
-      broadcast('error', { message: err.message })
+      bus.push('error', { message: err.message })
     }
   }
 })
@@ -246,7 +224,7 @@ app.post('/api/compact/abort', (_req, res) => {
 app.post('/api/compaction/auto', (req, res) => {
   const { enabled } = req.body
   setAutoCompaction(enabled)
-  broadcast('session_status', getSessionInfo())
+  bus.push('session_status', getSessionInfo())
   res.json({ ok: true })
 })
 
@@ -266,11 +244,11 @@ app.post('/api/session/switch', async (req, res) => {
   try {
     res.json({ ok: true })
     await switchToSession(sessionPath)
-    broadcast('session_status', getSessionInfo())
-    broadcast('session_history', { entries: getSessionHistory() })
-    broadcast('session_stats', getSessionStats())
+    bus.push('session_status', getSessionInfo())
+    bus.push('session_history', { entries: getSessionHistory() })
+    bus.push('session_stats', getSessionStats())
   } catch (err) {
-    broadcast('error', { message: err.message })
+    bus.push('error', { message: err.message })
   }
 })
 
@@ -284,14 +262,11 @@ app.get('/api/changelog', (_req, res) => {
 })
 
 // ── File upload ──
-const IMG_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
-const EXT_TO_MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' }
-
 app.post('/api/upload', upload.array('files', 10), (req, res) => {
   const files = (req.files || []).map(f => {
     const ext = path.extname(f.originalname).toLowerCase().replace('.', '')
-    const mimetype = EXT_TO_MIME[ext] || f.mimetype
-    const isImage = IMG_TYPES.includes(mimetype)
+    const mimetype = Mime.mimeFor(ext) || f.mimetype
+    const isImage = Mime.isImage(mimetype)
     const info = {
       id: f.filename,
       name: f.originalname,
@@ -309,29 +284,6 @@ app.post('/api/upload', upload.array('files', 10), (req, res) => {
   res.json({ files })
 })
 
-app.get('/api/test-image', async (_req, res) => {
-  const { getOrCreateSession, setEventBroadcaster } = await import('./pi-session.js')
-  const session = await getOrCreateSession()
-  setEventBroadcaster((type, data) => broadcast(type, data))
-
-  const fs = await import('node:fs')
-  const path = await import('node:path')
-  const uploadsDir = path.join(__dirname, '..', 'uploads')
-  const files = fs.readdirSync(uploadsDir).filter(f => /\.(png|jpg|jpeg|gif|webp)$/i.test(f))
-  if (!files.length) return res.status(404).json({ error: 'no images in uploads/' })
-
-  const file = files[files.length - 1] // latest image
-  const imgPath = path.join(uploadsDir, file)
-  const ext = path.extname(file).toLowerCase().replace('.', '')
-  const mimeMap = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' }
-  const mediaType = mimeMap[ext] || 'image/png'
-  const data = fs.readFileSync(imgPath).toString('base64')
-
-  res.json({ ok: true, file, mediaType, size: data.length })
-  await session.prompt(`Describe this image: ${file}`, {
-    images: [{ type: 'image', mimeType: mediaType, data }],
-  })
-})
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '..', 'dist')))
 }
