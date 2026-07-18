@@ -97,13 +97,18 @@ export function readSessionCookie(req) {
   return null
 }
 export function setSessionCookie(res, token, secure) {
-  const a = ['Path=/', 'HttpOnly', `Max-Age=${SESSION_TTL_MS / 1000}`, 'SameSite=Lax']
-  if (secure) a.push('Secure') // only over HTTPS — a Secure cookie is dropped on HTTP access
+  // SameSite=None;Secure over HTTPS so the cookie survives a cross-site iframe
+  // embed (skale.dev embedding this app); Lax for direct LAN (HTTP) access.
+  // Partitioned (CHIPS) lets Chrome keep it despite third-party-cookie blocking.
+  const sameSite = secure ? 'None' : 'Lax'
+  const a = ['Path=/', 'HttpOnly', `Max-Age=${SESSION_TTL_MS / 1000}`, `SameSite=${sameSite}`]
+  if (secure) a.push('Secure', 'Partitioned')
   res.setHeader('Set-Cookie', [`${COOKIE_NAME}=${encodeURIComponent(token)};${a.join(';')}`])
 }
 export function clearSessionCookie(res, secure) {
-  const a = ['Path=/', 'HttpOnly', 'Max-Age=0', 'SameSite=Lax']
-  if (secure) a.push('Secure')
+  const sameSite = secure ? 'None' : 'Lax'
+  const a = ['Path=/', 'HttpOnly', 'Max-Age=0', `SameSite=${sameSite}`]
+  if (secure) a.push('Secure', 'Partitioned')
   res.setHeader('Set-Cookie', [`${COOKIE_NAME}=;${a.join(';')}`])
 }
 

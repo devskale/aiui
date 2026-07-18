@@ -61,6 +61,16 @@ const app = express()
 app.set('trust proxy', true) // behind nginx in prod → real client IP for the login throttle
 app.use(express.json({ limit: '50mb' }))
 
+// ── Security headers (before routes so they apply to every response) ──
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  // Allow skale.dev to embed aiui in an iframe (URL bar stays skale.dev/aiui
+  // while the app streams direct from here). Replaces X-Frame-Options:
+  // SAMEORIGIN, which blocked cross-origin embedding.
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://skale.dev https://www.skale.dev")
+  next()
+})
+
 // ── File upload setup ──
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadsDir),
@@ -313,13 +323,6 @@ const base = process.env.VITE_BASE || ''
 // (nginx proxy_pass with trailing slash strips the /aiui/ prefix before reaching us).
 app.use(`${base}/uploads`, express.static(uploadsDir))
 app.use(`/uploads`, express.static(uploadsDir))
-
-// ── Security headers ──
-app.use((_req, res, next) => {
-  res.setHeader('X-Content-Type-Options', 'nosniff')
-  res.setHeader('X-Frame-Options', 'SAMEORIGIN')
-  next()
-})
 
 const PORT = process.env.PORT || 3001
 const HOST = process.env.HOST || '127.0.0.1'

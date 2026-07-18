@@ -153,6 +153,17 @@ export default function App() {
     navigator.clipboard.writeText(text)
   }
 
+  // Until authed, render only the login (the full shell fetches data that
+  // 401s when unauthed — don't mount it). UI loads once logged in.
+  if (authLoading) return <div className="app" />
+  if (!authed) {
+    return (
+      <div className="app">
+        <LoginModal onSuccess={checkMe} />
+      </div>
+    )
+  }
+
   return (
     <div className="app" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
       {dragOver && <div className="drop-zone"><span>Drop files here</span></div>}
