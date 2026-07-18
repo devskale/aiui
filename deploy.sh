@@ -11,6 +11,7 @@ echo "📦 Syncing to $HOST:$REMOTE_DIR ..."
 rsync -avz --delete \
   --exclude='node_modules/' \
   --exclude='session/' \
+  --exclude='workspace/' \
   --exclude='uploads/' \
   --exclude='pi/' \
   --exclude='.pi/' \
@@ -18,7 +19,7 @@ rsync -avz --delete \
   --exclude='test-results/' \
   ./ "$HOST:$REMOTE_DIR/"
 
-echo "🔄 Restarting service..."
-ssh "$HOST" "systemctl --user restart aiui"
+echo "🔄 Installing deps + restarting service..."
+ssh "$HOST" "cd $REMOTE_DIR && pnpm install --frozen-lockfile && systemctl --user restart aiui"
 
 echo "✅ Deployed to $HOST (port 8082)"

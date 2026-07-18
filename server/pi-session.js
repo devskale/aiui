@@ -1,6 +1,7 @@
 import { createAgentSession, ModelRuntime, SessionManager } from '@earendil-works/pi-coding-agent'
 import path from 'node:path'
 import fs from 'node:fs'
+import crypto from 'node:crypto'
 import os from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { getBus } from './event-bus.js'
@@ -27,17 +28,29 @@ async function initShared() {
 // confined to that dir. One live session per user.
 const contexts = new Map() // user → { cwd, sessionDir, customTools, session, startedAt }
 
+// Usernames are arbitrary strings (typically emails). The Map key is the raw
+// username; the workspace DIR is derived below (emails aren't safe dir names).
 function normUser(user) {
   const u = user || ANON
-  if (!/^[a-zA-Z0-9_-]+$/.test(u)) throw new Error(`invalid user: ${u}`)
+  if (typeof u !== 'string' || u.includes('/') || u.includes('\0')) throw new Error('invalid user')
   return u
+}
+
+// Filesystem-safe, collision-free dir name from a username: readable slug +
+// 8 hex of its sha256 (so hans@skale.dev and hans@other.com never share a dir).
+function workspaceSlug(user) {
+  const u = normUser(user)
+  if (u === ANON) return ANON
+  const slug = u.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'user'
+  const hash = crypto.createHash('sha256').update(u).digest('hex').slice(0, 8)
+  return `${slug}-${hash}`
 }
 
 function ctxFor(user) {
   const u = normUser(user)
   let ctx = contexts.get(u)
   if (!ctx) {
-    const cwd = path.join(WORKSPACE_ROOT, u)
+    const cwd = path.join(WORKSPACE_ROOT, workspaceSlug(u))
     const sessionDir = path.join(cwd, 'sessions')
     fs.mkdirSync(sessionDir, { recursive: true })
     ctx = { cwd, sessionDir, customTools: Sandbox.createTools(cwd), session: null, startedAt: null }

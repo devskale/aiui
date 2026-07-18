@@ -199,13 +199,22 @@ Deploy to lubu with one command:
 ./deploy.sh          # Build, rsync, restart systemd service
 ```
 
-This runs `vite build` with `VITE_BASE=/aiui/`, rsyncs to `lubu:/home/woodmastr/code/webuis/aiui/`, and restarts the `aiui` systemd user service.
+This runs `vite build` with `VITE_BASE=/aiui/`, rsyncs to `lubu:/home/woodmastr/code/webuis/aiui/` (excluding `workspace/` so users' dirs survive), runs `pnpm install --frozen-lockfile` on lubu, and restarts the `aiui` systemd user service. (Lubu's `pnpm`/`node` aren't on the non-interactive ssh PATH — the remote step uses the nvm node + pnpm paths from the service unit.)
+
+### Where it lives
+
+- **URLs:** `https://neusiedl.duckdns.org:8001/` and `http://lubuntu.local/aiui/`
+- **On lubu:** `/home/woodmastr/code/webuis/aiui/`
+
+### Login (auth)
+
+Login is **on** when `~/.aiui-auth.json` exists on lubu (format: `{ users, passphrases, limits }`); absent → open. Generate a passphrase hash with `node scripts/hash-passphrase.js '<pw>'` and paste the `salt:hash` into `passphrases`. Each user gets a scoped workspace at `workspace/<user>/`. Edit the file live (read on each login) + `systemctl --user restart aiui`.
 
 ### Lubuntu Setup
 
-- **Service:** `~/.config/systemd/user/aiui.service` (port 8082)
+- **Service:** `~/.config/systemd/user/aiui.service` (port 8082, `NODE_ENV=production`, nvm node `~/.nvm/versions/node/v24.13.0/bin/node`)
 - **Nginx:** `/etc/nginx/sites-enabled/default` — `location /aiui/` proxies to `127.0.0.1:8082`
-- **Models:** `~/.pi/agent/models.json` — provider `amd` with TU Aqueduct models
+- **Models:** `~/.pi/agent/models.json`
 - **Settings:** Project `.pi/settings.json` sets `defaultProvider`/`defaultModel`
 - **Logs:** `journalctl --user -u aiui -f`
 
