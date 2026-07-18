@@ -42,6 +42,7 @@ export default function App() {
   const [sessionRefresh, setSessionRefresh] = useState(0)
   const { route, navigate } = useHashRoute()
   const [model, setModel] = useState('')
+  const [imageModels, setImageModels] = useState([])
   const endRef = useRef(null)
   const scrollContainerRef = useRef(null)
   const stickToBottomRef = useRef(true)  // stick to bottom unless the user scrolled up
@@ -61,11 +62,12 @@ export default function App() {
     fetch(apiUrl('/api/models'))
       .then(r => r.json())
       .then(data => {
-        const flat = flattenModels(data)
+        const flat = flattenModels(data.providers)
         const allowed = getAllowedModels()
         const visible = flat.filter(m => isModelAllowed(m, allowed))
         const preferred = visible.find(m => m === 'amd-local@tu@qwen-3.5-397b')
         setModel(preferred || visible[0] || '')
+        setImageModels(Array.isArray(data.imageModels) ? data.imageModels : [])
       })
       .catch(() => {})
   }, [showSettings])
@@ -126,6 +128,11 @@ export default function App() {
   }
 
   const hasContent = entries.length > 0 || current
+
+  // Can the current model accept images? Derived from each model's `input`
+  // capability (models.json via /api/models) — only models that declare image
+  // input accept images. Not a preference.
+  const imageCapable = imageModels.includes(sessionModel || model)
 
   const copyEntry = (el) => {
     // Clone node, strip UI chrome, extract clean textContent
@@ -215,6 +222,7 @@ export default function App() {
           onCompact={handleCompact}
           onNewChat={handleNewChat}
           onOpenModelPicker={() => setShowModelPicker(true)}
+          imageCapable={imageCapable}
         />
       </main>
 

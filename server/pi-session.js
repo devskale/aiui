@@ -1,4 +1,4 @@
-import { createAgentSession, AuthStorage, ModelRegistry, SessionManager } from '@earendil-works/pi-coding-agent'
+import { createAgentSession, ModelRuntime, SessionManager } from '@earendil-works/pi-coding-agent'
 import path from 'node:path'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -25,16 +25,15 @@ fs.mkdirSync(SESSION_DIR, { recursive: true })
 // the better "off" state; no no-op passthrough wrapper). See server/sandbox.js.
 const customTools = Sandbox.createTools(cwd)
 
-let authStorage = null
-let modelRegistry = null
+let modelRuntime = null
 let session = null
 let sessionStartedAt = null  // epoch ms when the current session was created (for uptime)
 
-// Shared auth + registry (created once)
+// Shared model runtime (created once) — owns auth + models + provider catalogs.
+// Replaces the old AuthStorage + ModelRegistry pair (removed in SDK 0.80.8).
 async function initShared() {
-  if (!authStorage) {
-    authStorage = AuthStorage.create()
-    modelRegistry = ModelRegistry.create(authStorage)
+  if (!modelRuntime) {
+    modelRuntime = await ModelRuntime.create()
   }
 }
 
@@ -55,8 +54,7 @@ export async function getOrCreateSession() {
   await initShared()
   const { session: s } = await createAgentSession({
     cwd,
-    authStorage,
-    modelRegistry,
+    modelRuntime,
     customTools,
     sessionManager: SessionManager.continueRecent(cwd, SESSION_DIR),
   })
@@ -74,8 +72,7 @@ export async function newSession() {
   await initShared()
   const { session: s } = await createAgentSession({
     cwd,
-    authStorage,
-    modelRegistry,
+    modelRuntime,
     customTools,
     sessionManager: SessionManager.create(cwd, SESSION_DIR),
   })
@@ -115,7 +112,7 @@ export async function abort() {
 
 export async function setModel(modelId) {
   const s = await getOrCreateSession()
-  const available = await modelRegistry.getAvailable()
+  const available = modelRuntime.getModels()
   const model = available.find(m => m.id === modelId || `${m.provider}@${m.id}` === modelId)
   if (model) {
     await s.setModel(model)
@@ -126,14 +123,20 @@ export async function setModel(modelId) {
 
 export async function getAvailableModels() {
   await getOrCreateSession()
-  const models = await modelRegistry.getAvailable()
+  const models = modelRuntime.getModels()
   const grouped = {}
+  const imageModels = []
   for (const m of models) {
     const provider = m.provider || 'unknown'
     if (!grouped[provider]) grouped[provider] = []
     grouped[provider].push(m.id)
+    // Image capability is a fact from models.json (each model's `input` array),
+    // not a preference. Only models whose input includes 'image' accept images.
+    if (Array.isArray(m.input) && m.input.includes('image')) {
+      imageModels.push(`${provider}@${m.id}`)
+    }
   }
-  return grouped
+  return { providers: grouped, imageModels }
 }
 
 // Abbreviate an absolute path for compact UI display: $HOME → ~
@@ -222,8 +225,7 @@ export async function switchToSession(sessionPath) {
   await initShared()
   const { session: s } = await createAgentSession({
     cwd,
-    authStorage,
-    modelRegistry,
+    modelRuntime,
     customTools,
     sessionManager: SessionManager.open(sessionPath, SESSION_DIR, cwd),
   })

@@ -30,7 +30,7 @@ export function isModelAllowed(modelId, allowed) {
 }
 
 /**
- * Flatten the /api/models response into an array of "provider@id" strings.
+ * Flatten the /api/models `providers` field into an array of "provider@id" strings.
  * Handles both array and { provider: [ids] } shapes.
  */
 export function flattenModels(data) {
@@ -68,4 +68,28 @@ export function groupModels(flat) {
     }
   }
   return grouped
+}
+
+// ── Pure list-toggle helpers (shared by the allow-list + image-capable UIs) ──
+// null/empty `selected` means "all on". Toggling returns the next list, or
+// null when the selection again covers every model (normalised to "all").
+
+/** Toggle one model in a selection. Returns next list (or null = all). */
+export function toggleModelInList(modelId, selected, allFlat) {
+  const current = selected || allFlat
+  const next = current.includes(modelId)
+    ? current.filter(m => m !== modelId)
+    : [...current, modelId]
+  return next.length === allFlat.length ? null : next
+}
+
+/** Toggle a whole provider's models in a selection. Returns next list (or null = all). */
+export function toggleProviderInList(provider, ids, selected, allFlat) {
+  const current = selected || allFlat
+  const full = ids.map(id => `${provider}@${id}`)
+  const allOn = full.every(m => current.includes(m))
+  const next = allOn
+    ? current.filter(m => !full.includes(m))
+    : [...new Set([...current, ...full])]
+  return next.length === allFlat.length ? null : next
 }

@@ -4,7 +4,22 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { apiUrl } from '../lib/api'
 
-export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRemoveAttachment, onAddFiles, onCompact, onNewChat, onOpenModelPicker }) {
+// Splits a file list into accepted + image-rejected. When the current model
+// can't take images, image files are stripped so they never reach the server;
+// the caller surfaces a note for the rejected count.
+function splitByImageSupport(files, imageCapable) {
+  const arr = Array.from(files || [])
+  if (imageCapable) return { accept: arr, rejectedImages: 0 }
+  let rejectedImages = 0
+  const accept = []
+  for (const f of arr) {
+    if (f.type.startsWith('image/')) rejectedImages++
+    else accept.push(f)
+  }
+  return { accept, rejectedImages }
+}
+
+export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRemoveAttachment, onAddFiles, onCompact, onNewChat, onOpenModelPicker, imageCapable }) {
   const [text, setText] = useState('')
   const [commands, setCommands] = useState({ skills: [], prompts: [], extensions: [] })
   const [slashIndex, setSlashIndex] = useState(0)
@@ -15,6 +30,13 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
   const [mentionFiles, setMentionFiles] = useState([])
   const [mentionIndex, setMentionIndex] = useState(0)
   const [mentionDismissed, setMentionDismissed] = useState(false)
+
+  // Transient inline notice (e.g. "model doesn't support images").
+  const [imageNotice, setImageNotice] = useState('')
+  const flashNotice = (msg) => {
+    setImageNotice(msg)
+    setTimeout(() => setImageNotice(prev => (prev === msg ? '' : prev)), 3200)
+  }
 
   const ref = useRef(null)
   const fileRef = useRef(null)
@@ -168,6 +190,11 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
   }
 
   const handleSend = () => {
+    // Guard: never fire images at a model that can't take them.
+    if (!imageCapable && attachments.some(a => a.isImage)) {
+      flashNotice("This model doesn't support images — remove them to send.")
+      return
+    }
     if (!text.trim() && attachments.length === 0) return
     const textToSend = rewriteSkillCommand(text)
     if (streaming) {
@@ -188,13 +215,18 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
     for (const item of items) {
       if (item.kind === 'file') files.push(item.getAsFile())
     }
-    if (files.length) { e.preventDefault(); onAddFiles(files) }
+    if (!files.length) return
+    e.preventDefault()
+    const { accept, rejectedImages } = splitByImageSupport(files, imageCapable)
+    if (rejectedImages) flashNotice(`${rejectedImages} image${rejectedImages > 1 ? 's' : ''} not attached — this model doesn't support images.`)
+    if (accept.length) onAddFiles(accept)
   }
 
   const handleDrop = (e) => {
     e.preventDefault()
-    const files = Array.from(e.dataTransfer?.files || [])
-    if (files.length) onAddFiles(files)
+    const { accept, rejectedImages } = splitByImageSupport(e.dataTransfer?.files || [], imageCapable)
+    if (rejectedImages) flashNotice(`${rejectedImages} image${rejectedImages > 1 ? 's' : ''} not attached — this model doesn't support images.`)
+    if (accept.length) onAddFiles(accept)
   }
 
   const shortenPath = (p) => {
@@ -238,6 +270,7 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
         </div>
       )}
 
+      {imageNotice && <div className="ib-notice">{imageNotice}</div>}
       {attachments.length > 0 && (
         <div className="attachment-bar">
           {attachments.map(a => (
@@ -263,11 +296,16 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
           placeholder={streaming ? 'Steer π… (queued after current turn)' : 'Ask π anything…  (type / for commands, @ for files)'}
           rows={1}
         />
-        <button className="ib-btn" onClick={() => fileRef.current?.click()} title="Attach file">
+        <button className="ib-btn" onClick={() => fileRef.current?.click()} title={imageCapable ? 'Attach file' : 'Attach file (images disabled — model doesn\'t support them)'}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
         </button>
         <input ref={fileRef} type="file" multiple style={{ display: 'none' }}
-          onChange={e => { onAddFiles(Array.from(e.target.files || [])); e.target.value = '' }} />
+          onChange={e => {
+            const { accept, rejectedImages } = splitByImageSupport(e.target.files || [], imageCapable)
+            if (rejectedImages) flashNotice(`${rejectedImages} image${rejectedImages > 1 ? 's' : ''} not attached — this model doesn't support images.`)
+            if (accept.length) onAddFiles(accept)
+            e.target.value = ''
+          }} />
         {streaming ? (
           <button className="ib-btn stop" onClick={onStop} title="Stop">⏹</button>
         ) : (

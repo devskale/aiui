@@ -76,7 +76,7 @@ When working on piui, consult `pi/docs/` and `pi/examples/` for SDK patterns bef
 
 - **Backend:** Express 5, multer (file uploads), SSE (`EventSource` on client)
 - **Frontend:** React 19, Vite 6, react-markdown + remark-gfm
-- **Agent SDK:** `@earendil-works/pi-coding-agent` — `createAgentSession`, `ModelRegistry`, `AuthStorage`, `SessionManager`
+- **Agent SDK:** `@earendil-works/pi-coding-agent` — `createAgentSession`, `ModelRuntime`, `SessionManager` (SDK ≥0.80.8: `ModelRuntime` replaced the old `AuthStorage` + `ModelRegistry`)
 - **Runtime:** Node ESM (`"type": "module"`)
 
 ## Architecture

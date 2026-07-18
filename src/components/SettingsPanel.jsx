@@ -1,9 +1,46 @@
 // ════════════════════════════════════════════════════════════════════
-// SettingsPanel — model allow-list + future settings
+// SettingsPanel — model allow-list (picker visibility)
+//
+// Image capability is NOT configured here — it's a fact derived from each
+// model's `input` array (models.json via /api/models). Only models that
+// declare image input accept images. See App.jsx → imageCapable.
 // ════════════════════════════════════════════════════════════════════
 import { useState, useEffect } from 'react'
 import { apiUrl } from '../lib/api'
-import { flattenModels, groupModels, getAllowedModels, setAllowedModels, isModelAllowed } from '../lib/models'
+import {
+  flattenModels, groupModels, isModelAllowed,
+  getAllowedModels, setAllowedModels,
+  toggleModelInList, toggleProviderInList,
+} from '../lib/models'
+
+// Reusable provider→models checkbox tree. `selected` is null = "all on".
+function ModelGrid({ allFlat, selected, onToggleModel, onToggleProvider }) {
+  const grouped = groupModels(allFlat)
+  return Object.entries(grouped).map(([provider, ids]) => {
+    const allOn = ids.every(id => isModelAllowed(`${provider}@${id}`, selected))
+    return (
+      <div key={provider} className="sp-provider">
+        <label className="sp-provider-toggle">
+          <input type="checkbox" checked={allOn} onChange={() => onToggleProvider(provider, ids)} />
+          <span>{provider}</span>
+          <span className="sp-provider-count">{ids.length}</span>
+        </label>
+        <div className="sp-model-grid">
+          {ids.map(id => {
+            const full = `${provider}@${id}`
+            const on = isModelAllowed(full, selected)
+            return (
+              <label key={full} className={`sp-model ${on ? 'on' : ''}`}>
+                <input type="checkbox" checked={on} onChange={() => onToggleModel(full)} />
+                <span>{id}</span>
+              </label>
+            )
+          })}
+        </div>
+      </div>
+    )
+  })
+}
 
 export function SettingsPanel({ onClose }) {
   const [allFlat, setAllFlat] = useState([])
@@ -15,39 +52,22 @@ export function SettingsPanel({ onClose }) {
     fetch(apiUrl('/api/models'))
       .then(r => r.json())
       .then(data => {
-        setAllFlat(flattenModels(data))
+        setAllFlat(flattenModels(data.providers))
         setLoading(false)
       })
       .catch(() => setLoading(false))
   }, [])
 
-  const toggle = (modelId) => {
-    const current = allowed || allFlat // if null (all), start from full list
-    const next = current.includes(modelId)
-      ? current.filter(m => m !== modelId)
-      : [...current, modelId]
-    setAllowed(next)
-    setAllowedModels(next)
+  const toggleAllowed = (modelId) => {
+    const next = toggleModelInList(modelId, allowed, allFlat)
+    setAllowed(next); setAllowedModels(next)
+  }
+  const toggleAllowedProvider = (provider, ids) => {
+    const next = toggleProviderInList(provider, ids, allowed, allFlat)
+    setAllowed(next); setAllowedModels(next)
   }
 
-  const selectAll = () => { setAllowed(null); setAllowedModels(null) }
-  const selectNone = () => { setAllowed([]); setAllowedModels([]) }
-  const toggleProvider = (provider, ids) => {
-    const current = allowed || allFlat
-    const allOn = ids.every(id => isModelAllowed(`${provider}@${id}`, current))
-    let next
-    if (allOn) {
-      next = current.filter(m => !ids.some(id => m === `${provider}@${id}`))
-    } else {
-      next = [...new Set([...current, ...ids.map(id => `${provider}@${id}`)])]
-    }
-    setAllowed(next.length === allFlat.length ? null : next)
-    setAllowedModels(next.length === allFlat.length ? null : next)
-  }
-
-  const grouped = groupModels(allFlat)
-  const effectiveAllowed = allowed || allFlat
-  const allowedCount = effectiveAllowed.length
+  const allowedCount = (allowed || allFlat).length
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -63,40 +83,23 @@ export function SettingsPanel({ onClose }) {
               <h3>Allowed Models</h3>
               <span className="sp-hint">{allowedCount} of {allFlat.length} shown in picker</span>
             </div>
+            <p className="sp-help">
+              Controls which models appear in the picker. Image support is
+              automatic — only models that declare image input accept images.
+            </p>
             <div className="sp-actions">
-              <button className="sp-action-btn" onClick={selectAll}>All</button>
-              <button className="sp-action-btn" onClick={selectNone}>None</button>
+              <button className="sp-action-btn" onClick={() => { setAllowed(null); setAllowedModels(null) }}>All</button>
+              <button className="sp-action-btn" onClick={() => { setAllowed([]); setAllowedModels([]) }}>None</button>
             </div>
-
             {loading && <div className="sp-loading">Loading models…</div>}
-
-            {!loading && Object.entries(grouped).map(([provider, ids]) => {
-              const allOn = ids.every(id => isModelAllowed(`${provider}@${id}`, effectiveAllowed))
-              return (
-                <div key={provider} className="sp-provider">
-                  <label className="sp-provider-toggle">
-                    <input type="checkbox" checked={allOn} onChange={() => toggleProvider(provider, ids)} />
-                    <span>{provider}</span>
-                    <span className="sp-provider-count">{ids.length}</span>
-                  </label>
-                  <div className="sp-model-grid">
-                    {ids.map(id => {
-                      const full = `${provider}@${id}`
-                      return (
-                        <label key={full} className={`sp-model ${isModelAllowed(full, effectiveAllowed) ? 'on' : ''}`}>
-                          <input
-                            type="checkbox"
-                            checked={isModelAllowed(full, effectiveAllowed)}
-                            onChange={() => toggle(full)}
-                          />
-                          <span>{id}</span>
-                        </label>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-            })}
+            {!loading && (
+              <ModelGrid
+                allFlat={allFlat}
+                selected={allowed}
+                onToggleModel={toggleAllowed}
+                onToggleProvider={toggleAllowedProvider}
+              />
+            )}
           </section>
         </div>
       </div>

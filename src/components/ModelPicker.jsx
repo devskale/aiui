@@ -16,7 +16,7 @@ export function ModelPicker({ activeModel, onSelect, onClose }) {
     fetch(apiUrl('/api/models'))
       .then(r => r.json())
       .then(data => {
-        const flat = flattenModels(data)
+        const flat = flattenModels(data.providers)
         const allowed = getAllowedModels()
         setModels(flat.filter(m => isModelAllowed(m, allowed)))
         setLoading(false)

@@ -10,7 +10,7 @@
     "build": "vite build"
   },
   "dependencies": {
-    "@earendil-works/pi-coding-agent": "^0.80.6",
+    "@earendil-works/pi-coding-agent": "^0.80.10",
     "concurrently": "^9.1.2",
     "express": "^5.1.0",
     "lucide-react": "^1.23.0",
