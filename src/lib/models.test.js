@@ -10,6 +10,7 @@ import {
   toggleModelInList,
   toggleProviderInList,
   flattenModels,
+  selectModels,
 } from './models.js'
 
 const ALL = ['amd@a', 'amd@b', 'openai@gpt-4o']
@@ -49,4 +50,26 @@ test('flattenModels: { provider: [ids] } → "provider@id" strings', () => {
     flattenModels({ amd: ['a', 'b'] }),
     ['amd@a', 'amd@b'],
   )
+})
+
+// ── selectModels (the pure core of useModels) ──
+
+test('selectModels: all flattens providers, visible filters by allow-list, imageModels passes through', () => {
+  const data = { providers: { amd: ['a', 'b'], openai: ['gpt'] }, imageModels: ['amd@a', 'openai@gpt'] }
+  const r = selectModels(data, ['amd@a'])
+  assert.deepEqual(r.all, ['amd@a', 'amd@b', 'openai@gpt'])
+  assert.deepEqual(r.visible, ['amd@a'])
+  assert.deepEqual(r.imageModels, ['amd@a', 'openai@gpt'])
+})
+
+test('selectModels: null/empty allow-list → visible = all', () => {
+  const data = { providers: { amd: ['a', 'b'] }, imageModels: [] }
+  assert.deepEqual(selectModels(data, null).visible, ['amd@a', 'amd@b'])
+  assert.deepEqual(selectModels(data, []).visible, ['amd@a', 'amd@b'])
+})
+
+test('selectModels: tolerates missing / malformed input', () => {
+  assert.deepEqual(selectModels(null, null), { all: [], visible: [], imageModels: [] })
+  assert.deepEqual(selectModels({}, null), { all: [], visible: [], imageModels: [] })
+  assert.deepEqual(selectModels({ providers: { amd: ['a'] } }, null).imageModels, [])
 })

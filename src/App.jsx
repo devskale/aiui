@@ -2,8 +2,8 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { useAgentEvents } from './hooks/useAgentEvents'
 import { useAttachments } from './hooks/useAttachments'
 import { useHashRoute } from './hooks/useHashRoute'
+import { useModels } from './hooks/useModels'
 import { apiUrl } from './lib/api'
-import { flattenModels, isModelAllowed, getAllowedModels } from './lib/models'
 import { Sidebar } from './components/Sidebar'
 import { ModelPicker } from './components/ModelPicker'
 import { CommandPanel } from './components/CommandPanel'
@@ -42,7 +42,7 @@ export default function App() {
   const [sessionRefresh, setSessionRefresh] = useState(0)
   const { route, navigate } = useHashRoute()
   const [model, setModel] = useState('')
-  const [imageModels, setImageModels] = useState([])
+  const { visible, imageModels } = useModels()
   const endRef = useRef(null)
   const scrollContainerRef = useRef(null)
   const stickToBottomRef = useRef(true)  // stick to bottom unless the user scrolled up
@@ -57,20 +57,12 @@ export default function App() {
     return () => clearInterval(id)
   }, [sessionAlive, sessionStartedAt])
 
-  // Fetch current model on mount — respect the allow-list from settings
+  // Pick the initial model once the (allow-listed) model list arrives.
   useEffect(() => {
-    fetch(apiUrl('/api/models'))
-      .then(r => r.json())
-      .then(data => {
-        const flat = flattenModels(data.providers)
-        const allowed = getAllowedModels()
-        const visible = flat.filter(m => isModelAllowed(m, allowed))
-        const preferred = visible.find(m => m === 'amd-local@tu@qwen-3.5-397b')
-        setModel(preferred || visible[0] || '')
-        setImageModels(Array.isArray(data.imageModels) ? data.imageModels : [])
-      })
-      .catch(() => {})
-  }, [showSettings])
+    if (model || !visible.length) return
+    const preferred = visible.find(m => m === 'amd-local@tu@qwen-3.5-397b')
+    setModel(preferred || visible[0] || '')
+  }, [visible, model])
 
   // Auto-scroll only when the user is near the bottom.
   // Scrolling up to read pauses auto-scroll; scrolling back down resumes it.

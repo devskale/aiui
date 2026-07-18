@@ -3,26 +3,14 @@
 // ════════════════════════════════════════════════════════════════════
 import { useState, useEffect, useRef } from 'react'
 import { apiUrl } from '../lib/api'
-import { flattenModels, isModelAllowed, getAllowedModels } from '../lib/models'
+import { useModels } from '../hooks/useModels'
 
 export function ModelPicker({ activeModel, onSelect, onClose }) {
-  const [models, setModels] = useState([])
+  const { visible: models, loading } = useModels()
   const [search, setSearch] = useState('')
-  const [loading, setLoading] = useState(true)
   const inputRef = useRef(null)
 
-  useEffect(() => {
-    inputRef.current?.focus()
-    fetch(apiUrl('/api/models'))
-      .then(r => r.json())
-      .then(data => {
-        const flat = flattenModels(data.providers)
-        const allowed = getAllowedModels()
-        setModels(flat.filter(m => isModelAllowed(m, allowed)))
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [])
+  useEffect(() => { inputRef.current?.focus() }, [])
 
   const filtered = search
     ? models.filter(m => m.toLowerCase().includes(search.toLowerCase()))

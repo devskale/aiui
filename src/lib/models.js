@@ -93,3 +93,16 @@ export function toggleProviderInList(provider, ids, selected, allFlat) {
     : [...new Set([...current, ...full])]
   return next.length === allFlat.length ? null : next
 }
+
+// ── selectModels: derive the client's views from the /api/models response ──
+// Pure: the test surface for the fetch→flatten→filter→image math that used
+// to be inlined (and duplicated) across App / ModelPicker / SettingsPanel.
+//   all         every "provider@id" (the allow-list UI shows all)
+//   visible     all filtered by the allow-list (App + Picker)
+//   imageModels "provider@id" strings that accept images
+export function selectModels(apiData, allowed) {
+  const all = flattenModels(apiData?.providers)
+  const visible = all.filter(m => isModelAllowed(m, allowed))
+  const imageModels = Array.isArray(apiData?.imageModels) ? apiData.imageModels : []
+  return { all, visible, imageModels }
+}

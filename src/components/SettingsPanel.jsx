@@ -6,9 +6,9 @@
 // declare image input accept images. See App.jsx → imageCapable.
 // ════════════════════════════════════════════════════════════════════
 import { useState, useEffect } from 'react'
-import { apiUrl } from '../lib/api'
+import { useModels } from '../hooks/useModels'
 import {
-  flattenModels, groupModels, isModelAllowed,
+  groupModels, isModelAllowed,
   getAllowedModels, setAllowedModels,
   toggleModelInList, toggleProviderInList,
 } from '../lib/models'
@@ -43,28 +43,18 @@ function ModelGrid({ allFlat, selected, onToggleModel, onToggleProvider }) {
 }
 
 export function SettingsPanel({ onClose }) {
-  const [allFlat, setAllFlat] = useState([])
+  const { all: allFlat, loading, refresh } = useModels()
   const [allowed, setAllowed] = useState(null) // null = all allowed
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    setAllowed(getAllowedModels())
-    fetch(apiUrl('/api/models'))
-      .then(r => r.json())
-      .then(data => {
-        setAllFlat(flattenModels(data.providers))
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [])
+  useEffect(() => { setAllowed(getAllowedModels()) }, [])
 
   const toggleAllowed = (modelId) => {
     const next = toggleModelInList(modelId, allowed, allFlat)
-    setAllowed(next); setAllowedModels(next)
+    setAllowed(next); setAllowedModels(next); refresh()
   }
   const toggleAllowedProvider = (provider, ids) => {
     const next = toggleProviderInList(provider, ids, allowed, allFlat)
-    setAllowed(next); setAllowedModels(next)
+    setAllowed(next); setAllowedModels(next); refresh()
   }
 
   const allowedCount = (allowed || allFlat).length
@@ -88,8 +78,8 @@ export function SettingsPanel({ onClose }) {
               automatic — only models that declare image input accept images.
             </p>
             <div className="sp-actions">
-              <button className="sp-action-btn" onClick={() => { setAllowed(null); setAllowedModels(null) }}>All</button>
-              <button className="sp-action-btn" onClick={() => { setAllowed([]); setAllowedModels([]) }}>None</button>
+              <button className="sp-action-btn" onClick={() => { setAllowed(null); setAllowedModels(null); refresh() }}>All</button>
+              <button className="sp-action-btn" onClick={() => { setAllowed([]); setAllowedModels([]); refresh() }}>None</button>
             </div>
             {loading && <div className="sp-loading">Loading models…</div>}
             {!loading && (
