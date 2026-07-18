@@ -11,6 +11,8 @@ import {
   toggleProviderInList,
   flattenModels,
   selectModels,
+  toggleFav,
+  withFavsFirst,
 } from './models.js'
 
 const ALL = ['amd@a', 'amd@b', 'openai@gpt-4o']
@@ -69,7 +71,34 @@ test('selectModels: null/empty allow-list → visible = all', () => {
 })
 
 test('selectModels: tolerates missing / malformed input', () => {
-  assert.deepEqual(selectModels(null, null), { all: [], visible: [], imageModels: [] })
-  assert.deepEqual(selectModels({}, null), { all: [], visible: [], imageModels: [] })
+  assert.deepEqual(selectModels(null, null), { all: [], visible: [], imageModels: [], favModels: [] })
+  assert.deepEqual(selectModels({}, null), { all: [], visible: [], imageModels: [], favModels: [] })
   assert.deepEqual(selectModels({ providers: { amd: ['a'] } }, null).imageModels, [])
+})
+
+test('selectModels: favModels filtered to models that still exist', () => {
+  const data = { providers: { amd: ['a', 'b'] }, imageModels: [] }
+  // 'amd@x' is favorited but not in the catalog → dropped; order preserved.
+  const r = selectModels(data, null, ['amd@b', 'amd@x', 'amd@a'])
+  assert.deepEqual(r.favModels, ['amd@b', 'amd@a'])
+})
+
+// ── toggleFav ──
+
+test('toggleFav: adds and removes', () => {
+  assert.deepEqual(toggleFav('a', []), ['a'])
+  assert.deepEqual(toggleFav('a', ['a']), [])
+  assert.deepEqual(toggleFav('b', ['a']), ['a', 'b'])
+})
+
+// ── withFavsFirst (picker ordering) ──
+
+test('withFavsFirst: favorites rise to the top, relative order preserved (stable)', () => {
+  const out = withFavsFirst(['a', 'b', 'c', 'd'], ['c', 'a'])
+  assert.deepEqual(out, ['a', 'c', 'b', 'd'])
+})
+
+test('withFavsFirst: no favorites → unchanged order', () => {
+  assert.deepEqual(withFavsFirst(['a', 'b'], []), ['a', 'b'])
+  assert.deepEqual(withFavsFirst(['a', 'b']), ['a', 'b'])
 })

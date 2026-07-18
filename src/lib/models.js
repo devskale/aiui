@@ -4,6 +4,12 @@
 
 const KEY = 'piui:allowedModels'
 
+/** Max models rendered as DOM nodes at once (picker list, settings search).
+ *  The catalog can hold 1000+; capping bounds the DOM so opens stay fast. */
+export const MODEL_RENDER_CAP = 60
+
+const FAV_KEY = 'piui:favModels'
+
 /** Get the allow-list. Returns null = all models allowed (default). */
 export function getAllowedModels() {
   try {
@@ -21,6 +27,31 @@ export function setAllowedModels(models) {
   } else {
     localStorage.setItem(KEY, JSON.stringify(models))
   }
+}
+
+// ── Favorite models (preferred in the picker; first fav = default model) ──
+// A plain list (empty = no favorites). Independent of the allow-list.
+
+/** Get the favorites list. Returns [] when unset. */
+export function getFavModels() {
+  try {
+    const raw = localStorage.getItem(FAV_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+/** Set the favorites list. Pass [] to clear. */
+export function setFavModels(list) {
+  if (!list || list.length === 0) localStorage.removeItem(FAV_KEY)
+  else localStorage.setItem(FAV_KEY, JSON.stringify(list))
+}
+
+/** Toggle a model in the favorites list. Returns the next list. */
+export function toggleFav(modelId, favs) {
+  const list = Array.isArray(favs) ? favs : []
+  return list.includes(modelId) ? list.filter(m => m !== modelId) : [...list, modelId]
 }
 
 /** Returns true if a given "provider@id" model should be visible. */
@@ -95,14 +126,22 @@ export function toggleProviderInList(provider, ids, selected, allFlat) {
 }
 
 // ── selectModels: derive the client's views from the /api/models response ──
-// Pure: the test surface for the fetch→flatten→filter→image math that used
-// to be inlined (and duplicated) across App / ModelPicker / SettingsPanel.
+// Pure: the test surface for the fetch→flatten→filter math that used to be
+// inlined (and duplicated) across App / ModelPicker / SettingsPanel.
 //   all         every "provider@id" (the allow-list UI shows all)
 //   visible     all filtered by the allow-list (App + Picker)
 //   imageModels "provider@id" strings that accept images
-export function selectModels(apiData, allowed) {
+//   favModels   favorites that still exist in the catalog (Picker/App)
+export function selectModels(apiData, allowed, favModels = []) {
   const all = flattenModels(apiData?.providers)
   const visible = all.filter(m => isModelAllowed(m, allowed))
   const imageModels = Array.isArray(apiData?.imageModels) ? apiData.imageModels : []
-  return { all, visible, imageModels }
+  const favs = Array.isArray(favModels) ? favModels.filter(m => all.includes(m)) : []
+  return { all, visible, imageModels, favModels: favs }
+}
+
+/** Stable-sort `models` so favorites come first (keeping relative order). */
+export function withFavsFirst(models, favs = []) {
+  const favSet = new Set(favs)
+  return [...models].sort((a, b) => (favSet.has(a) ? 0 : 1) - (favSet.has(b) ? 0 : 1))
 }

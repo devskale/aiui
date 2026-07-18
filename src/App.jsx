@@ -42,7 +42,7 @@ export default function App() {
   const [sessionRefresh, setSessionRefresh] = useState(0)
   const { route, navigate } = useHashRoute()
   const [model, setModel] = useState('')
-  const { visible, imageModels } = useModels()
+  const { visible, imageModels, favModels } = useModels()
   const endRef = useRef(null)
   const scrollContainerRef = useRef(null)
   const stickToBottomRef = useRef(true)  // stick to bottom unless the user scrolled up
@@ -57,12 +57,12 @@ export default function App() {
     return () => clearInterval(id)
   }, [sessionAlive, sessionStartedAt])
 
-  // Pick the initial model once the (allow-listed) model list arrives.
+  // Default model = first favorite (if any) that's visible, else the first visible.
   useEffect(() => {
     if (model || !visible.length) return
-    const preferred = visible.find(m => m === 'amd-local@tu@qwen-3.5-397b')
-    setModel(preferred || visible[0] || '')
-  }, [visible, model])
+    const firstFav = favModels.find(m => visible.includes(m))
+    setModel(firstFav || visible[0] || '')
+  }, [visible, favModels, model])
 
   // Auto-scroll only when the user is near the bottom.
   // Scrolling up to read pauses auto-scroll; scrolling back down resumes it.

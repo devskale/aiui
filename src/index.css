@@ -604,6 +604,7 @@ pre code { background: none; padding: 0; font-size: 13px; }
 }
 .mp-model:hover { background: var(--bg-hover); color: var(--text); }
 .mp-model.active { background: var(--bg-active); color: var(--text); font-weight: 500; }
+.mp-hint { padding: 8px 10px; font-size: 11px; color: var(--text-4); text-align: center; }
 
 /* ═══ CONNECTING ═══ */
 .connecting {
@@ -708,6 +709,20 @@ pre code { background: none; padding: 0; font-size: 13px; }
 .sp-hint { font-size: 11px; color: var(--text-4); }
 .sp-help { font-size: 11px; color: var(--text-4); margin: 0 0 10px; line-height: 1.45; }
 .sp-actions { display: flex; gap: 8px; margin-bottom: 14px; }
+.sp-search { width: 100%; padding: 7px 10px; margin-bottom: 10px; background: var(--bg-elevated); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); color: var(--text); font-size: 13px; }
+.sp-search:focus { outline: none; border-color: var(--text-3); }
+.sp-search-results { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 4px; }
+.sp-provider-row { display: flex; align-items: center; gap: 4px; }
+.sp-provider-expand { background: none; border: none; color: var(--text-4); cursor: pointer; padding: 2px 6px; font-size: 12px; }
+.sp-provider-expand:hover { color: var(--text); }
+.sp-fav-matches { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.sp-fav-add { display: block; width: 100%; text-align: left; background: none; border: 1px solid var(--border-subtle); color: var(--text-2); padding: 5px 8px; border-radius: var(--radius-sm); font-size: 12px; cursor: pointer; }
+.sp-fav-add:hover { background: var(--bg-hover); color: var(--text); }
+.sp-fav-chips { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 4px; }
+.sp-fav-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 6px 4px 8px; background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.35); color: var(--text-2); border-radius: 999px; font-size: 12px; }
+.sp-fav-star { color: #f59e0b; }
+.sp-fav-remove { background: none; border: none; color: var(--text-4); cursor: pointer; padding: 0 2px; font-size: 13px; line-height: 1; }
+.sp-fav-remove:hover { color: var(--danger); }
 .sp-action-btn {
   background: var(--bg-surface); border: 1px solid var(--border); color: var(--text-3);
   cursor: pointer; padding: 4px 12px; border-radius: var(--radius-sm); font-size: 12px;

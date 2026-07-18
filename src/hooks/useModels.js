@@ -9,7 +9,7 @@
 // ════════════════════════════════════════════════════════════════════
 import { useSyncExternalStore, useEffect, useCallback } from 'react'
 import { apiUrl } from '../lib/api'
-import { selectModels, getAllowedModels } from '../lib/models'
+import { selectModels, getAllowedModels, getFavModels } from '../lib/models'
 
 const EMPTY = { all: [], visible: [], imageModels: [], loading: true }
 
@@ -25,7 +25,7 @@ function emit() {
 // Recompute the views from the cached server data + the CURRENT allow-list.
 // No fetch. Called on first load completion and on refresh().
 function recompute() {
-  state = { ...selectModels(lastData, getAllowedModels()), loading: false }
+  state = { ...selectModels(lastData, getAllowedModels(), getFavModels()), loading: false }
   emit()
 }
 
