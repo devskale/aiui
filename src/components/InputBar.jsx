@@ -1,12 +1,14 @@
 // ════════════════════════════════════════════════════════════════════
-// InputBar — bottom input with attachments, @-file + /command autocomplete
+// InputBar — bottom input: textarea + attachments, composing the slash and
+// @-mention autocomplete hooks. Owns text + the textarea ref + send/steer.
 // ════════════════════════════════════════════════════════════════════
-import { useState, useRef, useEffect, useMemo } from 'react'
-import { apiUrl } from '../lib/api'
+import { useState, useRef, useEffect } from 'react'
+import { useSlashMenu } from '../hooks/useSlashMenu'
+import { useMention } from '../hooks/useMention'
+import { rewriteSkillCommand } from '../lib/compose'
 
 // Splits a file list into accepted + image-rejected. When the current model
-// can't take images, image files are stripped so they never reach the server;
-// the caller surfaces a note for the rejected count.
+// can't take images, image files are stripped so they never reach the server.
 function splitByImageSupport(files, imageCapable) {
   const arr = Array.from(files || [])
   if (imageCapable) return { accept: arr, rejectedImages: 0 }
@@ -21,15 +23,8 @@ function splitByImageSupport(files, imageCapable) {
 
 export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRemoveAttachment, onAddFiles, onCompact, onNewChat, onOpenModelPicker, imageCapable }) {
   const [text, setText] = useState('')
-  const [commands, setCommands] = useState({ skills: [], prompts: [], extensions: [] })
-  const [slashIndex, setSlashIndex] = useState(0)
-  const [slashDismissed, setSlashDismissed] = useState(false)
-
-  // ── @-mention (file) autocomplete state ──
-  const [mention, setMention] = useState(null)     // { query, atIndex } or null
-  const [mentionFiles, setMentionFiles] = useState([])
-  const [mentionIndex, setMentionIndex] = useState(0)
-  const [mentionDismissed, setMentionDismissed] = useState(false)
+  const ref = useRef(null)
+  const fileRef = useRef(null)
 
   // Transient inline notice (e.g. "model doesn't support images").
   const [imageNotice, setImageNotice] = useState('')
@@ -38,155 +33,25 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
     setTimeout(() => setImageNotice(prev => (prev === msg ? '' : prev)), 3200)
   }
 
-  const ref = useRef(null)
-  const fileRef = useRef(null)
-
-  // Fetch available commands (skills/prompts/extensions) for the slash menu
-  useEffect(() => {
-    fetch(apiUrl('/api/commands'))
-      .then(r => r.json())
-      .then(d => setCommands({ skills: d?.skills || [], prompts: d?.prompts || [], extensions: d?.extensions || [] }))
-      .catch(() => {})
-  }, [])
-
-  // ── Host actions available in the slash menu ──
-  const HOST_ACTIONS = useMemo(() => ([
-    { id: 'compact', command: '/compact', title: '/compact', description: 'Compact conversation context now', run: 'compact' },
-    { id: 'new', command: '/new', title: '/new', description: 'Start a new chat', run: 'new' },
-    { id: 'model', command: '/model', title: '/model', description: 'Change model', run: 'model' },
-  ]), [])
-
-  // ── Slash menu: detect trailing "/query" (at start or after whitespace) ──
-  const slashMatch = useMemo(() => {
-    if (slashDismissed) return null
-    const m = /(?:^|\s)(\/[^\s]*)$/.exec(text)
-    if (!m) return null
-    return { query: m[1], start: m.index + (m[0].length - m[1].length) }
-  }, [text, slashDismissed])
-
-  const slashItems = useMemo(() => {
-    if (!slashMatch) return []
-    const q = slashMatch.query.replace(/^\/+/, '').toLowerCase()
-    const items = []
-    for (const a of HOST_ACTIONS) {
-      if (!q || a.command.toLowerCase().includes(q) || a.title.toLowerCase().includes(q)) items.push(a)
-    }
-    const groups = [['skills', 'skill'], ['prompts', 'prompt'], ['extensions', 'extension']]
-    for (const [key, prefix] of groups) {
-      for (const c of commands[key] || []) {
-        const cmd = `/${prefix}:${c.name}`
-        if (!q || c.name.toLowerCase().includes(q) || cmd.toLowerCase().includes(q)) {
-          items.push({ id: cmd, command: cmd, title: cmd, description: c.description, run: 'fill' })
-        }
-      }
-    }
-    return items
-  }, [slashMatch, commands, HOST_ACTIONS])
-
-  const slashOpen = slashItems.length > 0
-
-  useEffect(() => { setSlashIndex(0) }, [slashItems])
-  useEffect(() => { setSlashDismissed(false) }, [text])
+  const onHostAction = (item) => {
+    if (item.run === 'compact') onCompact?.()
+    else if (item.run === 'new') onNewChat?.()
+    else if (item.run === 'model') onOpenModelPicker?.()
+  }
+  const slash = useSlashMenu({ text, setText, textareaRef: ref, onHostAction })
+  const mention = useMention({ text, setText, textareaRef: ref })
 
   useEffect(() => {
     if (!streaming) ref.current?.focus()
   }, [streaming])
 
-  // ── @-mention detection + file lookup ──
-  const mentionMatch = useMemo(() => {
-    if (mentionDismissed) return null
-    const m = /(?:^|\s)@([^\s]*)$/.exec(text)
-    if (!m) return null
-    const query = m[1] ?? ''
-    const atIndex = m.index + (m[0].length - query.length - 1)
-    return { query, atIndex }
-  }, [text, mentionDismissed])
-
-  useEffect(() => { setMention(mentionMatch) }, [mentionMatch])
-
-  useEffect(() => {
-    if (!mention) { setMentionFiles([]); return }
-    const ctrl = new AbortController()
-    fetch(apiUrl('/api/files?q=' + encodeURIComponent(mention.query)), { signal: ctrl.signal })
-      .then(r => r.json())
-      .then(d => setMentionFiles(Array.isArray(d.files) ? d.files : []))
-      .catch(() => {})
-    return () => ctrl.abort()
-  }, [mention])
-
-  useEffect(() => { setMentionIndex(0) }, [mentionFiles])
-  useEffect(() => { setMentionDismissed(false) }, [text])
-
-  const mentionOpen = !!mention && mentionFiles.length > 0
-
-  const insertMention = (filePath) => {
-    if (!mention) return
-    const before = text.slice(0, mention.atIndex)
-    const after = text.slice(mention.atIndex + 1 + mention.query.length)
-    const inserted = '@' + filePath + ' '
-    const newText = before + inserted + after
-    setText(newText)
-    setMentionDismissed(true)
-    requestAnimationFrame(() => {
-      const ta = ref.current
-      if (ta) {
-        const pos = before.length + inserted.length
-        ta.setSelectionRange(pos, pos)
-      }
-    })
-  }
-
-  const applySlash = (item) => {
-    if (!slashMatch) return
-    if (item.run === 'compact') { onCompact?.(); setText(''); setSlashDismissed(true); return }
-    if (item.run === 'new') { onNewChat?.(); setText(''); setSlashDismissed(true); return }
-    if (item.run === 'model') { onOpenModelPicker?.(); setText(''); setSlashDismissed(true); return }
-    // fill the command text into the composer
-    const before = text.slice(0, slashMatch.start)
-    const after = text.slice(slashMatch.start + slashMatch.query.length)
-    const inserted = item.command + ' '
-    const newText = before + inserted + after
-    setText(newText)
-    setSlashDismissed(true)
-    requestAnimationFrame(() => {
-      const ta = ref.current
-      if (ta) {
-        const pos = before.length + inserted.length
-        ta.setSelectionRange(pos, pos)
-      }
-    })
-  }
-
   const handleKey = (e) => {
-    // ── @-mention navigation ──
-    if (mentionOpen) {
-      if (e.key === 'ArrowDown') { e.preventDefault(); setMentionIndex(i => Math.min(i + 1, mentionFiles.length - 1)); return }
-      if (e.key === 'ArrowUp') { e.preventDefault(); setMentionIndex(i => Math.max(i - 1, 0)); return }
-      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) { e.preventDefault(); insertMention(mentionFiles[mentionIndex]); return }
-      if (e.key === 'Escape') { e.preventDefault(); setMentionDismissed(true); return }
-    }
-
-    // ── Slash command navigation ──
-    if (slashOpen) {
-      if (e.key === 'ArrowDown') { e.preventDefault(); setSlashIndex(i => Math.min(i + 1, slashItems.length - 1)); return }
-      if (e.key === 'ArrowUp') { e.preventDefault(); setSlashIndex(i => Math.max(i - 1, 0)); return }
-      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) { e.preventDefault(); applySlash(slashItems[slashIndex]); return }
-      if (e.key === 'Escape') { e.preventDefault(); setSlashDismissed(true); return }
-    }
-
+    if (mention.onKeyDown(e)) return
+    if (slash.onKeyDown(e)) return
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSend()
     }
-  }
-
-  // Rewrite /skillname → /skill:skillname if it matches a known skill
-  const rewriteSkillCommand = (input) => {
-    const match = input.match(/^\/([\w][\w-]*)/)
-    if (match && (commands.skills || []).some(s => s.name === match[1])) {
-      return '/skill:' + input.slice(1)
-    }
-    return input
   }
 
   const handleSend = () => {
@@ -196,15 +61,13 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
       return
     }
     if (!text.trim() && attachments.length === 0) return
-    const textToSend = rewriteSkillCommand(text)
+    const textToSend = rewriteSkillCommand(text, slash.skills)
     if (streaming) {
       onSteer(textToSend)
     } else {
       onSend(textToSend)
     }
     setText('')
-    setMentionDismissed(false)
-    setSlashDismissed(false)
     if (ref.current) ref.current.style.height = 'auto'
   }
 
@@ -237,13 +100,13 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
   return (
     <div className="input-area" onDrop={handleDrop} onDragOver={e => e.preventDefault()}>
       {/* Slash command dropdown */}
-      {slashOpen && (
+      {slash.open && (
         <div className="slash-dropdown">
-          {slashItems.map((item, i) => (
+          {slash.items.map((item, i) => (
             <button
               key={item.id}
-              className={`slash-item ${i === slashIndex ? 'active' : ''} ${item.run !== 'fill' ? 'action' : ''}`}
-              onMouseDown={(e) => { e.preventDefault(); applySlash(item) }}
+              className={`slash-item ${i === slash.index ? 'active' : ''} ${item.run !== 'fill' ? 'action' : ''}`}
+              onMouseDown={(e) => { e.preventDefault(); slash.apply(item) }}
             >
               <span className="slash-name">{item.title}</span>
               {item.description && <span className="slash-desc">{item.description}</span>}
@@ -253,14 +116,14 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
       )}
 
       {/* @-mention file dropdown */}
-      {mentionOpen && (
+      {mention.open && (
         <div className="mention-dropdown">
           <div className="mention-head">Insert file</div>
-          {mentionFiles.map((file, i) => (
+          {mention.files.map((file, i) => (
             <button
               key={file}
-              className={`mention-item ${i === mentionIndex ? 'active' : ''}`}
-              onMouseDown={(e) => { e.preventDefault(); insertMention(file) }}
+              className={`mention-item ${i === mention.index ? 'active' : ''}`}
+              onMouseDown={(e) => { e.preventDefault(); mention.insert(file) }}
               title={file}
             >
               <span className="mention-icon">📄</span>
