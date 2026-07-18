@@ -7,3 +7,4 @@ workspace/
 .DS_Store
 pi/
 pi
+.aiui-auth.json

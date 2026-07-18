@@ -13,6 +13,7 @@ import { ThinkingPicker } from './components/ThinkingPicker'
 import { EmptyState } from './components/EmptyState'
 import { ReleaseNotes } from './components/ReleaseNotes'
 import { SettingsPanel } from './components/SettingsPanel'
+import { LoginModal } from './components/LoginModal'
 import { UserEntry, AssistantEntry, ErrorEntry } from './components/StreamEntry'
 import { Folder, Clock } from 'lucide-react'
 
@@ -34,7 +35,24 @@ function formatUptime(ms) {
 }
 
 export default function App() {
-  const { entries, current, steerQueue, streaming, connected, sessionAlive, sessionModel, sessionId, sessionCwd, sessionCwdShort, sessionStartedAt, sessionStats, thinkingLevel, isCompacting, autoCompactionEnabled, sendPrompt, sendSteer, abortAgent, startNewChat, dispatch } = useAgentEvents()
+  // ── Auth: gate the live app behind a login (when configured) ──
+  const [me, setMe] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const checkMe = useCallback(() => {
+    fetch(apiUrl('/api/me'))
+      .then(r => (r.ok ? r.json() : { authed: false, authRequired: true }))
+      .then(d => { setMe(d); setAuthLoading(false) })
+      .catch(() => { setMe({ authed: false, authRequired: true }); setAuthLoading(false) })
+  }, [])
+  useEffect(() => { checkMe() }, [checkMe])
+  const authed = !!me?.authed
+  const handleLogout = async () => {
+    await fetch(apiUrl('/api/logout'), { method: 'POST' }).catch(() => {})
+    setAuthLoading(true)
+    checkMe()
+  }
+
+  const { entries, current, steerQueue, streaming, connected, sessionAlive, sessionModel, sessionId, sessionCwd, sessionCwdShort, sessionStartedAt, sessionStats, thinkingLevel, isCompacting, autoCompactionEnabled, sendPrompt, sendSteer, abortAgent, startNewChat, dispatch } = useAgentEvents(authed)
   const { attachments, addFiles, remove: removeAttachment, clear: clearAttachments, buildPayload } = useAttachments()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [showModelPicker, setShowModelPicker] = useState(false)
@@ -138,6 +156,7 @@ export default function App() {
   return (
     <div className="app" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
       {dragOver && <div className="drop-zone"><span>Drop files here</span></div>}
+      {!authLoading && !authed && <LoginModal onSuccess={checkMe} />}
 
       <Sidebar
         open={sidebarOpen}
@@ -176,6 +195,15 @@ export default function App() {
               </span>
             )}
           </div>
+          {me?.authRequired && me?.user && (
+            <div className="tb-user">
+              <span className="tb-user-name">{me.user}</span>
+              {me.quota && me.quota.limit !== null && (
+                <span className="tb-user-quota" title="queries used today / daily limit">{me.quota.used}/{me.quota.limit}</span>
+              )}
+              <button className="tb-user-logout" onClick={handleLogout} title="Log out">⎋</button>
+            </div>
+          )}
           <div style={{ flex: 1 }} />
         </header>
 

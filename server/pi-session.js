@@ -3,115 +3,126 @@ import path from 'node:path'
 import fs from 'node:fs'
 import os from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { bus } from './event-bus.js'
+import { getBus } from './event-bus.js'
 import * as Entry from '../shared/entry.js'
 import * as Sandbox from './sandbox.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PROJECT_ROOT = path.join(__dirname, '..')
+const WORKSPACE_ROOT = path.join(PROJECT_ROOT, 'workspace')
 
-// ══ Scoped workspace ══
-// The agent's entire world. cwd + local session storage live here — fully
-// self-contained and gitignored. The agent cannot see or touch aiui's own
-// source by default (that is the "scope"), and sessions are stored locally
-// (workspace/sessions) instead of globally (~/.pi/agent/sessions). Settings +
-// skills are still inherited from aiui/.pi via the SDK's walk-up discovery.
-const cwd = path.join(PROJECT_ROOT, 'workspace')
-const SESSION_DIR = path.join(cwd, 'sessions')
-fs.mkdirSync(SESSION_DIR, { recursive: true })
-
-// Confinement lives in ./sandbox.js. One call returns the overridden tools
-// (or undefined when off — the SDK then uses its own built-in tools, which is
-// the better "off" state; no no-op passthrough wrapper). See server/sandbox.js.
-const customTools = Sandbox.createTools(cwd)
-
-let modelRuntime = null
-let session = null
-let sessionStartedAt = null  // epoch ms when the current session was created (for uptime)
+const ANON = '_local' // used when auth is off (req.user === null)
 
 // Shared model runtime (created once) — owns auth + models + provider catalogs.
-// Replaces the old AuthStorage + ModelRegistry pair (removed in SDK 0.80.8).
+// Your API keys are global/shared; only the agent's working dir + sessions are
+// per-user.
+let modelRuntime = null
 async function initShared() {
-  if (!modelRuntime) {
-    modelRuntime = await ModelRuntime.create()
-  }
+  if (!modelRuntime) modelRuntime = await ModelRuntime.create()
 }
 
-function disposeSession() {
-  if (session) {
-    try { session.dispose?.() } catch {}
-    session = null
-  }
-  sessionStartedAt = null
-  // Note: the session→bus subscription is owned by `bus.bind`, which swaps it
-  // idempotently on the next create/switch. No unbind needed here — the disposed
-  // session won't emit, and the upcoming bind unsubscribes it.
+// ── Per-user context ──
+// Each user gets their own scoped workspace: workspace/<user>/ is the agent's
+// cwd, workspace/<user>/sessions/ holds their sessions, and the sandbox is
+// confined to that dir. One live session per user.
+const contexts = new Map() // user → { cwd, sessionDir, customTools, session, startedAt }
+
+function normUser(user) {
+  const u = user || ANON
+  if (!/^[a-zA-Z0-9_-]+$/.test(u)) throw new Error(`invalid user: ${u}`)
+  return u
 }
 
-// Resume the most recent session, or create new if none exists
-export async function getOrCreateSession() {
-  if (session) return session
+function ctxFor(user) {
+  const u = normUser(user)
+  let ctx = contexts.get(u)
+  if (!ctx) {
+    const cwd = path.join(WORKSPACE_ROOT, u)
+    const sessionDir = path.join(cwd, 'sessions')
+    fs.mkdirSync(sessionDir, { recursive: true })
+    ctx = { cwd, sessionDir, customTools: Sandbox.createTools(cwd), session: null, startedAt: null }
+    contexts.set(u, ctx)
+  }
+  return ctx
+}
+
+function dispose(user) {
+  const ctx = contexts.get(normUser(user))
+  if (!ctx) return
+  if (ctx.session) { try { ctx.session.dispose?.() } catch {} ctx.session = null }
+  ctx.startedAt = null
+  // The session→bus subscription is owned by getBus(user).bind, which swaps it
+  // idempotently on the next create/switch. No unbind needed here.
+}
+
+/** The agent's working directory for this user (for @-mention file listing). */
+export function workspaceCwd(user) {
+  return ctxFor(user).cwd
+}
+
+// Always start FRESH: a new pi session (not continueRecent). Stored sessions
+// remain listable/switchable via the sidebar.
+export async function getOrCreateSession(user) {
+  const ctx = ctxFor(user)
+  if (ctx.session) return ctx.session
   await initShared()
   const { session: s } = await createAgentSession({
-    cwd,
+    cwd: ctx.cwd,
     modelRuntime,
-    customTools,
-    sessionManager: SessionManager.continueRecent(cwd, SESSION_DIR),
+    customTools: ctx.customTools,
+    sessionManager: SessionManager.create(ctx.cwd, ctx.sessionDir),
   })
-  session = s
-  sessionStartedAt = Date.now()
-  bus.bind(session)
-  console.log('π agent session ready (resumed recent)')
-  bus.push('session_status', getSessionInfo())
-  return session
+  ctx.session = s
+  ctx.startedAt = Date.now()
+  getBus(user).bind(s)
+  getBus(user).push('session_status', getSessionInfo(user))
+  return ctx.session
 }
 
 // Start a brand-new session (for "New Chat")
-export async function newSession() {
-  disposeSession()
+export async function newSession(user) {
+  dispose(user)
   await initShared()
+  const ctx = ctxFor(user)
   const { session: s } = await createAgentSession({
-    cwd,
+    cwd: ctx.cwd,
     modelRuntime,
-    customTools,
-    sessionManager: SessionManager.create(cwd, SESSION_DIR),
+    customTools: ctx.customTools,
+    sessionManager: SessionManager.create(ctx.cwd, ctx.sessionDir),
   })
-  session = s
-  sessionStartedAt = Date.now()
-  bus.bind(session)
-  console.log('π agent new session created')
-  bus.push('session_status', getSessionInfo())
-  return session
+  ctx.session = s
+  ctx.startedAt = Date.now()
+  getBus(user).bind(s)
+  getBus(user).push('session_status', getSessionInfo(user))
+  return ctx.session
 }
 
+/** Drop the user's in-memory session (used on logout → next login is fresh). */
+export function disposeSession(user) {
+  dispose(user)
+}
 
-
-export async function prompt(text, attachments = []) {
-  const s = await getOrCreateSession()
+export async function prompt(user, text, attachments = []) {
+  const s = await getOrCreateSession(user)
   const promptText = text?.trim() || 'Describe this image.'
   const images = attachments
     .filter(a => a.isImage && a.dataUrl)
     .map(a => {
       const match = a.dataUrl.match(/^data:([^;]+);base64,(.+)$/)
-      return {
-        type: 'image',
-        mimeType: match?.[1] || 'image/png',
-        data: match?.[2],
-      }
+      return { type: 'image', mimeType: match?.[1] || 'image/png', data: match?.[2] }
     })
-  // SDK 0.80.x requires streamingBehavior when prompting while a turn is in flight
   const options = { images }
-  if (s.isStreaming) options.streamingBehavior = 'steer'
+  if (s.isStreaming) options.streamingBehavior = 'steer' // prompting mid-turn
   return s.prompt(promptText, options)
 }
 
-export async function abort() {
-  const s = await getOrCreateSession()
+export async function abort(user) {
+  const s = await getOrCreateSession(user)
   return s.abort()
 }
 
-export async function setModel(modelId) {
-  const s = await getOrCreateSession()
+export async function setModel(user, modelId) {
+  const s = await getOrCreateSession(user)
   const available = modelRuntime.getModels()
   const model = available.find(m => m.id === modelId || `${m.provider}@${m.id}` === modelId)
   if (model) {
@@ -121,8 +132,9 @@ export async function setModel(modelId) {
   }
 }
 
+// Global model catalog (your shared keys) — no user scope needed.
 export async function getAvailableModels() {
-  await getOrCreateSession()
+  await initShared()
   const models = modelRuntime.getModels()
   const grouped = {}
   const imageModels = []
@@ -130,8 +142,6 @@ export async function getAvailableModels() {
     const provider = m.provider || 'unknown'
     if (!grouped[provider]) grouped[provider] = []
     grouped[provider].push(m.id)
-    // Image capability is a fact from models.json (each model's `input` array),
-    // not a preference. Only models whose input includes 'image' accept images.
     if (Array.isArray(m.input) && m.input.includes('image')) {
       imageModels.push(`${provider}@${m.id}`)
     }
@@ -148,7 +158,9 @@ function shortenForDisplay(p) {
   return p
 }
 
-export function getSessionInfo() {
+export function getSessionInfo(user) {
+  const ctx = ctxFor(user)
+  const session = ctx.session
   return {
     alive: session !== null,
     streaming: session?.isStreaming ?? false,
@@ -157,23 +169,26 @@ export function getSessionInfo() {
     isCompacting: session?.isCompacting ?? false,
     autoCompactionEnabled: session?.autoCompactionEnabled ?? true,
     sessionId: session?.sessionId ?? null,
-    cwd,                // agent working directory (the scoped workspace)
-    cwdShort: shortenForDisplay(cwd),  // ~-abbreviated form for the UI
-    startedAt: sessionStartedAt,  // epoch ms when this session was created
+    cwd: ctx.cwd,
+    cwdShort: shortenForDisplay(ctx.cwd),
+    startedAt: ctx.startedAt,
   }
 }
 
-export function getSessionStats() {
+export function getSessionStats(user) {
+  const session = ctxFor(user).session
   if (!session) return null
   try { return session.getSessionStats() } catch { return null }
 }
 
-export function setThinkingLevel(level) {
+export function setThinkingLevel(user, level) {
+  const session = ctxFor(user).session
   if (!session) throw new Error('no session')
   session.setThinkingLevel(level)
 }
 
-export function getThinkingInfo() {
+export function getThinkingInfo(user) {
+  const session = ctxFor(user).session
   if (!session) return null
   return {
     current: session.thinkingLevel,
@@ -182,28 +197,28 @@ export function getThinkingInfo() {
   }
 }
 
-export async function compactSession() {
-  const s = await getOrCreateSession()
+export async function compactSession(user) {
+  const s = await getOrCreateSession(user)
   return s.compact()
 }
 
-export function abortCompaction() {
-  if (!session) return
-  session.abortCompaction()
+export function abortCompaction(user) {
+  const session = ctxFor(user).session
+  if (session) session.abortCompaction()
 }
 
-export function setAutoCompaction(enabled) {
-  if (!session) return
-  session.setAutoCompactionEnabled(enabled)
+export function setAutoCompaction(user, enabled) {
+  const session = ctxFor(user).session
+  if (session) session.setAutoCompactionEnabled(enabled)
 }
 
 // ── Session list + switching ──
 
-export async function listSessions() {
+export async function listSessions(user) {
+  const ctx = ctxFor(user)
   await initShared()
   try {
-    const sessions = await SessionManager.list(cwd, SESSION_DIR)
-    // Sort by modified desc, strip heavy fields
+    const sessions = await SessionManager.list(ctx.cwd, ctx.sessionDir)
     return sessions
       .sort((a, b) => new Date(b.modified) - new Date(a.modified))
       .map(s => ({
@@ -220,29 +235,26 @@ export async function listSessions() {
   }
 }
 
-export async function switchToSession(sessionPath) {
-  disposeSession()
+export async function switchToSession(user, sessionPath) {
+  dispose(user)
   await initShared()
+  const ctx = ctxFor(user)
   const { session: s } = await createAgentSession({
-    cwd,
+    cwd: ctx.cwd,
     modelRuntime,
-    customTools,
-    sessionManager: SessionManager.open(sessionPath, SESSION_DIR, cwd),
+    customTools: ctx.customTools,
+    sessionManager: SessionManager.open(sessionPath, ctx.sessionDir, ctx.cwd),
   })
-  session = s
-  sessionStartedAt = Date.now()
-  bus.bind(session)
-  console.log('π agent session switched:', sessionPath)
-  bus.push('session_status', getSessionInfo())
-  return session
+  ctx.session = s
+  ctx.startedAt = Date.now()
+  getBus(user).bind(s)
+  getBus(user).push('session_status', getSessionInfo(user))
+  return ctx.session
 }
 
-// ── Session history (for replay on page load) ──
-// The Entry shape is owned by shared/entry.js. This loop just walks stored SDK
-// messages and routes each through the module: fromMessage for user/assistant
-// rows, attachResult for toolResult messages (which attach to the preceding
-// assistant entry). No shape construction lives here.
-export function getSessionHistory() {
+// ── Session history (for replay) ──
+export function getSessionHistory(user) {
+  const session = ctxFor(user).session
   if (!session?.messages) return []
   const entries = []
   for (const msg of session.messages) {
@@ -259,8 +271,8 @@ export function getSessionHistory() {
   return entries
 }
 
-export async function getCommands() {
-  const s = await getOrCreateSession()
+export async function getCommands(user) {
+  const s = await getOrCreateSession(user)
   const loader = s.resourceLoader
   if (!loader) return { skills: [], prompts: [], extensions: [] }
 

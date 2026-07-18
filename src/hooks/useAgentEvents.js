@@ -173,10 +173,11 @@ function reducer(state, action) {
   }
 }
 
-export function useAgentEvents() {
+export function useAgentEvents(enabled = true) {
   const [state, dispatch] = useReducer(reducer, initialState)
 
   useEffect(() => {
+    if (!enabled) return
     const es = new EventSource(apiUrl('/api/events'))
 
     es.onopen = () => dispatch({ type: 'connected' })
@@ -211,9 +212,10 @@ export function useAgentEvents() {
       handlers.forEach(({ event, handler }) => es.removeEventListener(event, handler))
       es.close()
     }
-  }, [])
+  }, [enabled])
 
   const sendPrompt = async (text, attachments = []) => {
+    if (!enabled) return
     dispatch({ type: 'user_prompt', text, attachments })
     await fetch(apiUrl('/api/prompt'), {
       method: 'POST',
@@ -223,6 +225,7 @@ export function useAgentEvents() {
   }
 
   const sendSteer = async (text, attachments = []) => {
+    if (!enabled) return
     dispatch({ type: 'user_steer', text })
     await fetch(apiUrl('/api/prompt'), {
       method: 'POST',

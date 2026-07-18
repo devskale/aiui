@@ -40,10 +40,25 @@ interface, depth, seam, adapter, leverage, locality — is separate from this li
 ## Confinement
 
 - **Sandbox** — the macOS seatbelt confinement layer scoping the agent's file
-  access to the workspace (`AIUI_SANDBOX=0` to disable). Has a home module —
+  access to the user's workspace (`workspace/<user>/`; `AIUI_SANDBOX=0` to
+  disable). Has a home module —
   `server/sandbox.js`, with a small interface: `createTools(cwd)` returns the
   overridden tools (or `undefined` when off, in which case the SDK falls back
   to its own built-in tools — the better "off" state, not a no-op passthrough
   adapter) and `assertInside(base, target)` is the pure path guard. One real
   adapter (seatbelt) + an off-switch; what varies across the boundary is
   *whether tools are overridden*, not *which adapter fills the slot*.
+
+## Users
+
+- **User** — a logged-in identity (username + passphrase, configured in
+  `~/.aiui-auth.json`). Each User gets a **scoped workspace** at
+  `workspace/<user>/`: the agent's `cwd`, its session store, and the sandbox
+  boundary. One live Session per User. Credentials (API keys/models) are
+  global/shared via `ModelRuntime` — only the working dir + history are
+  per-User.
+- **Quota** — a per-User daily prompt cap (`limits` in the auth config, e.g.
+  `guest: 10`). `null` = unlimited. Enforced in `/api/prompt`; over-limit → a
+  429 + an error Event on that User's bus.
+- **Event bus** *(updated)* — now **one bus per User** (`getBus(user)`), so an
+  Event from one User's Session never fans out to another's SSE connection.
