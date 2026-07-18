@@ -36,9 +36,10 @@ export function LoginModal({ onSuccess }) {
 
   return (
     <div className="login-overlay">
-      <form className="login-modal" onSubmit={submit}>
+      <form id="aiui-login-form" className="login-modal" onSubmit={submit}>
         <div className="login-title">πui</div>
         <input
+          id="aiui-username"
           className="login-input"
           value={username}
           onChange={e => setUsername(e.target.value)}
@@ -47,6 +48,7 @@ export function LoginModal({ onSuccess }) {
           autoFocus
         />
         <input
+          id="aiui-passphrase"
           className="login-input"
           type="password"
           value={passphrase}
@@ -55,7 +57,7 @@ export function LoginModal({ onSuccess }) {
           autoComplete="current-password"
         />
         {error && <div className="login-error">{error}</div>}
-        <button className="login-submit" type="submit" disabled={busy || !username.trim() || !passphrase}>
+        <button id="aiui-login-submit" className="login-submit" type="submit" disabled={busy || !username.trim() || !passphrase}>
           {busy ? '…' : 'Log in'}
         </button>
       </form>

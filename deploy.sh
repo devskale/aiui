@@ -20,6 +20,6 @@ rsync -avz --delete \
   ./ "$HOST:$REMOTE_DIR/"
 
 echo "🔄 Installing deps + restarting service..."
-ssh "$HOST" "cd $REMOTE_DIR && pnpm install --frozen-lockfile && systemctl --user restart aiui"
+ssh "$HOST" "export CI=true PATH=/home/woodmastr/.nvm/versions/node/v24.13.0/bin:/home/woodmastr/.local/share/pnpm/bin:\$PATH; cd $REMOTE_DIR && pnpm install --frozen-lockfile && systemctl --user restart aiui"
 
 echo "✅ Deployed to $HOST (port 8082)"

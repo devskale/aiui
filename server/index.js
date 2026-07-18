@@ -80,13 +80,13 @@ app.post('/api/login', (req, res) => {
   const { username, passphrase } = req.body || {}
   if (!noteLoginAttempt(req.ip)) return res.status(429).json({ error: 'too many attempts, slow down' })
   if (!verifyCredentials(username, passphrase)) return res.status(401).json({ error: 'invalid credentials' })
-  setSessionCookie(res, issueSession(username))
+  setSessionCookie(res, issueSession(username), req.secure)
   res.json({ ok: true, user: username })
 })
 app.post('/api/logout', (req, res) => {
   if (req.user) disposeSession(req.user) // drop the in-memory session → next login is fresh
   revokeSession(readSessionCookie(req))
-  clearSessionCookie(res)
+  clearSessionCookie(res, req.secure)
   res.json({ ok: true })
 })
 app.get('/api/me', (req, res) => {

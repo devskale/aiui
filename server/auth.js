@@ -20,7 +20,6 @@ import path from 'node:path'
 const AUTH_FILE = process.env.AIUI_AUTH_FILE || path.join(os.homedir(), '.aiui-auth.json')
 export const COOKIE_NAME = 'aiui_session'
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7 // 7 days
-const IS_PROD = process.env.NODE_ENV === 'production'
 
 // session token → { user, expiresAt }
 const sessions = new Map()
@@ -97,17 +96,14 @@ export function readSessionCookie(req) {
   }
   return null
 }
-function cookieAttrs() {
+export function setSessionCookie(res, token, secure) {
   const a = ['Path=/', 'HttpOnly', `Max-Age=${SESSION_TTL_MS / 1000}`, 'SameSite=Lax']
-  if (IS_PROD) a.push('Secure')
-  return a
+  if (secure) a.push('Secure') // only over HTTPS — a Secure cookie is dropped on HTTP access
+  res.setHeader('Set-Cookie', [`${COOKIE_NAME}=${encodeURIComponent(token)};${a.join(';')}`])
 }
-export function setSessionCookie(res, token) {
-  res.setHeader('Set-Cookie', [`${COOKIE_NAME}=${encodeURIComponent(token)};${cookieAttrs().join(';')}`])
-}
-export function clearSessionCookie(res) {
+export function clearSessionCookie(res, secure) {
   const a = ['Path=/', 'HttpOnly', 'Max-Age=0', 'SameSite=Lax']
-  if (IS_PROD) a.push('Secure')
+  if (secure) a.push('Secure')
   res.setHeader('Set-Cookie', [`${COOKIE_NAME}=;${a.join(';')}`])
 }
 
