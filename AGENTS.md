@@ -39,7 +39,7 @@ server/
 src/
   App.jsx           root: composes sidebar, stream, input, pickers, modals
   components/        Sidebar, InputBar, StreamEntry, ModelPicker, SettingsPanel,
-                    LoginModal, ThinkingPicker, StatsFooter, CommandPanel, …
+                    LoginModal, ThinkingPicker, ForkPicker, StatsFooter, CommandPanel, …
   hooks/
     useAgentEvents.js  ★ SSE event reducer — the chat state machine
     useAttachments.js  file upload (images as dataURL, others via /api/upload)
@@ -184,6 +184,8 @@ in the Node process outside the sandbox.
 | POST | `/api/session/new` | req | new chat |
 | GET  | `/api/sessions` | req | list stored sessions |
 | POST | `/api/session/switch` | req | switch to a stored session |
+| GET  | `/api/fork-targets` | req | user messages this session can branch from |
+| POST | `/api/fork` | req | branch from a message (new session file; SDK `runtime.fork`) |
 | POST | `/api/compact` | req | compact context |
 | POST | `/api/compact/abort` | req | abort compaction |
 | POST | `/api/compaction/auto` | req | toggle auto-compaction |

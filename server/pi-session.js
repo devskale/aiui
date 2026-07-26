@@ -350,6 +350,26 @@ export async function switchToSession(user, sessionPath) {
   return ctx.runtime.session
 }
 
+// ── Branching (fork) ──
+
+// Fork points: the user messages this session can branch from. The SDK owns
+// the fork-selector data; aiui just surfaces it to the UI.
+export async function getForkTargets(user) {
+  const s = await getOrCreateSession(user)
+  try { return s.getUserMessagesForForking() } catch { return [] }
+}
+
+// Branch from a user message into a new session file. SDK-owned
+// (runtime.fork): creates the child session, switches the runtime to it, and
+// rebinds the SSE bus via setRebindSession. The route pushes session_history
+// so the client renders the forked branch.
+export async function forkSession(user, entryId) {
+  const ctx = ctxFor(user)
+  await getOrCreateSession(user)
+  await ctx.runtime.fork(entryId)
+  return ctx.runtime.session
+}
+
 // ── Session history (for replay) ──
 export function getSessionHistory(user) {
   const session = ctxFor(user).runtime?.session

@@ -9,7 +9,7 @@ import { getBus } from './event-bus.js'
 import * as Mime from './mime.js'
 import { authEnabled, verifyCredentials, issueSession, revokeSession, userLimit, setSessionCookie, clearSessionCookie, clearStaleSessionCookies, readSessionCookies, currentSession, requireAuth, noteLoginAttempt } from './auth.js'
 import { consumeQuota, peekQuota } from './quota.js'
-import { getOrCreateSession, disposeSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, listSessions, switchToSession, getAvailableModels, getCommands, getSessionInfo, getSessionStats, getSessionHistory, newSession, workspaceCwd } from './pi-session.js'
+import { getOrCreateSession, disposeSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, listSessions, switchToSession, getAvailableModels, getCommands, getSessionInfo, getSessionStats, getSessionHistory, newSession, workspaceCwd, getForkTargets, forkSession } from './pi-session.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.join(__dirname, '..')
@@ -277,6 +277,29 @@ app.post('/api/session/switch', async (req, res) => {
   try {
     res.json({ ok: true })
     await switchToSession(req.user, sessionPath)
+    const bus = getBus(req.user)
+    bus.push('session_status', getSessionInfo(req.user))
+    bus.push('session_history', { entries: getSessionHistory(req.user) })
+    bus.push('session_stats', getSessionStats(req.user))
+  } catch (err) {
+    getBus(req.user).push('error', { message: err.message })
+  }
+})
+
+// ── Branching (fork) ──
+app.get('/api/fork-targets', async (req, res) => {
+  try {
+    res.json(await getForkTargets(req.user))
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+app.post('/api/fork', async (req, res) => {
+  const { entryId } = req.body || {}
+  if (!entryId) return res.status(400).json({ error: 'no entryId' })
+  try {
+    res.json({ ok: true })
+    await forkSession(req.user, entryId)
     const bus = getBus(req.user)
     bus.push('session_status', getSessionInfo(req.user))
     bus.push('session_history', { entries: getSessionHistory(req.user) })

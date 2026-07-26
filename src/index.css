@@ -604,6 +604,17 @@ pre code { background: none; padding: 0; font-size: 13px; }
 }
 .mp-model:hover { background: var(--bg-hover); color: var(--text); }
 .mp-model.active { background: var(--bg-active); color: var(--text); font-weight: 500; }
+
+/* ForkPicker — message text wraps/clamps instead of one-line model names */
+.fork-head { display: flex; flex-direction: column; gap: 2px; }
+.fork-title { font-size: 13px; font-weight: 500; color: var(--text); }
+.fork-sub { font-size: 11px; color: var(--text-4); }
+.fork-target { align-items: flex-start; }
+.fork-target-text {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; line-height: 1.35; word-break: break-word;
+}
+.fork-target:disabled { opacity: .5; cursor: default; }
 .mp-hint { padding: 8px 10px; font-size: 11px; color: var(--text-4); text-align: center; }
 
 /* ═══ CONNECTING ═══ */

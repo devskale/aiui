@@ -10,6 +10,7 @@ import { CommandPanel } from './components/CommandPanel'
 import { InputBar } from './components/InputBar'
 import { StatsFooter } from './components/StatsFooter'
 import { ThinkingPicker } from './components/ThinkingPicker'
+import { ForkPicker } from './components/ForkPicker'
 import { EmptyState } from './components/EmptyState'
 import { ReleaseNotes } from './components/ReleaseNotes'
 import { SettingsPanel } from './components/SettingsPanel'
@@ -58,6 +59,7 @@ export default function App() {
   const [showModelPicker, setShowModelPicker] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [sessionRefresh, setSessionRefresh] = useState(0)
+  const [showFork, setShowFork] = useState(false)
   const { route, navigate } = useHashRoute()
   const [model, setModel] = useState('')
   const { visible, imageModels, favModels } = useModels(authed)
@@ -179,6 +181,7 @@ export default function App() {
         onSwitchSession={handleSwitchSession}
         onShowReleaseNotes={() => navigate('releases')}
         onShowSettings={() => setShowSettings(true)}
+        onShowFork={() => setShowFork(true)}
         refreshTrigger={sessionRefresh}
       />
 
@@ -263,6 +266,9 @@ export default function App() {
           onSelect={setModel}
           onClose={() => setShowModelPicker(false)}
         />
+      )}
+      {showFork && (
+        <ForkPicker onClose={() => setShowFork(false)} />
       )}
       {route === 'releases' && (
         <ReleaseNotes onClose={() => navigate('')} />

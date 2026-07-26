@@ -16,7 +16,7 @@ function timeAgo(dateStr) {
   return `${days}d`
 }
 
-export function Sidebar({ open, onToggle, connected, sessionAlive, sessionId, onNewChat, onSwitchSession, onShowReleaseNotes, onShowSettings, refreshTrigger }) {
+export function Sidebar({ open, onToggle, connected, sessionAlive, sessionId, onNewChat, onSwitchSession, onShowReleaseNotes, onShowSettings, onShowFork, refreshTrigger }) {
   const [commands, setCommands] = useState(null)
   const [sessions, setSessions] = useState([])
   const [search, setSearch] = useState('')
@@ -59,6 +59,11 @@ export function Sidebar({ open, onToggle, connected, sessionAlive, sessionId, on
         <button className="sb-nav-item" onClick={onNewChat}>
           <span>＋</span><span>New Chat</span>
         </button>
+        {sessionAlive && (
+          <button className="sb-nav-item" onClick={onShowFork} title="Branch from an earlier message">
+            <span>⑃</span><span>Fork</span>
+          </button>
+        )}
       </nav>
 
       {/* Session list */}
