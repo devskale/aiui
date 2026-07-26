@@ -11,6 +11,7 @@ import { InputBar } from './components/InputBar'
 import { StatsFooter } from './components/StatsFooter'
 import { ThinkingPicker } from './components/ThinkingPicker'
 import { ForkPicker } from './components/ForkPicker'
+import { FileExplorer } from './components/FileExplorer'
 import { EmptyState } from './components/EmptyState'
 import { ReleaseNotes } from './components/ReleaseNotes'
 import { SettingsPanel } from './components/SettingsPanel'
@@ -60,6 +61,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [sessionRefresh, setSessionRefresh] = useState(0)
   const [showFork, setShowFork] = useState(false)
+  const [showFiles, setShowFiles] = useState(false)
   const { route, navigate } = useHashRoute()
   const [model, setModel] = useState('')
   const { visible, imageModels, favModels } = useModels(authed, me?.user)
@@ -182,6 +184,7 @@ export default function App() {
         onShowReleaseNotes={() => navigate('releases')}
         onShowSettings={() => setShowSettings(true)}
         onShowFork={() => setShowFork(true)}
+        onShowFiles={() => setShowFiles(true)}
         refreshTrigger={sessionRefresh}
       />
 
@@ -269,6 +272,9 @@ export default function App() {
       )}
       {showFork && (
         <ForkPicker onClose={() => setShowFork(false)} />
+      )}
+      {showFiles && (
+        <FileExplorer onClose={() => setShowFiles(false)} />
       )}
       {route === 'releases' && (
         <ReleaseNotes onClose={() => navigate('')} />

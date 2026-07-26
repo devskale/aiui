@@ -11,6 +11,7 @@ import { authEnabled, verifyCredentials, issueSession, revokeSession, userLimit,
 import { consumeQuota, peekQuota } from './quota.js'
 import { getOrCreateSession, disposeSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, listSessions, switchToSession, getAvailableModels, getCommands, getSessionInfo, getSessionStats, getSessionHistory, newSession, workspaceCwd, getForkTargets, forkSession } from './pi-session.js'
 import { resolveBashOutputPath, readBashOutput } from './bash-output.js'
+import { listDir, readTextFile, resolveWorkspacePath, mimeFor } from './workspace-files.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.join(__dirname, '..')
@@ -295,6 +296,33 @@ app.post('/api/session/switch', async (req, res) => {
     bus.push('session_stats', getSessionStats(req.user))
   } catch (err) {
     getBus(req.user).push('error', { message: err.message })
+  }
+})
+
+// ── Workspace file browser (G5) ──
+app.get('/api/tree', (req, res) => {
+  try {
+    res.json(listDir(workspaceCwd(req.user), (req.query.path || '').toString()))
+  } catch {
+    res.status(400).json({ error: 'invalid path' })
+  }
+})
+app.get('/api/file', async (req, res) => {
+  try {
+    res.json(readTextFile(workspaceCwd(req.user), (req.query.path || '').toString()))
+  } catch {
+    res.status(400).json({ error: 'invalid path' })
+  }
+})
+// Raw bytes (images) with a mime-typed Content-Type.
+app.get('/api/file/raw', async (req, res) => {
+  try {
+    const sub = (req.query.path || '').toString()
+    const file = resolveWorkspacePath(workspaceCwd(req.user), sub)
+    res.setHeader('Content-Type', mimeFor(path.extname(file)) || 'application/octet-stream')
+    fs.createReadStream(file).on('error', () => res.status(404).end()).pipe(res)
+  } catch {
+    res.status(400).json({ error: 'invalid path' })
   }
 })
 

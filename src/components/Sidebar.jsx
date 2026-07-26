@@ -37,7 +37,7 @@ function buildSessionTree(sessions) {
   return roots.map(attach)
 }
 
-export function Sidebar({ open, onToggle, connected, sessionAlive, sessionId, onNewChat, onSwitchSession, onShowReleaseNotes, onShowSettings, onShowFork, refreshTrigger }) {
+export function Sidebar({ open, onToggle, connected, sessionAlive, sessionId, onNewChat, onSwitchSession, onShowReleaseNotes, onShowSettings, onShowFork, onShowFiles, refreshTrigger }) {
   const [commands, setCommands] = useState(null)
   const [sessions, setSessions] = useState([])
   const [search, setSearch] = useState('')
@@ -84,6 +84,11 @@ export function Sidebar({ open, onToggle, connected, sessionAlive, sessionId, on
         {sessionAlive && (
           <button className="sb-nav-item" onClick={onShowFork} title="Branch from an earlier message">
             <span>⑃</span><span>Fork</span>
+          </button>
+        )}
+        {sessionAlive && (
+          <button className="sb-nav-item" onClick={onShowFiles} title="Browse workspace files">
+            <span>📂</span><span>Files</span>
           </button>
         )}
       </nav>
