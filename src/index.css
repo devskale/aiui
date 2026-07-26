@@ -822,7 +822,7 @@ pre code { background: none; padding: 0; font-size: 13px; }
 .fe-viewer-bar { display: flex; align-items: center; gap: 12px; padding: 6px 10px; border-bottom: 1px solid var(--border-subtle); }
 .fe-back { background: none; border: 1px solid var(--border-subtle); color: var(--text-3); border-radius: var(--radius-sm); padding: 2px 8px; cursor: pointer; font-size: 12px; }
 .fe-back:hover { color: var(--text); background: var(--bg-hover); }
-.fe-upload { background: none; border: 1px solid var(--border-subtle); color: var(--text-3); border-radius: var(--radius-sm); padding: 3px 10px; cursor: pointer; font-size: 12px; transition: all .1s; flex-shrink: 0; }
+.fe-upload { display: inline-flex; align-items: center; gap: 5px; background: none; border: 1px solid var(--border-subtle); color: var(--text-3); border-radius: var(--radius-sm); padding: 3px 10px; cursor: pointer; font-size: 12px; transition: all .1s; flex-shrink: 0; }
 .fe-upload:hover:not(:disabled) { color: var(--text); background: var(--bg-hover); border-color: var(--bg-active); }
 .fe-upload:disabled { opacity: .6; cursor: default; }
 .fe-file-input { display: none; }

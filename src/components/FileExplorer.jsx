@@ -9,6 +9,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { apiUrl } from '../lib/api'
 import { useEscape } from '../hooks/useEscape'
+import { UploadCloud } from 'lucide-react'
 
 const IMG_RE = /\.(png|jpe?g|gif|webp|svg|bmp)$/i
 
@@ -79,7 +80,9 @@ export function FileExplorer({ onClose }) {
             ))}
           </div>
           <input ref={fileInputRef} type="file" multiple className="fe-file-input" onChange={e => { uploadFiles(e.target.files); e.target.value = '' }} />
-          <button className="fe-upload" onClick={() => fileInputRef.current?.click()} disabled={uploading} title="Upload to this folder">↑ Upload{uploading ? '…' : ''}</button>
+          <button className="fe-upload" onClick={() => fileInputRef.current?.click()} disabled={uploading} title="Upload to this folder">
+            <UploadCloud size={14} strokeWidth={2} /> {uploading ? 'Uploading…' : 'Upload'}
+          </button>
           <button className="sp-close" onClick={onClose}>✕</button>
         </header>
 
