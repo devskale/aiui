@@ -6,7 +6,7 @@
 // (text in a <pre>, images via the raw endpoint). All paths are
 // workspace-scoped server-side (assertInside), so this can't read outside it.
 // ════════════════════════════════════════════════════════════════════
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { apiUrl } from '../lib/api'
 import { useEscape } from '../hooks/useEscape'
 
@@ -19,6 +19,9 @@ export function FileExplorer({ onClose }) {
   const [file, setFile] = useState(null)    // { path, name } when viewing
   const [content, setContent] = useState(null)
   const [error, setError] = useState(null)
+  const [uploading, setUploading] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+  const fileInputRef = useRef(null)
 
   const loadDir = useCallback(async (d) => {
     setFile(null); setContent(null); setError(null)
@@ -30,6 +33,24 @@ export function FileExplorer({ onClose }) {
   }, [])
 
   useEffect(() => { loadDir(dir) }, [dir, loadDir])
+
+  // Upload into the currently-browsed folder, then refresh the listing.
+  const uploadFiles = useCallback(async (fileList) => {
+    if (!fileList || !fileList.length) return
+    setUploading(true)
+    try {
+      for (const file of fileList) {
+        const fd = new FormData()
+        fd.append('files', file)
+        await fetch(apiUrl(`/api/upload?dir=${encodeURIComponent(dir)}`), { method: 'POST', body: fd })
+      }
+      await loadDir(dir)
+    } catch {
+      setError('upload failed')
+    } finally {
+      setUploading(false)
+    }
+  }, [dir, loadDir])
 
   const openFile = async (name) => {
     const p = dir ? `${dir}/${name}` : name
@@ -57,10 +78,12 @@ export function FileExplorer({ onClose }) {
               </span>
             ))}
           </div>
+          <input ref={fileInputRef} type="file" multiple className="fe-file-input" onChange={e => { uploadFiles(e.target.files); e.target.value = '' }} />
+          <button className="fe-upload" onClick={() => fileInputRef.current?.click()} disabled={uploading} title="Upload to this folder">↑ Upload{uploading ? '…' : ''}</button>
           <button className="sp-close" onClick={onClose}>✕</button>
         </header>
 
-        <div className="fe-body">
+        <div className={`fe-body ${dragOver ? 'drag-over' : ''}`} onDragOver={e => { if (!file) { e.preventDefault(); setDragOver(true) } }} onDragLeave={() => setDragOver(false)} onDrop={e => { setDragOver(false); if (file) return; e.preventDefault(); uploadFiles(e.dataTransfer?.files) }}>
           {file ? (
             <div className="fe-viewer">
               <div className="fe-viewer-bar">

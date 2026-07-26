@@ -80,9 +80,17 @@ const storage = multer.diskStorage({
   // file (the shared uploads/ dir is outside the sandbox cwd). 'uploads' is
   // in IGNORED_DIRS, so the file browser stays tidy but the agent can still read it.
   destination: (req, _file, cb) => {
-    const dir = path.join(workspaceCwd(req.user), 'uploads')
-    fs.mkdirSync(dir, { recursive: true })
-    cb(null, dir)
+    // Target dir: the FileExplorer passes ?dir= (the browsed folder, even ''
+    // for root); the InputBar omits it and defaults to 'uploads/'. Validated
+    // by resolveWorkspacePath (assertInside) so a crafted dir can't escape cwd.
+    try {
+      const sub = req.query.dir !== undefined ? req.query.dir.toString() : 'uploads'
+      const dir = resolveWorkspacePath(workspaceCwd(req.user), sub)
+      fs.mkdirSync(dir, { recursive: true })
+      cb(null, dir)
+    } catch (e) {
+      cb(e)
+    }
   },
   filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname)
@@ -383,7 +391,7 @@ app.post('/api/upload', upload.array('files', 10), (req, res) => {
     const ext = path.extname(f.originalname).toLowerCase().replace('.', '')
     const mimetype = Mime.mimeFor(ext) || f.mimetype
     const isImage = Mime.isImage(mimetype)
-    const relPath = `uploads/${f.filename}`
+    const relPath = path.relative(workspaceCwd(req.user), f.path)
     const info = {
       id: f.filename,
       name: f.originalname,
