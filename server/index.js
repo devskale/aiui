@@ -12,6 +12,7 @@ import { consumeQuota, peekQuota } from './quota.js'
 import { getOrCreateSession, disposeSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, listSessions, switchToSession, getAvailableModels, getCommands, getSessionInfo, getSessionStats, getSessionHistory, newSession, workspaceCwd, getForkTargets, forkSession } from './pi-session.js'
 import { resolveBashOutputPath, readBashOutput } from './bash-output.js'
 import { listDir, readTextFile, resolveWorkspacePath, mimeFor } from './workspace-files.js'
+import { searchCatalog } from './skills-catalog.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.join(__dirname, '..')
@@ -296,6 +297,15 @@ app.post('/api/session/switch', async (req, res) => {
     bus.push('session_stats', getSessionStats(req.user))
   } catch (err) {
     getBus(req.user).push('error', { message: err.message })
+  }
+})
+
+// ── Skills catalog (read-only discovery; admin curates enablement — ADR-0001) ──
+app.get('/api/skills/search', async (req, res) => {
+  try {
+    res.json(await searchCatalog((req.query.q || '').toString(), 30))
+  } catch {
+    res.json({ error: 'search failed' })
   }
 })
 

@@ -37,7 +37,7 @@ function buildSessionTree(sessions) {
   return roots.map(attach)
 }
 
-export function Sidebar({ open, onToggle, connected, sessionAlive, sessionId, onNewChat, onSwitchSession, onShowReleaseNotes, onShowSettings, onShowFork, onShowFiles, refreshTrigger }) {
+export function Sidebar({ open, onToggle, connected, sessionAlive, sessionId, onNewChat, onSwitchSession, onShowReleaseNotes, onShowSettings, onShowFork, onShowFiles, onShowSkills, refreshTrigger }) {
   const [commands, setCommands] = useState(null)
   const [sessions, setSessions] = useState([])
   const [search, setSearch] = useState('')
@@ -136,7 +136,7 @@ export function Sidebar({ open, onToggle, connected, sessionAlive, sessionId, on
           const items = commands?.[key] || []
           if (items.length === 0) return null
           return (
-            <CollapsibleGroup key={key} label={label} items={items} />
+            <CollapsibleGroup key={key} label={label} items={items} onBrowse={key === 'skills' ? onShowSkills : undefined} />
           )
         })}
       </div>
@@ -154,7 +154,7 @@ export function Sidebar({ open, onToggle, connected, sessionAlive, sessionId, on
   )
 }
 
-function CollapsibleGroup({ label, items }) {
+function CollapsibleGroup({ label, items, onBrowse }) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -163,6 +163,7 @@ function CollapsibleGroup({ label, items }) {
         <span className="sb-cmd-arrow">{open ? '▾' : '▸'}</span>
         <span className="sb-cmd-label">{label}</span>
         <span className="sb-cmd-count">{items.length}</span>
+        {onBrowse && <span className="sb-cmd-browse" onClick={(e) => { e.stopPropagation(); onBrowse() }} title="Browse the skills catalog">⊕</span>}
       </button>
       {open && (
         <div className="sb-cmd-list">

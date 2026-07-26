@@ -39,7 +39,7 @@ server/
 src/
   App.jsx           root: composes sidebar, stream, input, pickers, modals
   components/        Sidebar, InputBar, StreamEntry, ModelPicker, SettingsPanel,
-                    LoginModal, ThinkingPicker, ForkPicker, FileExplorer, StatsFooter, CommandPanel, …
+                    LoginModal, ThinkingPicker, ForkPicker, FileExplorer, SkillsBrowser, StatsFooter, CommandPanel, …
   hooks/
     useAgentEvents.js  ★ SSE event reducer — the chat state machine
     useAttachments.js  file upload (images as dataURL, others via /api/upload)
@@ -177,7 +177,8 @@ in the Node process outside the sandbox.
 | GET  | `/api/models` | req | per-user model catalog (hybrid keys) |
 | POST | `/api/model` | req | set session model |
 | GET/POST | `/api/thinking-level` | req | get/set thinking level |
-| GET  | `/api/commands` | req | skills/prompts/extensions |
+| GET  | `/api/commands` | req | skills/prompts/extensions (the user's ENABLED set) |
+| GET  | `/api/skills/search` | req | browse the public skills.sh catalog (read-only; admin curates enablement) |
 | GET  | `/api/files` | req | workspace file list (@-mention) |
 | GET  | `/api/tree` | req | one level of a workspace dir (G5 browser) |
 | GET  | `/api/file` | req | read a workspace text file (≤1MB; workspace-scoped) |
