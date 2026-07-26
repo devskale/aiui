@@ -207,13 +207,21 @@ export function disposeSession(user) {
 
 export async function prompt(user, text, attachments = []) {
   const s = await getOrCreateSession(user)
-  const promptText = text?.trim() || 'Describe this image.'
   const images = attachments
     .filter(a => a.isImage && a.dataUrl)
     .map(a => {
       const match = a.dataUrl.match(/^data:([^;]+);base64,(.+)$/)
       return { type: 'image', mimeType: match?.[1] || 'image/png', data: match?.[2] }
     })
+  // Non-image attachments now land inside the user's workspace (uploads/), so
+  // point the agent at them — its read tool can reach them under the cwd.
+  const files = attachments.filter(a => !a.isImage && a.relPath).map(a => a.relPath)
+  let promptText = (text || '').trim()
+  if (files.length) {
+    const list = files.map(p => `- ${p}`).join('\n')
+    promptText += `\n\n[Attached file(s) — read with your read tool to see their contents:]\n${list}`
+  }
+  if (!promptText.trim()) promptText = images.length ? 'Describe this image.' : ''
   const options = { images }
   if (s.isStreaming) options.streamingBehavior = 'steer' // prompting mid-turn
   return s.prompt(promptText, options)

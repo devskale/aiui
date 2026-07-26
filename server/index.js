@@ -76,7 +76,14 @@ app.use((_req, res, next) => {
 
 // ── File upload setup ──
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadsDir),
+  // Upload into the user's workspace so the agent's read tool can reach the
+  // file (the shared uploads/ dir is outside the sandbox cwd). 'uploads' is
+  // in IGNORED_DIRS, so the file browser stays tidy but the agent can still read it.
+  destination: (req, _file, cb) => {
+    const dir = path.join(workspaceCwd(req.user), 'uploads')
+    fs.mkdirSync(dir, { recursive: true })
+    cb(null, dir)
+  },
   filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname)
     const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9._-]/g, '_')
@@ -371,14 +378,17 @@ app.get('/api/changelog', (_req, res) => {
 
 // ── File upload ──
 app.post('/api/upload', upload.array('files', 10), (req, res) => {
+  const base = process.env.VITE_BASE || ''
   const files = (req.files || []).map(f => {
     const ext = path.extname(f.originalname).toLowerCase().replace('.', '')
     const mimetype = Mime.mimeFor(ext) || f.mimetype
     const isImage = Mime.isImage(mimetype)
+    const relPath = `uploads/${f.filename}`
     const info = {
       id: f.filename,
       name: f.originalname,
-      path: `${process.env.VITE_BASE || ''}/uploads/${f.filename}`,
+      relPath,                                       // workspace-relative; the agent reads this
+      path: `${base}/api/file/raw?path=${encodeURIComponent(relPath)}`, // preview URL (images)
       size: f.size,
       mimetype,
       isImage,
