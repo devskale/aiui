@@ -11,6 +11,7 @@
 // ════════════════════════════════════════════════════════════════════
 import { useState, useEffect } from 'react'
 import { useModels } from '../hooks/useModels'
+import { useEscape } from '../hooks/useEscape'
 import {
   MODEL_RENDER_CAP, groupModels, isModelAllowed,
   getAllowedModels, setAllowedModels,
@@ -19,6 +20,7 @@ import {
 } from '../lib/models'
 
 export function SettingsPanel({ onClose }) {
+  useEscape(onClose)
   const { all: allFlat, loading, refresh, favModels } = useModels()
   const [allowed, setAllowed] = useState(null)      // null = all allowed
   const [search, setSearch] = useState('')

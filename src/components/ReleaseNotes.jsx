@@ -4,6 +4,7 @@
 // same react-markdown + remark-gfm pipeline as chat entries.
 // ════════════════════════════════════════════════════════════════════
 import { useState, useEffect } from 'react'
+import { useEscape } from '../hooks/useEscape'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { apiUrl } from '../lib/api'
@@ -33,12 +34,7 @@ export function ReleaseNotes({ onClose }) {
     return () => { cancelled = true }
   }, [])
 
-  // Esc closes the overlay
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  useEscape(onClose)
 
   return (
     <div className="rn-overlay" onClick={onClose}>

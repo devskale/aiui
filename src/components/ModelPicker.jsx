@@ -3,6 +3,7 @@
 // ════════════════════════════════════════════════════════════════════
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { apiUrl } from '../lib/api'
+import { useEscape } from '../hooks/useEscape'
 import { useModels } from '../hooks/useModels'
 import { MODEL_RENDER_CAP, withFavsFirst } from '../lib/models'
 
@@ -13,6 +14,7 @@ export function ModelPicker({ activeModel, onSelect, onClose }) {
   const inputRef = useRef(null)
 
   useEffect(() => { inputRef.current?.focus() }, [])
+  useEscape(onClose)
 
   const ordered = useMemo(() => withFavsFirst(models, favModels), [models, favModels])
   const filtered = search

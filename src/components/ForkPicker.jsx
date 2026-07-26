@@ -5,8 +5,10 @@
 // ════════════════════════════════════════════════════════════════════
 import { useState, useEffect, useRef } from 'react'
 import { apiUrl } from '../lib/api'
+import { useEscape } from '../hooks/useEscape'
 
 export function ForkPicker({ onClose }) {
+  useEscape(onClose)
   const [targets, setTargets] = useState(null) // null = loading, [] = none
   const [pending, setPending] = useState(null) // entryId being forked
   const listRef = useRef(null)

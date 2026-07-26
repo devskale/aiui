@@ -7,6 +7,7 @@
 // ════════════════════════════════════════════════════════════════════
 import { useState, useEffect, useRef } from 'react'
 import { apiUrl } from '../lib/api'
+import { useEscape } from '../hooks/useEscape'
 
 function fmtInstalls(n) {
   if (!n) return ''
@@ -30,6 +31,7 @@ export function SkillsBrowser({ onClose }) {
   }, [])
 
   useEffect(() => { inputRef.current?.focus() }, [])
+  useEscape(onClose)
 
   const runSearch = (query) => {
     if (!query.trim()) { setData(null); return }

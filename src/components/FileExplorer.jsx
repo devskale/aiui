@@ -8,10 +8,12 @@
 // ════════════════════════════════════════════════════════════════════
 import { useState, useEffect, useCallback } from 'react'
 import { apiUrl } from '../lib/api'
+import { useEscape } from '../hooks/useEscape'
 
 const IMG_RE = /\.(png|jpe?g|gif|webp|svg|bmp)$/i
 
 export function FileExplorer({ onClose }) {
+  useEscape(onClose)
   const [dir, setDir] = useState('')        // current relative dir ('' = root)
   const [entries, setEntries] = useState(null)
   const [file, setFile] = useState(null)    // { path, name } when viewing
