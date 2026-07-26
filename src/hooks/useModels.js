@@ -58,12 +58,14 @@ function getSnapshot() {
  * The fetch runs once (deduped); refresh() re-applies the allow-list to the
  * cached server data without refetching.
  */
-export function useModels() {
+export function useModels(enabled = true) {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot)
-  // Fetch on first mount, and only if we don't already have data.
+  // Fetch on first mount (once authed), and only if we don't already have data.
+  // Gated on `enabled` (= authed) so the login screen doesn't fire /api/models
+  // pre-auth and 401. Re-runs when authed flips false→true after login.
   useEffect(() => {
-    if (lastData === null) load()
-  }, [])
+    if (enabled && lastData === null) load()
+  }, [enabled])
   const refresh = useCallback(() => recompute(), [])
   return { ...snapshot, refresh }
 }

@@ -1,0 +1,8 @@
+{
+  "_comment": "Behavioral defaults seeded into each new User's agentDir/settings.json on first creation (ADR-0001). Edit this file to change defaults for NEW users; existing users keep their seeded copy until re-seeded. defaultProvider/defaultModel are pinned to this deployment's model (match ~/.pi/agent/settings.json); a BYOK User whose own catalog lacks this model gets the SDK fallback (first available). Entitlement (skills/packages) is NOT seeded here — the admin curates it per-User (default-deny).",
+  "defaultProvider": "zen.fg",
+  "defaultModel": "hy3-free",
+  "defaultThinkingLevel": "high",
+  "theme": "dark",
+  "compaction": { "enabled": true }
+}

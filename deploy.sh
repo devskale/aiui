@@ -19,7 +19,7 @@ rsync -avz --delete \
   --exclude='test-results/' \
   ./ "$HOST:$REMOTE_DIR/"
 
-echo "🔄 Installing deps + restarting service..."
-ssh "$HOST" "export CI=true PATH=/home/woodmastr/.nvm/versions/node/v24.13.0/bin:/home/woodmastr/.local/share/pnpm/bin:\$PATH; cd $REMOTE_DIR && pnpm install --frozen-lockfile && systemctl --user restart aiui"
+echo "🔄 Installing deps + migrating to per-user agentDir + restarting service..."
+ssh "$HOST" "export CI=true PATH=/home/woodmastr/.nvm/versions/node/v24.13.0/bin:/home/woodmastr/.local/share/pnpm/bin:\$PATH; cd $REMOTE_DIR && pnpm install --frozen-lockfile && node scripts/migrate-per-user-agentdir.js && systemctl --user restart aiui"
 
 echo "✅ Deployed to $HOST (port 8082)"

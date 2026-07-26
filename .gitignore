@@ -2,6 +2,7 @@ node_modules/
 dist/
 uploads/
 workspace/
+workspace/.agent/
 .pi/
 *.log
 .DS_Store

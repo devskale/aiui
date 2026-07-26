@@ -89,24 +89,46 @@ export function lookupSession(token) {
 export function revokeSession(token) { if (token) sessions.delete(token) }
 
 // ── cookies ──
-export function readSessionCookie(req) {
+// Read ALL aiui_session cookie values. Several may be present — stale
+// path/domain variants from past deploys pile up in the browser, and the
+// Cookie header sends them all. We try each rather than trusting the first
+// (which may be an old, post-restart-invalid token).
+export function readSessionCookies(req) {
+  const vals = []
   for (const part of (req.headers.cookie || '').split(';')) {
     const [k, ...v] = part.trim().split('=')
-    if (k === COOKIE_NAME) return decodeURIComponent(v.join('='))
+    if (k === COOKIE_NAME) vals.push(decodeURIComponent(v.join('=')))
+  }
+  return vals
+}
+// Resolve the live session from whichever aiui_session cookie validates.
+export function currentSession(req) {
+  for (const t of readSessionCookies(req)) {
+    const s = lookupSession(t)
+    if (s) return s
   }
   return null
 }
 export function setSessionCookie(res, token, secure) {
-  // Simple first-party cookie: Lax + Secure over HTTPS. (The cross-site iframe
-  // experiment is gone — skale.dev/aiui redirects here, so access is first-party.)
+  // First-party cookie: Lax + Secure over HTTPS. skale.dev/aiui redirects here,
+  // so access is first-party (SameSite=Lax works).
   const a = ['Path=/', 'HttpOnly', `Max-Age=${SESSION_TTL_MS / 1000}`, 'SameSite=Lax']
   if (secure) a.push('Secure')
-  res.setHeader('Set-Cookie', [`${COOKIE_NAME}=${encodeURIComponent(token)};${a.join(';')}`])
+  res.setHeader('Set-Cookie', [`${COOKIE_NAME}=${encodeURIComponent(token)}; ${a.join('; ')}`])
+}
+// Best-effort: expire stale session cookies at common path variants so the
+// fresh Path=/ cookie is the only one that sticks.
+export function clearStaleSessionCookies(res, secure) {
+  for (const p of ['/aiui', '/aiui/', '/aiui/api', '/aiui/api/']) {
+    const a = [`Path=${p}`, 'Max-Age=0', 'SameSite=Lax']
+    if (secure) a.push('Secure')
+    res.append('Set-Cookie', `${COOKIE_NAME}=; ${a.join('; ')}`)
+  }
 }
 export function clearSessionCookie(res, secure) {
   const a = ['Path=/', 'HttpOnly', 'Max-Age=0', 'SameSite=Lax']
   if (secure) a.push('Secure')
-  res.setHeader('Set-Cookie', [`${COOKIE_NAME}=;${a.join(';')}`])
+  res.setHeader('Set-Cookie', [`${COOKIE_NAME}=; ${a.join('; ')}`])
 }
 
 // ── middleware ──
@@ -114,7 +136,7 @@ export function clearSessionCookie(res, secure) {
 // a valid session and expose the username as req.user.
 export function requireAuth(req, res, next) {
   if (!authEnabled()) { req.user = null; return next() }
-  const s = lookupSession(readSessionCookie(req))
+  const s = currentSession(req)
   if (!s) return res.status(401).json({ error: 'not authenticated' })
   req.user = s.user
   next()

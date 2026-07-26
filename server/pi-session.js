@@ -1,4 +1,4 @@
-import { createAgentSession, ModelRuntime, SessionManager } from '@earendil-works/pi-coding-agent'
+import { createAgentSession, ModelRuntime, SessionManager, DefaultResourceLoader, SettingsManager } from '@earendil-works/pi-coding-agent'
 import path from 'node:path'
 import fs from 'node:fs'
 import crypto from 'node:crypto'
@@ -11,16 +11,44 @@ import * as Sandbox from './sandbox.js'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PROJECT_ROOT = path.join(__dirname, '..')
 const WORKSPACE_ROOT = path.join(PROJECT_ROOT, 'workspace')
+const AGENT_ROOT = path.join(WORKSPACE_ROOT, '.agent') // per-user agentDirs (ADR-0001)
 
 const ANON = '_local' // used when auth is off (req.user === null)
 
-// Shared model runtime (created once) — owns auth + models + provider catalogs.
-// Your API keys are global/shared; only the agent's working dir + sessions are
-// per-user.
+// Shared model runtime (created once) — owns auth + models + provider catalogs
+// for non-BYOK Users. BYOK Users (auth.json in their agentDir) get a per-User
+// runtime instead (ADR-0002).
 let modelRuntime = null
 async function initShared() {
   if (!modelRuntime) modelRuntime = await ModelRuntime.create()
 }
+
+// Per-user BYOK runtimes, cached so we don't re-read/parse auth/models per
+// request. Keyed by normalized username.
+const byokRuntimes = new Map() // user → ModelRuntime
+
+// Slim, web-chat-shaped system message (ADR-0003). Replaces pi's CLI-oriented
+// default persona. Skills, project context files, and cwd are appended
+// automatically by the SDK (this string becomes buildSystemPrompt's
+// customPrompt, which preserves them).
+const SLIM_SYSTEM_PROMPT = `You are a helpful coding and general-purpose assistant in \u03c0ui, a web-based chat interface. You operate inside the user's workspace and can read files, run commands, edit code, and write new files.
+
+Tools available: read, bash, edit, write \u2014 plus any extension or skill tools the user has enabled.
+
+Guidelines:
+- Be concise and direct in your responses.
+- Show file paths clearly when working with files.
+- Use bash for exploration (ls, rg, find) and shell commands.
+- Prefer precise edits over full rewrites.`
+
+// Behavioral defaults seeded into each new User's agentDir/settings.json on
+// first creation (ADR-0001). Entitlement is NOT seeded — default-deny.
+const DEFAULT_SETTINGS_TEMPLATE = path.join(__dirname, 'default-user-settings.json')
+const DEFAULT_USER_SETTINGS = (() => {
+  const tpl = JSON.parse(fs.readFileSync(DEFAULT_SETTINGS_TEMPLATE, 'utf8'))
+  delete tpl._comment
+  return JSON.stringify(tpl, null, 2)
+})()
 
 // ── Per-user context ──
 // Each user gets their own scoped workspace: workspace/<user>/ is the agent's
@@ -52,11 +80,66 @@ function ctxFor(user) {
   if (!ctx) {
     const cwd = path.join(WORKSPACE_ROOT, workspaceSlug(u))
     const sessionDir = path.join(cwd, 'sessions')
+    const agentDir = path.join(AGENT_ROOT, workspaceSlug(u)) // OUTSIDE cwd (ADR-0001)
     fs.mkdirSync(sessionDir, { recursive: true })
-    ctx = { cwd, sessionDir, customTools: Sandbox.createTools(cwd), session: null, startedAt: null }
+    fs.mkdirSync(agentDir, { recursive: true })
+    // Seed behavioral defaults on first creation (ADR-0001). Entitlement stays
+    // empty (default-deny); the admin curates it per-User.
+    const settingsPath = path.join(agentDir, 'settings.json')
+    if (!fs.existsSync(settingsPath)) {
+      fs.writeFileSync(settingsPath, DEFAULT_USER_SETTINGS)
+    }
+    ctx = { cwd, sessionDir, agentDir, customTools: Sandbox.createTools(cwd), session: null, startedAt: null }
     contexts.set(u, ctx)
   }
   return ctx
+}
+
+// Resolve the ModelRuntime for a User: shared (non-BYOK) or per-User (BYOK,
+// when auth.json exists in their agentDir). Cached per User (ADR-0002).
+async function modelRuntimeFor(user) {
+  const u = normUser(user)
+  const ctx = ctxFor(u)
+  const byokAuth = path.join(ctx.agentDir, 'auth.json')
+  if (!fs.existsSync(byokAuth)) {
+    await initShared()
+    return modelRuntime
+  }
+  let rt = byokRuntimes.get(u)
+  if (!rt) {
+    const byokModels = path.join(ctx.agentDir, 'models.json')
+    rt = await ModelRuntime.create({
+      authPath: byokAuth,
+      modelsPath: fs.existsSync(byokModels) ? byokModels : undefined,
+    })
+    byokRuntimes.set(u, rt)
+  }
+  return rt
+}
+
+// Build the full createAgentSession options for a User: per-user agentDir
+// (ADR-0001), hybrid ModelRuntime (ADR-0002), and the slim system message via
+// a custom resource loader (ADR-0003).
+async function buildSessionOptions(user, sessionManager) {
+  const ctx = ctxFor(user)
+  const modelRuntime = await modelRuntimeFor(user)
+  const settingsManager = SettingsManager.create(ctx.cwd, ctx.agentDir)
+  const resourceLoader = new DefaultResourceLoader({
+    cwd: ctx.cwd,
+    agentDir: ctx.agentDir,
+    settingsManager,
+    systemPrompt: SLIM_SYSTEM_PROMPT,
+  })
+  await resourceLoader.reload()
+  return {
+    cwd: ctx.cwd,
+    agentDir: ctx.agentDir,
+    modelRuntime,
+    resourceLoader,
+    settingsManager,
+    customTools: ctx.customTools,
+    sessionManager,
+  }
 }
 
 function dispose(user) {
@@ -78,13 +161,9 @@ export function workspaceCwd(user) {
 export async function getOrCreateSession(user) {
   const ctx = ctxFor(user)
   if (ctx.session) return ctx.session
-  await initShared()
-  const { session: s } = await createAgentSession({
-    cwd: ctx.cwd,
-    modelRuntime,
-    customTools: ctx.customTools,
-    sessionManager: SessionManager.create(ctx.cwd, ctx.sessionDir),
-  })
+  const { session: s } = await createAgentSession(
+    await buildSessionOptions(user, SessionManager.create(ctx.cwd, ctx.sessionDir)),
+  )
   ctx.session = s
   ctx.startedAt = Date.now()
   getBus(user).bind(s)
@@ -95,14 +174,10 @@ export async function getOrCreateSession(user) {
 // Start a brand-new session (for "New Chat")
 export async function newSession(user) {
   dispose(user)
-  await initShared()
   const ctx = ctxFor(user)
-  const { session: s } = await createAgentSession({
-    cwd: ctx.cwd,
-    modelRuntime,
-    customTools: ctx.customTools,
-    sessionManager: SessionManager.create(ctx.cwd, ctx.sessionDir),
-  })
+  const { session: s } = await createAgentSession(
+    await buildSessionOptions(user, SessionManager.create(ctx.cwd, ctx.sessionDir)),
+  )
   ctx.session = s
   ctx.startedAt = Date.now()
   getBus(user).bind(s)
@@ -136,7 +211,8 @@ export async function abort(user) {
 
 export async function setModel(user, modelId) {
   const s = await getOrCreateSession(user)
-  const available = modelRuntime.getModels()
+  const rt = await modelRuntimeFor(user)
+  const available = rt.getModels()
   const model = available.find(m => m.id === modelId || `${m.provider}@${m.id}` === modelId)
   if (model) {
     await s.setModel(model)
@@ -145,10 +221,11 @@ export async function setModel(user, modelId) {
   }
 }
 
-// Global model catalog (your shared keys) — no user scope needed.
-export async function getAvailableModels() {
-  await initShared()
-  const models = modelRuntime.getModels()
+// Model catalog — per-User under hybrid keys (ADR-0002): a BYOK User sees only
+// their own models; a shared User sees the global catalog.
+export async function getAvailableModels(user) {
+  const rt = await modelRuntimeFor(user)
+  const models = rt.getModels()
   const grouped = {}
   const imageModels = []
   for (const m of models) {
@@ -250,14 +327,10 @@ export async function listSessions(user) {
 
 export async function switchToSession(user, sessionPath) {
   dispose(user)
-  await initShared()
   const ctx = ctxFor(user)
-  const { session: s } = await createAgentSession({
-    cwd: ctx.cwd,
-    modelRuntime,
-    customTools: ctx.customTools,
-    sessionManager: SessionManager.open(sessionPath, ctx.sessionDir, ctx.cwd),
-  })
+  const { session: s } = await createAgentSession(
+    await buildSessionOptions(user, SessionManager.open(sessionPath, ctx.sessionDir, ctx.cwd)),
+  )
   ctx.session = s
   ctx.startedAt = Date.now()
   getBus(user).bind(s)

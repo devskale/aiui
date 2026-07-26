@@ -49,7 +49,6 @@ function buildProfile(cwd) {
 (deny file-read* file-write* (subpath "${home}"))
 (allow file-read* file-write*
   (subpath "${cwd}")                              ; the DATA directory
-  (subpath "${home}/.pi/agent")                   ; auth/models/rg
   (subpath "${home}/.local")                      ; fnm / pnpm store
   (subpath "${home}/Library/pnpm")                ; pnpm
   (subpath "${home}/Library/Caches")

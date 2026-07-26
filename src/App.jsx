@@ -60,7 +60,7 @@ export default function App() {
   const [sessionRefresh, setSessionRefresh] = useState(0)
   const { route, navigate } = useHashRoute()
   const [model, setModel] = useState('')
-  const { visible, imageModels, favModels } = useModels()
+  const { visible, imageModels, favModels } = useModels(authed)
   const endRef = useRef(null)
   const scrollContainerRef = useRef(null)
   const stickToBottomRef = useRef(true)  // stick to bottom unless the user scrolled up

@@ -22,10 +22,11 @@ export function LoginModal({ onSuccess }) {
       })
       if (r.ok) {
         onSuccess?.()
-      } else if (r.status === 429) {
-        setError('Too many attempts — wait a minute.')
       } else {
-        setError('Invalid username or passphrase.')
+        // Surface the server's actual reason (invalid creds, throttle, 500…)
+        let reason = `Login failed (HTTP ${r.status})`
+        try { const j = await r.json(); if (j.error) reason = j.error } catch {}
+        setError(reason)
       }
     } catch {
       setError('Login failed — check your connection.')

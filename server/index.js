@@ -7,7 +7,7 @@ import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { getBus } from './event-bus.js'
 import * as Mime from './mime.js'
-import { authEnabled, verifyCredentials, issueSession, lookupSession, revokeSession, userLimit, setSessionCookie, clearSessionCookie, readSessionCookie, requireAuth, noteLoginAttempt } from './auth.js'
+import { authEnabled, verifyCredentials, issueSession, revokeSession, userLimit, setSessionCookie, clearSessionCookie, clearStaleSessionCookies, readSessionCookies, currentSession, requireAuth, noteLoginAttempt } from './auth.js'
 import { consumeQuota, peekQuota } from './quota.js'
 import { getOrCreateSession, disposeSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, listSessions, switchToSession, getAvailableModels, getCommands, getSessionInfo, getSessionStats, getSessionHistory, newSession, workspaceCwd } from './pi-session.js'
 
@@ -90,18 +90,21 @@ app.post('/api/login', (req, res) => {
   const { username, passphrase } = req.body || {}
   if (!noteLoginAttempt(req.ip)) return res.status(429).json({ error: 'too many attempts, slow down' })
   if (!verifyCredentials(username, passphrase)) return res.status(401).json({ error: 'invalid credentials' })
+  // Expire stale session cookies at other paths (accumulated from past deploys)
+  // before setting the fresh Path=/ cookie — so only one aiui_session sticks.
+  clearStaleSessionCookies(res, req.secure)
   setSessionCookie(res, issueSession(username), req.secure)
   res.json({ ok: true, user: username })
 })
 app.post('/api/logout', (req, res) => {
   if (req.user) disposeSession(req.user) // drop the in-memory session → next login is fresh
-  revokeSession(readSessionCookie(req))
+  for (const t of readSessionCookies(req)) revokeSession(t)
   clearSessionCookie(res, req.secure)
   res.json({ ok: true })
 })
 app.get('/api/me', (req, res) => {
   if (!authEnabled()) return res.json({ authed: true, authRequired: false, user: null, quota: null })
-  const s = lookupSession(readSessionCookie(req))
+  const s = currentSession(req)
   if (!s) return res.json({ authed: false, authRequired: true })
   res.json({ authed: true, authRequired: true, user: s.user, quota: peekQuota(s.user, userLimit(s.user)) })
 })
@@ -156,10 +159,10 @@ app.post('/api/abort', async (req, res) => {
   res.json({ ok: true })
 })
 
-// ── Models (global catalog — your shared keys) ──
-app.get('/api/models', async (_req, res) => {
+// ── Models (per-User catalog under hybrid keys — ADR-0002) ──
+app.get('/api/models', async (req, res) => {
   try {
-    res.json(await getAvailableModels())
+    res.json(await getAvailableModels(req.user))
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
