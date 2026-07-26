@@ -237,13 +237,17 @@ export async function setModel(user, modelId) {
 }
 
 // Model catalog — per-User under hybrid keys (ADR-0002): a BYOK User sees only
-// their own models; a shared User sees the global catalog.
+// their own models; a shared User sees the global catalog. Filtered to
+// providers with configured credentials, so every listed model is actually
+// selectable (no "No API key" silent failures in the picker).
 export async function getAvailableModels(user) {
   const rt = await modelRuntimeFor(user)
   const models = rt.getModels()
+  const credentialed = new Set((await rt.listCredentials()).map(c => c.providerId))
+  const usable = credentialed.size ? models.filter(m => credentialed.has(m.provider)) : models
   const grouped = {}
   const imageModels = []
-  for (const m of models) {
+  for (const m of usable) {
     const provider = m.provider || 'unknown'
     if (!grouped[provider]) grouped[provider] = []
     grouped[provider].push(m.id)

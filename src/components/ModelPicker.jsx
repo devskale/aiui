@@ -9,6 +9,7 @@ import { MODEL_RENDER_CAP, withFavsFirst } from '../lib/models'
 export function ModelPicker({ activeModel, onSelect, onClose }) {
   const { visible: models, loading, favModels } = useModels()
   const [search, setSearch] = useState('')
+  const [error, setError] = useState(null)
   const inputRef = useRef(null)
 
   useEffect(() => { inputRef.current?.focus() }, [])
@@ -24,10 +25,16 @@ export function ModelPicker({ activeModel, onSelect, onClose }) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model }),
-    }).then(() => {
+    }).then(async (r) => {
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}))
+        setError(j.error || `HTTP ${r.status}`)
+        return
+      }
+      setError(null)
       onSelect(model)
       onClose()
-    })
+    }).catch(() => setError('network error'))
   }
 
   return (
@@ -42,6 +49,7 @@ export function ModelPicker({ activeModel, onSelect, onClose }) {
           />
         </div>
         <div className="mp-list">
+          {error && <div className="mp-error">{error}</div>}
           {loading && <div style={{ padding: 16, color: '#666', textAlign: 'center' }}>Loading models…</div>}
           {!loading && filtered.length === 0 && <div style={{ padding: 16, color: '#555', textAlign: 'center' }}>No models found</div>}
           {capped.map(m => (

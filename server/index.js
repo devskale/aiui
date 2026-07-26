@@ -177,6 +177,7 @@ app.post('/api/model', async (req, res) => {
   if (!model) return res.status(400).json({ error: 'no model' })
   try {
     await setModel(req.user, model)
+    getBus(req.user).push('session_status', getSessionInfo(req.user))
     res.json({ ok: true })
   } catch (err) {
     res.status(500).json({ error: err.message })

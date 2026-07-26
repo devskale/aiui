@@ -840,3 +840,5 @@ pre code { background: none; padding: 0; font-size: 13px; }
 .sk-link:hover { color: var(--text); }
 .sb-cmd-browse { margin-left: auto; font-size: 12px; color: var(--text-4); cursor: pointer; padding: 0 4px; }
 .sb-cmd-browse:hover { color: var(--text); }
+
+.mp-error { padding: 8px 14px; font-size: 12px; color: var(--danger, #e06c6c); background: rgba(224,108,108,0.08); border-bottom: 1px solid var(--border-subtle); }
