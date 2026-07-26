@@ -221,6 +221,7 @@ export async function prompt(user, text, attachments = []) {
 
 export async function abort(user) {
   const s = await getOrCreateSession(user)
+  s.clearQueue() // drop queued steers/followUps so Stop fully halts (emits queue_update)
   return s.abort()
 }
 
