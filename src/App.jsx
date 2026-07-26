@@ -271,6 +271,7 @@ export default function App() {
           activeModel={model}
           onSelect={setModel}
           onClose={() => setShowModelPicker(false)}
+          onOpenSettings={() => setShowSettings(true)}
         />
       )}
       {showFork && (
