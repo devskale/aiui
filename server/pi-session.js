@@ -246,14 +246,19 @@ export async function setModel(user, modelId) {
 }
 
 // Model catalog — per-User under hybrid keys (ADR-0002): a BYOK User sees only
-// their own models; a shared User sees the global catalog. Filtered to
-// providers with configured credentials, so every listed model is actually
-// selectable (no "No API key" silent failures in the picker).
+// their own models; a shared User sees the global catalog. Filtered to providers
+// that actually resolve auth (getAuth — covers OAuth, API keys, env vars, AND
+// local/no-auth providers like amd-local/localhost/uart that listCredentials
+// misses), so every listed model is selectable (no silent "No API key" failures).
 export async function getAvailableModels(user) {
   const rt = await modelRuntimeFor(user)
   const models = rt.getModels()
-  const credentialed = new Set((await rt.listCredentials()).map(c => c.providerId))
-  const usable = credentialed.size ? models.filter(m => credentialed.has(m.provider)) : models
+  const providers = [...new Set(models.map(m => m.provider))]
+  const authed = new Set()
+  await Promise.all(providers.map(async p => {
+    try { if (await rt.getAuth(p)) authed.add(p) } catch {}
+  }))
+  const usable = authed.size ? models.filter(m => authed.has(m.provider)) : models
   const grouped = {}
   const imageModels = []
   for (const m of usable) {
