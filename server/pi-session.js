@@ -1,4 +1,10 @@
-import { createAgentSession, ModelRuntime, SessionManager, DefaultResourceLoader, SettingsManager } from '@earendil-works/pi-coding-agent'
+import {
+  createAgentSessionRuntime,
+  createAgentSessionServices,
+  createAgentSessionFromServices,
+  ModelRuntime,
+  SessionManager,
+} from '@earendil-works/pi-coding-agent'
 import path from 'node:path'
 import fs from 'node:fs'
 import crypto from 'node:crypto'
@@ -53,8 +59,14 @@ const DEFAULT_USER_SETTINGS = (() => {
 // ── Per-user context ──
 // Each user gets their own scoped workspace: workspace/<user>/ is the agent's
 // cwd, workspace/<user>/sessions/ holds their sessions, and the sandbox is
-// confined to that dir. One live session per user.
-const contexts = new Map() // user → { cwd, sessionDir, customTools, session, startedAt }
+// confined to that dir. One live AgentSessionRuntime per user.
+//
+// Session lifecycle (new/switch/fork/import) is owned by the SDK's
+// AgentSessionRuntime; aiui owns only what's truly aiui's: auth → which user?,
+// cwd/sandbox, BYOK runtime, and entitlement. The runtime factory below injects
+// those per-user inputs; runtime.setRebindSession re-wires the SSE bus whenever
+// the underlying session is replaced.
+const contexts = new Map() // user → { cwd, sessionDir, agentDir, customTools, runtime, startedAt }
 
 // Usernames are arbitrary strings (typically emails). The Map key is the raw
 // username; the workspace DIR is derived below (emails aren't safe dir names).
@@ -89,7 +101,7 @@ function ctxFor(user) {
     if (!fs.existsSync(settingsPath)) {
       fs.writeFileSync(settingsPath, DEFAULT_USER_SETTINGS)
     }
-    ctx = { cwd, sessionDir, agentDir, customTools: Sandbox.createTools(cwd), session: null, startedAt: null }
+    ctx = { cwd, sessionDir, agentDir, customTools: Sandbox.createTools(cwd), runtime: null, startedAt: null }
     contexts.set(u, ctx)
   }
   return ctx
@@ -117,35 +129,10 @@ async function modelRuntimeFor(user) {
   return rt
 }
 
-// Build the full createAgentSession options for a User: per-user agentDir
-// (ADR-0001), hybrid ModelRuntime (ADR-0002), and the slim system message via
-// a custom resource loader (ADR-0003).
-async function buildSessionOptions(user, sessionManager) {
-  const ctx = ctxFor(user)
-  const modelRuntime = await modelRuntimeFor(user)
-  const settingsManager = SettingsManager.create(ctx.cwd, ctx.agentDir)
-  const resourceLoader = new DefaultResourceLoader({
-    cwd: ctx.cwd,
-    agentDir: ctx.agentDir,
-    settingsManager,
-    systemPrompt: SLIM_SYSTEM_PROMPT,
-  })
-  await resourceLoader.reload()
-  return {
-    cwd: ctx.cwd,
-    agentDir: ctx.agentDir,
-    modelRuntime,
-    resourceLoader,
-    settingsManager,
-    customTools: ctx.customTools,
-    sessionManager,
-  }
-}
-
 function dispose(user) {
   const ctx = contexts.get(normUser(user))
   if (!ctx) return
-  if (ctx.session) { try { ctx.session.dispose?.() } catch {} ctx.session = null }
+  if (ctx.runtime) { try { ctx.runtime.dispose?.() } catch {} ctx.runtime = null }
   ctx.startedAt = null
   // The session→bus subscription is owned by getBus(user).bind, which swaps it
   // idempotently on the next create/switch. No unbind needed here.
@@ -156,33 +143,61 @@ export function workspaceCwd(user) {
   return ctxFor(user).cwd
 }
 
-// Always start FRESH: a new pi session (not continueRecent). Stored sessions
-// remain listable/switchable via the sidebar.
+// Lazily create a user's AgentSessionRuntime (once per login) and wire the SSE
+// bus to rebind on every session replacement (new/switch/fork/import).
 export async function getOrCreateSession(user) {
-  const ctx = ctxFor(user)
-  if (ctx.session) return ctx.session
-  const { session: s } = await createAgentSession(
-    await buildSessionOptions(user, SessionManager.create(ctx.cwd, ctx.sessionDir)),
-  )
-  ctx.session = s
+  const u = normUser(user)
+  const ctx = ctxFor(u)
+  if (ctx.runtime) return ctx.runtime.session
+
+  // The runtime factory closes over the USER: each time the runtime replaces
+  // the session it rebuilds cwd-bound services with this user's ModelRuntime,
+  // slim system message (ADR-0003), and sandbox tools.
+  const createRuntime = async ({ cwd, agentDir, sessionManager }) => {
+    const services = await createAgentSessionServices({
+      cwd,
+      agentDir,
+      modelRuntime: await modelRuntimeFor(u),
+      resourceLoaderOptions: { systemPrompt: SLIM_SYSTEM_PROMPT },
+    })
+    const result = await createAgentSessionFromServices({
+      services,
+      sessionManager,
+      customTools: ctx.customTools,
+    })
+    return { ...result, services, diagnostics: services.diagnostics ?? [] }
+  }
+
+  const runtime = await createAgentSessionRuntime(createRuntime, {
+    cwd: ctx.cwd,
+    agentDir: ctx.agentDir,
+    sessionManager: SessionManager.create(ctx.cwd, ctx.sessionDir),
+  })
+
+  // SDK contract: re-subscribe after a session replacement. We re-point the
+  // SSE bus and re-announce status. Fires on newSession/switchSession/fork.
+  runtime.setRebindSession(async (session) => {
+    getBus(u).bind(session)
+    ctx.startedAt = Date.now()
+    getBus(u).push('session_status', getSessionInfo(u))
+  })
+  // Initial bind: createAgentSessionRuntime does not call rebind for the first
+  // session, so wire the bus to the initial session ourselves.
+  getBus(u).bind(runtime.session)
+
+  ctx.runtime = runtime
   ctx.startedAt = Date.now()
-  getBus(user).bind(s)
-  getBus(user).push('session_status', getSessionInfo(user))
-  return ctx.session
+  getBus(u).push('session_status', getSessionInfo(u))
+  return ctx.runtime.session
 }
 
-// Start a brand-new session (for "New Chat")
+// Start a brand-new session (for "New Chat"). SDK-owned; bus rebinds via
+// setRebindSession.
 export async function newSession(user) {
-  dispose(user)
   const ctx = ctxFor(user)
-  const { session: s } = await createAgentSession(
-    await buildSessionOptions(user, SessionManager.create(ctx.cwd, ctx.sessionDir)),
-  )
-  ctx.session = s
-  ctx.startedAt = Date.now()
-  getBus(user).bind(s)
-  getBus(user).push('session_status', getSessionInfo(user))
-  return ctx.session
+  await getOrCreateSession(user)
+  await ctx.runtime.newSession()
+  return ctx.runtime.session
 }
 
 /** Drop the user's in-memory session (used on logout → next login is fresh). */
@@ -250,9 +265,9 @@ function shortenForDisplay(p) {
 
 export function getSessionInfo(user) {
   const ctx = ctxFor(user)
-  const session = ctx.session
+  const session = ctx.runtime?.session
   return {
-    alive: session !== null,
+    alive: session !== null && session !== undefined,
     streaming: session?.isStreaming ?? false,
     model: session?.model ? `${session.model.provider}@${session.model.id}` : null,
     thinkingLevel: session?.thinkingLevel ?? null,
@@ -266,19 +281,19 @@ export function getSessionInfo(user) {
 }
 
 export function getSessionStats(user) {
-  const session = ctxFor(user).session
+  const session = ctxFor(user).runtime?.session
   if (!session) return null
   try { return session.getSessionStats() } catch { return null }
 }
 
 export function setThinkingLevel(user, level) {
-  const session = ctxFor(user).session
+  const session = ctxFor(user).runtime?.session
   if (!session) throw new Error('no session')
   session.setThinkingLevel(level)
 }
 
 export function getThinkingInfo(user) {
-  const session = ctxFor(user).session
+  const session = ctxFor(user).runtime?.session
   if (!session) return null
   return {
     current: session.thinkingLevel,
@@ -293,12 +308,12 @@ export async function compactSession(user) {
 }
 
 export function abortCompaction(user) {
-  const session = ctxFor(user).session
+  const session = ctxFor(user).runtime?.session
   if (session) session.abortCompaction()
 }
 
 export function setAutoCompaction(user, enabled) {
-  const session = ctxFor(user).session
+  const session = ctxFor(user).runtime?.session
   if (session) session.setAutoCompactionEnabled(enabled)
 }
 
@@ -325,22 +340,19 @@ export async function listSessions(user) {
   }
 }
 
+// Resume a stored session. SDK-owned (runtime.switchSession); bus rebinds via
+// setRebindSession. cwdOverride pins the session to this user's workspace
+// regardless of what's recorded in the session file header.
 export async function switchToSession(user, sessionPath) {
-  dispose(user)
   const ctx = ctxFor(user)
-  const { session: s } = await createAgentSession(
-    await buildSessionOptions(user, SessionManager.open(sessionPath, ctx.sessionDir, ctx.cwd)),
-  )
-  ctx.session = s
-  ctx.startedAt = Date.now()
-  getBus(user).bind(s)
-  getBus(user).push('session_status', getSessionInfo(user))
-  return ctx.session
+  await getOrCreateSession(user)
+  await ctx.runtime.switchSession(sessionPath, { cwdOverride: ctx.cwd })
+  return ctx.runtime.session
 }
 
 // ── Session history (for replay) ──
 export function getSessionHistory(user) {
-  const session = ctxFor(user).session
+  const session = ctxFor(user).runtime?.session
   if (!session?.messages) return []
   const entries = []
   for (const msg of session.messages) {
@@ -358,8 +370,8 @@ export function getSessionHistory(user) {
 }
 
 export async function getCommands(user) {
-  const s = await getOrCreateSession(user)
-  const loader = s.resourceLoader
+  await getOrCreateSession(user)
+  const loader = ctxFor(user).runtime.services.resourceLoader
   if (!loader) return { skills: [], prompts: [], extensions: [] }
 
   const skillsData = loader.getSkills()
