@@ -113,6 +113,8 @@ pre code { background: none; padding: 0; font-size: 13px; }
 }
 .sb-session.active .sb-session-title { color: var(--text); }
 .sb-session-meta { font-size: 11px; color: var(--text-4); }
+.sb-session--child .sb-session-title { font-size: 12.5px; }
+.sb-session-branch { color: var(--text-4); font-size: 11px; margin-right: 2px; }
 
 /* ── Collapsible command groups ── */
 .sb-cmd-group { margin-bottom: 1px; }

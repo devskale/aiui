@@ -1,7 +1,7 @@
 // ════════════════════════════════════════════════════════════════════
 // Sidebar — new chat, sessions, skills/prompts/extensions
 // ════════════════════════════════════════════════════════════════════
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { apiUrl } from '../lib/api'
 import { Settings } from 'lucide-react'
 
@@ -14,6 +14,27 @@ function timeAgo(dateStr) {
   if (hours < 24) return `${hours}h`
   const days = Math.floor(hours / 24)
   return `${days}d`
+}
+
+// Build a parent→children tree from the flat session list. Sessions whose
+// parent isn't in the list (deleted parent, or a root) become roots. Forks
+// (G2) nest under their parent so the branch structure is visible.
+function buildSessionTree(sessions) {
+  const byPath = new Map(sessions.map(s => [s.path, s]))
+  const childrenOf = new Map()
+  const roots = []
+  for (const s of sessions) {
+    const parent = s.parent && byPath.has(s.parent) ? s.parent : null
+    if (!parent) {
+      roots.push(s)
+    } else {
+      if (!childrenOf.has(parent)) childrenOf.set(parent, [])
+      childrenOf.get(parent).push(s)
+    }
+  }
+  // Attach children arrays (sorted newest-first) onto each node.
+  const attach = (s) => ({ ...s, children: (childrenOf.get(s.path) || []).sort((a, b) => new Date(b.modified) - new Date(a.modified)).map(attach) })
+  return roots.map(attach)
 }
 
 export function Sidebar({ open, onToggle, connected, sessionAlive, sessionId, onNewChat, onSwitchSession, onShowReleaseNotes, onShowSettings, onShowFork, refreshTrigger }) {
@@ -37,7 +58,8 @@ export function Sidebar({ open, onToggle, connected, sessionAlive, sessionId, on
 
   const filtered = search
     ? sessions.filter(s => (s.firstMessage || s.id || '').toLowerCase().includes(search.toLowerCase()))
-    : sessions
+    : null
+  const tree = useMemo(() => search ? null : buildSessionTree(sessions), [sessions, search])
 
   const groups = [
     { key: 'skills', label: 'Skills', icon: '⚡' },
@@ -81,10 +103,10 @@ export function Sidebar({ open, onToggle, connected, sessionAlive, sessionId, on
         <div className="sb-session-list">
           {!connected ? (
             <div className="connecting"><span className="thinking-dot" /><span>Connecting…</span></div>
-          ) : filtered.length === 0 ? (
-            <div className="connecting"><span className="thinking-dot" /><span>{search ? 'No matches' : 'No sessions'}</span></div>
-          ) : (
-            filtered.map(s => (
+          ) : search ? (
+            filtered.length === 0 ? (
+              <div className="connecting"><span className="thinking-dot" /><span>No matches</span></div>
+            ) : filtered.map(s => (
               <button
                 key={s.id}
                 className={`sb-session ${s.id === sessionId ? 'active' : ''}`}
@@ -95,7 +117,11 @@ export function Sidebar({ open, onToggle, connected, sessionAlive, sessionId, on
                 <span className="sb-session-meta">{timeAgo(s.modified)} · {s.messageCount} msgs</span>
               </button>
             ))
-          )}
+          ) : tree.length === 0 ? (
+            <div className="connecting"><span className="thinking-dot" /><span>No sessions</span></div>
+          ) : tree.map(s => (
+            <SessionNode key={s.id} node={s} sessionId={sessionId} onSwitchSession={onSwitchSession} depth={0} />
+          ))}
         </div>
       </div>
 
@@ -150,5 +176,28 @@ function CollapsibleGroup({ label, items }) {
         </div>
       )}
     </div>
+  )
+}
+
+// One node in the session tree. Forks render indented under their parent
+// with a branch glyph so the conversation tree (G2) is visible at a glance.
+function SessionNode({ node, sessionId, onSwitchSession, depth }) {
+  const isChild = depth > 0
+  return (
+    <>
+      <button
+        className={`sb-session ${node.id === sessionId ? 'active' : ''} ${isChild ? 'sb-session--child' : ''}`}
+        style={isChild ? { paddingLeft: `${12 + depth * 14}px` } : undefined}
+        onClick={() => onSwitchSession?.(node.path)}
+        title={node.firstMessage}
+      >
+        {isChild && <span className="sb-session-branch">↳</span>}
+        <span className="sb-session-title">{node.firstMessage || 'New session'}</span>
+        <span className="sb-session-meta">{timeAgo(node.modified)} · {node.messageCount} msgs</span>
+      </button>
+      {node.children?.map(c => (
+        <SessionNode key={c.id} node={c} sessionId={sessionId} onSwitchSession={onSwitchSession} depth={depth + 1} />
+      ))}
+    </>
   )
 }

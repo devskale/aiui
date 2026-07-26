@@ -330,6 +330,7 @@ export async function listSessions(user) {
         path: s.path,
         id: s.id,
         name: s.name || '',
+        parent: s.parentSessionPath || null,
         created: s.created,
         modified: s.modified,
         messageCount: s.messageCount,
