@@ -62,7 +62,7 @@ export default function App() {
   const [showFork, setShowFork] = useState(false)
   const { route, navigate } = useHashRoute()
   const [model, setModel] = useState('')
-  const { visible, imageModels, favModels } = useModels(authed)
+  const { visible, imageModels, favModels } = useModels(authed, me?.user)
   const endRef = useRef(null)
   const scrollContainerRef = useRef(null)
   const stickToBottomRef = useRef(true)  // stick to bottom unless the user scrolled up
