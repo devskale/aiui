@@ -181,6 +181,7 @@ in the Node process outside the sandbox.
 | GET  | `/api/files` | req | workspace file list (@-mention) |
 | GET  | `/api/stats` | req | session stats |
 | GET  | `/api/history` | req | replay entries |
+| GET  | `/api/bash-output` | req | full output of a truncated bash call (temp `pi-bash-*.log`) |
 | POST | `/api/session/new` | req | new chat |
 | GET  | `/api/sessions` | req | list stored sessions |
 | POST | `/api/session/switch` | req | switch to a stored session |

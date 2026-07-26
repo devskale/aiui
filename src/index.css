@@ -335,6 +335,17 @@ pre code { background: none; padding: 0; font-size: 13px; }
 }
 .tc-output { color: var(--text-4); }
 
+/* Full-output affordance for truncated bash calls (W4) */
+.tc-full-output { margin-top: 6px; }
+.tc-full-toggle {
+  font-size: 11px; color: var(--text-4); background: none; border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm); padding: 2px 8px; cursor: pointer; transition: all .1s;
+}
+.tc-full-toggle:hover { color: var(--text-2); background: var(--bg-hover); }
+.tc-full-loading, .tc-full-error { font-size: 11px; color: var(--text-4); padding: 6px 2px 0; }
+.tc-full-error { color: var(--danger, #e06c6c); }
+.tc-output-full { margin-top: 6px; max-height: 420px; }
+
 /* ── Inline diff viewer ── */
 .diff-inline {
   font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 1.5;

@@ -10,6 +10,7 @@ import * as Mime from './mime.js'
 import { authEnabled, verifyCredentials, issueSession, revokeSession, userLimit, setSessionCookie, clearSessionCookie, clearStaleSessionCookies, readSessionCookies, currentSession, requireAuth, noteLoginAttempt } from './auth.js'
 import { consumeQuota, peekQuota } from './quota.js'
 import { getOrCreateSession, disposeSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, listSessions, switchToSession, getAvailableModels, getCommands, getSessionInfo, getSessionStats, getSessionHistory, newSession, workspaceCwd, getForkTargets, forkSession } from './pi-session.js'
+import { resolveBashOutputPath, readBashOutput } from './bash-output.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.join(__dirname, '..')
@@ -222,6 +223,17 @@ app.get('/api/stats', (req, res) => {
 })
 app.get('/api/history', (req, res) => {
   res.json({ entries: getSessionHistory(req.user) })
+})
+
+// ── Full bash output (truncated tool calls spill to a temp file) ──
+app.get('/api/bash-output', async (req, res) => {
+  const resolved = resolveBashOutputPath(req.query.path)
+  if (!resolved) return res.status(400).json({ error: 'invalid path' })
+  try {
+    res.json(await readBashOutput(resolved))
+  } catch {
+    res.status(404).json({ error: 'not found' })
+  }
 })
 
 // ── New session ──

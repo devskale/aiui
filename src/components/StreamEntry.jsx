@@ -5,6 +5,7 @@
 import { useState, useEffect } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { apiUrl } from '../lib/api'
 
 // ── Tool helpers (ported from pi-gui timeline-item.tsx patterns) ──
 function parseArgs(args) {
@@ -25,6 +26,13 @@ function extractToolPath(args) {
 
 function isWriteTool(name) { return /write|edit|patch|apply/i.test(name) }
 function isBashTool(name) { return /bash|shell|exec|terminal|command|run/i.test(name) }
+// When the SDK truncates bash output it spills the full output to a temp file
+// and embeds the path in the truncated text ("Full output: <path>"). Extract
+// it so we can offer a "show full output" affordance (W4).
+function extractFullOutputPath(output) {
+  const m = output && output.match(/Full output: (\S+\.log)/)
+  return m ? m[1] : null
+}
 function isReadTool(name) { return /read|grep|glob|find|ls|view|search|cat/i.test(name) }
 
 function countDiffStats(text) {
@@ -101,6 +109,40 @@ function InlineDiff({ diff }) {
   )
 }
 
+// ── FullBashOutput — fetch + expand the spilled temp file for a truncated
+// bash call (W4). The path comes from the SDK's "Full output: <path>" notice.
+function FullBashOutput({ path }) {
+  const [state, setState] = useState(null) // null=closed | {loading} | {content} | {error}
+  const toggle = async () => {
+    if (state?.content || state?.error) { setState(null); return } // collapse
+    setState({ loading: true })
+    try {
+      const r = await fetch(apiUrl(`/api/bash-output?path=${encodeURIComponent(path)}`))
+      const j = await r.json()
+      if (!r.ok || j.error) setState({ error: j.error || `HTTP ${r.status}` })
+      else setState(j)
+    } catch {
+      setState({ error: 'fetch failed' })
+    }
+  }
+  return (
+    <div className="tc-full-output">
+      <button className="tc-full-toggle" onClick={toggle}>
+        {state?.content || state?.error ? '▾' : '▸'} show full output
+      </button>
+      {state?.loading && <div className="tc-full-loading">Loading…</div>}
+      {state?.error && <div className="tc-full-error">{state.error}</div>}
+      {state?.content && (
+        <pre className="tc-output tc-output-full">
+          {state.tooLarge
+            ? `[Output is ${Math.round(state.size / 1024)}KB — too large to display inline]`
+            : state.content}
+        </pre>
+      )}
+    </div>
+  )
+}
+
 // ── ToolGroup — subtle tool calls with per-tool glyph + expandable output ──
 function ToolGroup({ toolCalls }) {
   return (
@@ -120,6 +162,7 @@ function ToolCallCard({ tc }) {
   const isRunning = tc.status === 'running'
   const filePath = extractToolPath(args)
   const output = tc.output || ''
+  const fullOutputPath = isBash ? extractFullOutputPath(output) : null
   const hasContent = output || (args && Object.keys(args).length > 0)
   const diffStats = isWrite && output ? countDiffStats(output) : null
   const label = isBash && args.command
@@ -165,6 +208,7 @@ function ToolCallCard({ tc }) {
           {output && (isWrite && extractDiffFromOutput(output)
             ? <InlineDiff diff={extractDiffFromOutput(output)} />
             : <pre className="tc-output">{output}</pre>)}
+          {fullOutputPath && <FullBashOutput path={fullOutputPath} />}
         </div>
       )}
     </div>
