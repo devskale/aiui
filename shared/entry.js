@@ -36,6 +36,14 @@ function extractThinking(content) {
   return content.filter(c => c.type === 'thinking').map(c => c.thinking).join('\n')
 }
 
+// Image content blocks (sent to vision models) → renderable {url} thumbnails.
+function extractImages(content) {
+  if (!Array.isArray(content)) return []
+  return content
+    .filter(c => c.type === 'image' && c.data)
+    .map(c => ({ url: `data:${c.mimeType || 'image/png'};base64,${c.data}`, mimeType: c.mimeType || 'image/png' }))
+}
+
 // ── Constructors ──
 
 export function empty(toolCalls = []) {
@@ -43,7 +51,10 @@ export function empty(toolCalls = []) {
 }
 
 export function fromUser(text, attachments) {
-  return { role: 'user', text, attachments }
+  const images = (Array.isArray(attachments) ? attachments : [])
+    .filter(a => a.isImage && a.dataUrl)
+    .map(a => ({ url: a.dataUrl }))
+  return { role: 'user', text, attachments, images }
 }
 
 export function error(message) {
@@ -58,7 +69,8 @@ export function fromMessage(msg) {
   if (!msg) return null
   if (msg.role === 'user') {
     const text = textOf(msg.content)
-    return text ? { role: 'user', text } : null
+    const images = extractImages(msg.content)
+    return (text || images.length) ? { role: 'user', text, images } : null
   }
   if (msg.role === 'assistant') {
     const toolCalls = (msg.content || [])

@@ -24,10 +24,10 @@ const execAsync = promisify(exec)
 // ── Workspace file listing (for @-mention autocomplete) ──
 // Scoped to the requesting user's workspace dir (the only place the agent can
 // read). Git-aware (git ls-files); falls back to a bounded walk if no git.
-const IGNORED_DIRS = new Set(['node_modules', '.git', 'dist', 'uploads', 'session', 'test-results', 'coverage'])
+const IGNORED_DIRS = new Set(['node_modules', '.git', 'dist', 'uploads', 'sessions', 'test-results', 'coverage'])
 
 async function gitListFiles(dir) {
-  const { stdout } = await execAsync('git ls-files', { cwd: dir, maxBuffer: 32 * 1024 * 1024 })
+  const { stdout } = await execAsync('git ls-files --cached --others --exclude-standard', { cwd: dir, maxBuffer: 32 * 1024 * 1024 })
   return stdout.split('\n').filter(Boolean)
 }
 
@@ -45,6 +45,13 @@ function walkFiles(dir, base, out, depth) {
   }
 }
 
+// Internal dirs / dotfiles never belong in the mention list (sessions/, uploads/,
+// .git/ etc.) — applied to both the git and walk fallbacks for parity.
+function keepFile(rel) {
+  if (!rel || rel.startsWith('.')) return false
+  return !rel.split('/').some(seg => IGNORED_DIRS.has(seg))
+}
+
 async function listWorkspaceFiles(dir, query) {
   let files
   try {
@@ -53,6 +60,7 @@ async function listWorkspaceFiles(dir, query) {
     files = []
     walkFiles(dir, '', files, 0)
   }
+  files = files.filter(keepFile)
   if (query) {
     const q = query.toLowerCase()
     files = files.filter(f => f.toLowerCase().includes(q))

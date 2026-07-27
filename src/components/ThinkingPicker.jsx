@@ -2,7 +2,7 @@
 // ThinkingPicker — dropdown for selecting thinking/reasoning level
 // ════════════════════════════════════════════════════════════════════
 import { useState, useEffect, useRef } from 'react'
-import { Brain } from 'lucide-react'
+import { Brain, Check } from 'lucide-react'
 import { apiUrl } from '../lib/api'
 
 export function ThinkingPicker({ thinkingLevel, sessionAlive }) {
@@ -61,7 +61,7 @@ export function ThinkingPicker({ thinkingLevel, sessionAlive }) {
               className={`tp-option ${level === thinkingLevel ? 'active' : ''}`}
               onClick={() => handleSelect(level)}
             >
-              <span className="tp-check">{level === thinkingLevel ? '✓' : ''}</span>
+              <span className="tp-check">{level === thinkingLevel ? <Check size={12} /> : ''}</span>
               <span>{level}</span>
             </button>
           ))}

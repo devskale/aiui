@@ -11,6 +11,7 @@ import crypto from 'node:crypto'
 import os from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { getBus } from './event-bus.js'
+import { resolveWorkspacePath } from './workspace-files.js'
 import * as Entry from '../shared/entry.js'
 import * as Sandbox from './sandbox.js'
 
@@ -207,6 +208,7 @@ export function disposeSession(user) {
 
 export async function prompt(user, text, attachments = []) {
   const s = await getOrCreateSession(user)
+  const cwd = workspaceCwd(user)
   const images = attachments
     .filter(a => a.isImage && a.dataUrl)
     .map(a => {
@@ -217,6 +219,11 @@ export async function prompt(user, text, attachments = []) {
   // point the agent at them — its read tool can reach them under the cwd.
   const files = attachments.filter(a => !a.isImage && a.relPath).map(a => a.relPath)
   let promptText = (text || '').trim()
+  // @-mentioned images → attach as vision content. Without this the agent only
+  // gets a path; its read tool won't inline a large image ("couldn't be
+  // displayed inline due to size limits"), so it falls back to pixel-hacking
+  // the picture with PIL instead of actually seeing it.
+  promptText = attachMentionedImages(promptText, cwd, images)
   if (files.length) {
     const list = files.map(p => `- ${p}`).join('\n')
     promptText += `\n\n[Attached file(s) — read with your read tool to see their contents:]\n${list}`
@@ -225,6 +232,31 @@ export async function prompt(user, text, attachments = []) {
   const options = { images }
   if (s.isStreaming) options.streamingBehavior = 'steer' // prompting mid-turn
   return s.prompt(promptText, options)
+}
+
+// Scan prompt text for @<path> tokens that point at workspace image files,
+// read them, and push them onto `images` as vision content. Strips the token
+// so the model sees the picture directly instead of a bare path.
+const IMG_MENTION_RE = /@([\w./-]+\.(?:png|jpe?g|gif|webp|bmp|svg))\b/gi
+function attachMentionedImages(text, cwd, images) {
+  if (!text) return text
+  const found = []
+  const stripped = text.replace(IMG_MENTION_RE, (token, rel) => {
+    let abs
+    try { abs = resolveWorkspacePath(cwd, rel) } catch { return token }
+    if (!fs.existsSync(abs)) return token
+    found.push({ rel, abs })
+    return ''
+  })
+  for (const { rel, abs } of found) {
+    try {
+      const buf = fs.readFileSync(abs)
+      const ext = path.extname(rel).slice(1).toLowerCase()
+      const mime = ext === 'jpg' ? 'image/jpeg' : ext === 'svg' ? 'image/svg+xml' : `image/${ext}`
+      images.push({ type: 'image', mimeType: mime, data: buf.toString('base64') })
+    } catch {}
+  }
+  return stripped.replace(/\s{2,}/g, ' ').trim()
 }
 
 export async function abort(user) {

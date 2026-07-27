@@ -3,6 +3,7 @@
 // @-mention autocomplete hooks. Owns text + the textarea ref + send/steer.
 // ════════════════════════════════════════════════════════════════════
 import { useState, useRef, useEffect } from 'react'
+import { File as FileIcon, LoaderCircle, Square, SendHorizontal } from 'lucide-react'
 import { useSlashMenu } from '../hooks/useSlashMenu'
 import { useMention } from '../hooks/useMention'
 import { rewriteSkillCommand } from '../lib/compose'
@@ -126,7 +127,7 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
               onMouseDown={(e) => { e.preventDefault(); mention.insert(file) }}
               title={file}
             >
-              <span className="mention-icon">📄</span>
+              <span className="mention-icon"><FileIcon size={12} /></span>
               <span className="mention-path">{shortenPath(file)}</span>
             </button>
           ))}
@@ -170,10 +171,15 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
             e.target.value = ''
           }} />
         {streaming ? (
-          <button className="ib-btn stop" onClick={onStop} title="Stop">⏹</button>
+          <button className="ib-btn stop" onClick={onStop} title="Stop">
+            <span className="ib-stop-wrap">
+              <LoaderCircle size={18} className="spin" />
+              <Square size={7} className="ib-stop-core" />
+            </span>
+          </button>
         ) : (
           <button className="ib-btn send" onClick={handleSend} title="Send" disabled={!text.trim() && !attachments.length}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3.714 3.048a.498.498 0 0 0-.683.627l2.843 7.627a2 2 0 0 1 0 1.396l-2.842 7.627a.498.498 0 0 0 .682.627l18-8.5a.5.5 0 0 0 0-.904z"/><path d="M6 12h16"/></svg>
+            <SendHorizontal size={18} />
           </button>
         )}
       </div>

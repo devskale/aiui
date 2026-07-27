@@ -6,7 +6,6 @@ import { useModels } from './hooks/useModels'
 import { apiUrl } from './lib/api'
 import { Sidebar } from './components/Sidebar'
 import { ModelPicker } from './components/ModelPicker'
-import { CommandPanel } from './components/CommandPanel'
 import { InputBar } from './components/InputBar'
 import { StatsFooter } from './components/StatsFooter'
 import { ThinkingPicker } from './components/ThinkingPicker'
@@ -18,6 +17,7 @@ import { ReleaseNotes } from './components/ReleaseNotes'
 import { SettingsPanel } from './components/SettingsPanel'
 import { LoginModal } from './components/LoginModal'
 import { UserEntry, AssistantEntry, ErrorEntry } from './components/StreamEntry'
+import { findImageMentions } from './lib/compose'
 import { Folder, Clock } from 'lucide-react'
 
 // Format an elapsed duration (ms) as a single largest-unit token.
@@ -114,8 +114,24 @@ export default function App() {
   }, [addFiles])
 
   const handleSend = async (text) => {
-    const payload = buildPayload()
-    await sendPrompt(text, payload)
+    // Resolve @<image> mentions into attachments so they preview live in the
+    // chat AND are sent as vision content. (The server also attaches bare
+    // @tokens as a fallback; client-side resolution is what powers the preview.)
+    let cleanText = text
+    const resolved = []
+    for (const { token, relPath } of findImageMentions(text)) {
+      try {
+        const r = await fetch(apiUrl('/api/file/raw?path=' + encodeURIComponent(relPath)))
+        if (!r.ok) continue
+        const dataUrl = await r.blob().then(b => new Promise((res, rej) => {
+          const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(b)
+        }))
+        resolved.push({ isImage: true, dataUrl, path: relPath, relPath })
+        cleanText = cleanText.replace(token, '')
+      } catch { /* leave the @token — server-side fallback will attach it */ }
+    }
+    const payload = [...buildPayload(), ...resolved]
+    await sendPrompt(cleanText.replace(/\s{2,}/g, ' ').trim(), payload)
     clearAttachments()
   }
 
@@ -231,7 +247,7 @@ export default function App() {
           {hasContent ? (
             <div className="entries">
               {entries.map((entry, i) => {
-                if (entry.role === 'user') return <UserEntry key={i} text={entry.text} onCopy={copyEntry} />
+                if (entry.role === 'user') return <UserEntry key={i} text={entry.text} images={entry.images} onCopy={copyEntry} />
                 if (entry.role === 'error') return <ErrorEntry key={i} text={entry.text} onCopy={copyEntry} />
                 return <AssistantEntry key={i} entry={entry} isStreaming={false} onCopy={copyEntry} />
               })}

@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { apiUrl } from '../lib/api'
+import { File as FileIcon, Terminal, Pen, Sparkles, Copy, Download, ChevronDown, ChevronRight } from 'lucide-react'
 
 // ── Tool helpers (ported from pi-gui timeline-item.tsx patterns) ──
 function parseArgs(args) {
@@ -52,16 +53,12 @@ function prettyArgs(args) {
   return JSON.stringify(args, null, 2)
 }
 
-const GlyphFile = () => (<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>)
-const GlyphTerm = () => (<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>)
-const GlyphPen = () => (<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>)
-const GlyphSpark = () => (<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/></svg>)
 
 function ToolGlyph({ name }) {
-  if (isWriteTool(name)) return <GlyphPen />
-  if (isBashTool(name)) return <GlyphTerm />
-  if (isReadTool(name)) return <GlyphFile />
-  return <GlyphSpark />
+  if (isWriteTool(name)) return <Pen size={12} />
+  if (isBashTool(name)) return <Terminal size={12} />
+  if (isReadTool(name)) return <FileIcon size={12} />
+  return <Sparkles size={12} />
 }
 
 // ── Inline diff viewer (ported from pi-gui diff-inline.tsx) ──
@@ -128,7 +125,7 @@ function FullBashOutput({ path }) {
   return (
     <div className="tc-full-output">
       <button className="tc-full-toggle" onClick={toggle}>
-        {state?.content || state?.error ? '▾' : '▸'} show full output
+        {state?.content || state?.error ? <ChevronDown size={11} /> : <ChevronRight size={11} />} show full output
       </button>
       {state?.loading && <div className="tc-full-loading">Loading…</div>}
       {state?.error && <div className="tc-full-error">{state.error}</div>}
@@ -217,7 +214,7 @@ function ToolCallCard({ tc }) {
 
 // ── ThinkingBlock — simple muted one-liner, expandable ──
 function ThinkingBlock({ thinking, thinkingDone, thinkingText }) {
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(true) // show reasoning by default
   const text = thinkingText || ''
   const hasText = text.trim().length > 0
 
@@ -283,11 +280,18 @@ const mdComponents = {
 
 // ── Entry Components ──
 
-const COPY_ICON = <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+const COPY_ICON = <Copy size={13} />
 
-export function UserEntry({ text, onCopy }) {
+export function UserEntry({ text, images, onCopy }) {
   return (
     <div className="entry-user">
+      {images?.length > 0 && (
+        <div className="entry-user-images">
+          {images.map((img, i) => (
+            <img key={i} src={img.url} className="entry-user-img" alt="attachment" onClick={() => window.open(img.url, '_blank')} />
+          ))}
+        </div>
+      )}
       <div className="entry-user-bubble">{text}</div>
       {onCopy && (
         <button className="copy-entry" onClick={(e) => onCopy(e.currentTarget.parentElement)} title="Copy">
@@ -353,7 +357,7 @@ export function ErrorEntry({ text, onCopy }) {
 // ImageEntry — renders an inline image-generation result (/image command)
 // entry.status: 'generating' | 'done' | 'error'
 // ════════════════════════════════════════════════════════════════════
-const DOWNLOAD_ICON = <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+const DOWNLOAD_ICON = <Download size={14} />
 
 export function ImageEntry({ entry }) {
   const BASE = import.meta.env.BASE_URL.replace(/\/$/, '')

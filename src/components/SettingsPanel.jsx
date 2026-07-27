@@ -12,6 +12,7 @@
 import { useState, useEffect } from 'react'
 import { useModels } from '../hooks/useModels'
 import { useEscape } from '../hooks/useEscape'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import {
   MODEL_RENDER_CAP, groupModels, isModelAllowed,
   getAllowedModels, setAllowedModels,
@@ -171,7 +172,7 @@ export function SettingsPanel({ onClose }) {
                       <span className="sp-provider-count">{ids.length}</span>
                     </label>
                     <button className="sp-provider-expand" onClick={() => toggleExpand(provider)} title={isOpen ? 'Collapse' : 'Expand'}>
-                      {isOpen ? '▾' : '▸'}
+                      {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                     </button>
                   </div>
                   {isOpen && (

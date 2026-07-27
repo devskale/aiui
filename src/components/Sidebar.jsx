@@ -3,7 +3,7 @@
 // ════════════════════════════════════════════════════════════════════
 import { useState, useEffect, useMemo } from 'react'
 import { apiUrl } from '../lib/api'
-import { Settings } from 'lucide-react'
+import { Settings, SquarePen, GitFork, Folder, ChevronDown, ChevronRight, CornerDownRight, Search, PanelLeftClose } from 'lucide-react'
 
 function timeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime()
@@ -62,9 +62,9 @@ export function Sidebar({ open, onToggle, connected, sessionAlive, sessionId, on
   const tree = useMemo(() => search ? null : buildSessionTree(sessions), [sessions, search])
 
   const groups = [
-    { key: 'skills', label: 'Skills', icon: '⚡' },
-    { key: 'prompts', label: 'Prompts', icon: '📝' },
-    { key: 'extensions', label: 'Extensions', icon: '🔌' },
+    { key: 'skills', label: 'Skills' },
+    { key: 'prompts', label: 'Prompts' },
+    { key: 'extensions', label: 'Extensions' },
   ]
 
   return (
@@ -74,21 +74,21 @@ export function Sidebar({ open, onToggle, connected, sessionAlive, sessionId, on
           <div className="sb-logo">π</div>
           <span className="sb-title">ui</span>
         </div>
-        <button className="sb-icon-btn" onClick={onToggle}>◀</button>
+        <button className="sb-icon-btn" onClick={onToggle} title="Collapse sidebar"><PanelLeftClose size={16} /></button>
       </div>
 
       <nav className="sb-nav">
         <button className="sb-nav-item" onClick={onNewChat}>
-          <span>＋</span><span>New Chat</span>
+          <SquarePen size={15} /><span>New Chat</span>
         </button>
         {sessionAlive && (
           <button className="sb-nav-item" onClick={onShowFork} title="Branch from an earlier message">
-            <span>⑃</span><span>Fork</span>
+            <GitFork size={15} /><span>Fork</span>
           </button>
         )}
         {sessionAlive && (
           <button className="sb-nav-item" onClick={onShowFiles} title="Browse workspace files">
-            <span>📂</span><span>Files</span>
+            <Folder size={15} /><span>Files</span>
           </button>
         )}
       </nav>
@@ -160,10 +160,10 @@ function CollapsibleGroup({ label, items, onBrowse }) {
   return (
     <div className="sb-cmd-group">
       <button className="sb-cmd-toggle" onClick={() => setOpen(!open)}>
-        <span className="sb-cmd-arrow">{open ? '▾' : '▸'}</span>
+        <span className="sb-cmd-arrow">{open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
         <span className="sb-cmd-label">{label}</span>
         <span className="sb-cmd-count">{items.length}</span>
-        {onBrowse && <span className="sb-cmd-browse" onClick={(e) => { e.stopPropagation(); onBrowse() }} title="Browse the skills catalog">⊕</span>}
+        {onBrowse && <span className="sb-cmd-browse" onClick={(e) => { e.stopPropagation(); onBrowse() }} title="Browse the skills catalog"><Search size={12} /></span>}
       </button>
       {open && (
         <div className="sb-cmd-list">
@@ -197,7 +197,7 @@ function SessionNode({ node, sessionId, onSwitchSession, depth }) {
         onClick={() => onSwitchSession?.(node.path)}
         title={node.firstMessage}
       >
-        {isChild && <span className="sb-session-branch">↳</span>}
+        {isChild && <span className="sb-session-branch"><CornerDownRight size={11} /></span>}
         <span className="sb-session-title">{node.firstMessage || 'New session'}</span>
         <span className="sb-session-meta">{timeAgo(node.modified)} · {node.messageCount} msgs</span>
       </button>

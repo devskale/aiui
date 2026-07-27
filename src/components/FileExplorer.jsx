@@ -9,7 +9,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { apiUrl } from '../lib/api'
 import { useEscape } from '../hooks/useEscape'
-import { UploadCloud } from 'lucide-react'
+import { UploadCloud, Folder, File as FileIcon } from 'lucide-react'
 
 const IMG_RE = /\.(png|jpe?g|gif|webp|svg|bmp)$/i
 
@@ -113,7 +113,7 @@ export function FileExplorer({ onClose }) {
           ) : (
             <ul className="fe-list">
               {dir && (
-                <li><button className="fe-entry fe-entry--dir" onClick={() => setDir(dir.includes('/') ? dir.slice(0, dir.lastIndexOf('/')) : '')}>📁 ..</button></li>
+                <li><button className="fe-entry fe-entry--dir" onClick={() => setDir(dir.includes('/') ? dir.slice(0, dir.lastIndexOf('/')) : '')}><Folder size={14} /> ..</button></li>
               )}
               {entries.map(e => (
                 <li key={e.name}>
@@ -121,7 +121,7 @@ export function FileExplorer({ onClose }) {
                     className={`fe-entry ${e.dir ? 'fe-entry--dir' : 'fe-entry--file'}`}
                     onClick={() => e.dir ? setDir(dir ? `${dir}/${e.name}` : e.name) : openFile(e.name)}
                   >
-                    {e.dir ? '📁' : '📄'} {e.name}
+                    {e.dir ? <Folder size={14} /> : <FileIcon size={14} />} <span>{e.name}</span>
                   </button>
                 </li>
               ))}

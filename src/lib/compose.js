@@ -46,6 +46,16 @@ export function applyMention(text, atIndex, query, filePath) {
   return { text: before + inserted + after, cursor: before.length + inserted.length }
 }
 
+/** Find @<path> tokens that point at image files (for live preview + send). */
+const IMG_MENTION_RE = /@([\w./-]+\.(?:png|jpe?g|gif|webp|bmp|svg))\b/gi
+export function findImageMentions(text) {
+  const found = []
+  let m
+  IMG_MENTION_RE.lastIndex = 0
+  while ((m = IMG_MENTION_RE.exec(text || '')) !== null) found.push({ token: m[0], relPath: m[1] })
+  return found
+}
+
 /** Build slash-menu items (host actions + skill/prompt/extension fills) filtered by `query`. */
 export function buildSlashItems(query, commands) {
   const q = String(query || '').replace(/^\/+/, '').toLowerCase()
