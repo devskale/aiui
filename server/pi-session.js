@@ -14,6 +14,7 @@ import { getBus } from './event-bus.js'
 import { resolveWorkspacePath } from './workspace-files.js'
 import * as Entry from '../shared/entry.js'
 import * as Sandbox from './sandbox.js'
+import { sharedRetrySettings } from './shared-settings.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PROJECT_ROOT = path.join(__dirname, '..')
@@ -50,12 +51,33 @@ Guidelines:
 
 // Behavioral defaults seeded into each new User's agentDir/settings.json on
 // first creation (ADR-0001). Entitlement is NOT seeded — default-deny.
+// The shared `retry` block (from the deployment-wide settings source, see
+// shared-settings.js) is merged in so web agents retry like the CLI.
 const DEFAULT_SETTINGS_TEMPLATE = path.join(__dirname, 'default-user-settings.json')
 const DEFAULT_USER_SETTINGS = (() => {
   const tpl = JSON.parse(fs.readFileSync(DEFAULT_SETTINGS_TEMPLATE, 'utf8'))
   delete tpl._comment
+  if (sharedRetrySettings()) tpl.retry = sharedRetrySettings()
   return JSON.stringify(tpl, null, 2)
 })()
+
+// Inject the shared retry block into a user's agentDir/settings.json if it's
+// missing (existing users seeded before retry was sourced). Returns true if
+// the file was rewritten.
+function ensureSharedRetry(settingsPath) {
+  const retry = sharedRetrySettings()
+  if (!retry) return false
+  let settings
+  try {
+    settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'))
+  } catch {
+    return false
+  }
+  if (settings.retry) return false // already set (admin-curated wins)
+  settings.retry = retry
+  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2))
+  return true
+}
 
 // ── Per-user context ──
 // Each user gets their own scoped workspace: workspace/<user>/ is the agent's
@@ -101,6 +123,10 @@ function ctxFor(user) {
     const settingsPath = path.join(agentDir, 'settings.json')
     if (!fs.existsSync(settingsPath)) {
       fs.writeFileSync(settingsPath, DEFAULT_USER_SETTINGS)
+    } else {
+      // Existing user: backfill the shared retry block so the change applies
+      // to already-seeded agentDirs (retry is behavioral, not entitlement).
+      ensureSharedRetry(settingsPath)
     }
     ctx = { cwd, sessionDir, agentDir, customTools: Sandbox.createTools(cwd), runtime: null, startedAt: null }
     contexts.set(u, ctx)
