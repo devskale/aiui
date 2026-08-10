@@ -14,7 +14,7 @@ test('empty() seeds an assistant value with no text and carried toolCalls', () =
 })
 
 test('fromUser carries text + attachments', () => {
-  assert.deepEqual(fromUser('hi', []), { role: 'user', text: 'hi', attachments: [] })
+  assert.deepEqual(fromUser('hi', []), { role: 'user', text: 'hi', attachments: [], images: [] })
 })
 
 test('error defaults the message', () => {
@@ -27,7 +27,7 @@ test('error defaults the message', () => {
 
 test('fromMessage: user message → entry', () => {
   const msg = { role: 'user', content: [{ type: 'text', text: 'hello' }] }
-  assert.deepEqual(fromMessage(msg), { role: 'user', text: 'hello' })
+  assert.deepEqual(fromMessage(msg), { role: 'user', text: 'hello', images: [] })
 })
 
 test('fromMessage: empty user content → null (no visible row)', () => {
@@ -55,7 +55,7 @@ test('fromMessage: assistant with neither text nor toolCalls → null', () => {
 })
 
 test('fromMessage: string content (no array) is treated as text', () => {
-  assert.deepEqual(fromMessage({ role: 'user', content: 'plain' }), { role: 'user', text: 'plain' })
+  assert.deepEqual(fromMessage({ role: 'user', content: 'plain' }), { role: 'user', text: 'plain', images: [] })
 })
 
 // ── attachResult (shared by fold + server replay) ──
