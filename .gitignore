@@ -11,3 +11,4 @@ pi
 .aiui-auth.json
 .env.local
 .env.*.local
+refs/

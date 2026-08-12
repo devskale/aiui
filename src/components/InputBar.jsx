@@ -22,9 +22,9 @@ function splitByImageSupport(files, imageCapable) {
   return { accept, rejectedImages }
 }
 
-export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRemoveAttachment, onAddFiles, onCompact, onNewChat, onOpenModelPicker, imageCapable }) {
+export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRemoveAttachment, onAddFiles, onCompact, onNewChat, onOpenModelPicker, imageCapable, inputRef }) {
   const [text, setText] = useState('')
-  const ref = useRef(null)
+  const ref = inputRef || useRef(null)
   const fileRef = useRef(null)
 
   // Transient inline notice (e.g. "model doesn't support images").
@@ -49,6 +49,11 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
   const handleKey = (e) => {
     if (mention.onKeyDown(e)) return
     if (slash.onKeyDown(e)) return
+    if (e.key === 'Escape' && streaming) {
+      e.preventDefault()
+      onStop()
+      return
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSend()

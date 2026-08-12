@@ -3,6 +3,7 @@ import { useAgentEvents } from './hooks/useAgentEvents'
 import { useAttachments } from './hooks/useAttachments'
 import { useHashRoute } from './hooks/useHashRoute'
 import { useModels } from './hooks/useModels'
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { apiUrl } from './lib/api'
 import { Sidebar } from './components/Sidebar'
 import { ModelPicker } from './components/ModelPicker'
@@ -68,6 +69,14 @@ export default function App() {
   const [model, setModel] = useState('')
   const { visible, imageModels, favModels } = useModels(authed, me?.user)
   const endRef = useRef(null)
+  const inputRef = useRef(null)
+
+  useKeyboardShortcuts({
+    onAbort: abortAgent,
+    onNewChat: handleNewChat,
+    inputRef,
+    isStreaming: streaming,
+  })
   const scrollContainerRef = useRef(null)
   const stickToBottomRef = useRef(true)  // stick to bottom unless the user scrolled up
   const [dragOver, setDragOver] = useState(false)
@@ -279,6 +288,7 @@ export default function App() {
           onNewChat={handleNewChat}
           onOpenModelPicker={() => setShowModelPicker(true)}
           imageCapable={imageCapable}
+          inputRef={inputRef}
         />
       </main>
 
