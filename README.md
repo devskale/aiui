@@ -71,3 +71,4 @@ reached via `skale.dev/aiui` (Vercel redirect). Excludes `workspace/` +
 - [`CONTEXT.md`](./CONTEXT.md) — domain glossary (Session, Turn, Entry, Event,
   User, Quota, Sandbox, Event bus).
 - [`CHANGELOG.md`](./CHANGELOG.md) — release notes.
+- [`REFERENCES.md`](./REFERENCES.md) — projects and templates that inspired πui.
