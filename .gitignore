@@ -9,3 +9,5 @@ workspace/.agent/
 pi/
 pi
 .aiui-auth.json
+.env.local
+.env.*.local

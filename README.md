@@ -59,6 +59,9 @@ Edit the file live + `systemctl --user restart aiui`.
 ./deploy.sh    # build, rsync to lubu, restart systemd service
 ```
 
+Deploy target defaults to `lubu`; override with `DEPLOY_HOST` / `DEPLOY_DIR`
+env vars, or set them in a local `.env.local` (not checked in).
+
 Targets `lubu:/home/woodmastr/code/webuis/aiui/` behind nginx at `/aiui/`,
 reached via `skale.dev/aiui` (Vercel redirect). Excludes `workspace/` +
 `uploads/` so user data survives deploys. Full topology + gotchas:
