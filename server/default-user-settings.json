@@ -1,5 +1,5 @@
 {
-  "_comment": "Behavioral defaults seeded into each new User's agentDir/settings.json on first creation (ADR-0001). Edit this file to change defaults for NEW users; existing users keep their seeded copy until re-seeded. defaultProvider/defaultModel are pinned to this deployment's model (match ~/.pi/agent/settings.json); a BYOK User whose own catalog lacks this model gets the SDK fallback (first available). Baseline utility skills (web-search, fetch-url) ARE seeded as a default entitlement — they are safe, generic HTTP tools every user needs. All other entitlement (skills/packages) stays admin-curated per-User (default-deny).",
+  "_comment": "Behavioral defaults seeded into each new User's agentDir/settings.json on first creation (ADR-0001). Edit this file to change defaults for NEW users; existing users keep their seeded copy until re-seeded. defaultProvider/defaultModel are pinned to this deployment's model (match ~/.pi/agent/settings.json); a BYOK User whose own catalog lacks this model gets the SDK fallback (first available). Baseline utility skills (web-search, fetch-url) ARE seeded as a default entitlement — they are safe, generic HTTP tools every user needs; generate-image is seeded the same way as a baseline extension (imagegen via TU Aqueduct, shared server-side key — remove the extensions entry per-User to opt out). All other entitlement (skills/packages) stays admin-curated per-User (default-deny).",
   "defaultProvider": "zen.fg",
   "defaultModel": "hy3-free",
   "defaultThinkingLevel": "high",
@@ -7,5 +7,9 @@
   "compaction": { "enabled": true },
   "packages": [
     { "source": "git:github.com/devskale/skale-skills", "skills": ["fetch-url", "web-search"] }
+  ],
+  "extensions": [
+    "../../../extensions/generate-image/index.js",
+    "../../../extensions/pdf-tools/index.js"
   ]
 }

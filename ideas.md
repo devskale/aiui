@@ -1,12 +1,13 @@
 # Ideas from reference repos
 
-Analysis of the three reference repos cloned into `refs/`, mapped against
+Analysis of the reference repos cloned into `inspirations/`, mapped against
 what aiui (`piui`) already has. Each idea is tagged with an estimated effort
 (S/M/L) and where it slots into aiui's existing architecture.
 
-- `refs/chatbot-template` — shadcn-ui/chatbot-template (Next.js + AI SDK UI shell)
-- `refs/pi-web` — agegr/pi-web (Next.js browser UI for pi; closest analog to aiui)
-- `refs/pi-gui` — minghinmatthewlam/pi-gui (Electron Codex-style desktop app for pi)
+- `inspirations/chatbot-template` — shadcn-ui/chatbot-template (Next.js + AI SDK UI shell)
+- `inspirations/pi-web` — agegr/pi-web (Next.js browser UI for pi; closest analog to aiui)
+- `inspirations/pi-gui` — minghinmatthewlam/pi-gui (Electron Codex-style desktop app for pi)
+- `inspirations/deepseek-harness` — deepseek-ai/deepseek-harness (plugin-driven agent harness)
 
 aiui's existing primitives: `shared/entry.js` (Entry value, server+client),
 `server/event-bus.js` (one SSE bus per user), `server/pi-session.js` (per-user

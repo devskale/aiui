@@ -120,6 +120,36 @@ interface, depth, seam, adapter, leverage, locality — is separate from this li
   file presence. The model catalog follows the keys: a BYOK User sees only
   their own models. _Avoid_: "API keys" as a noun (say Credentials).
 
+## Agents
+
+- **Kollektion** — the bundle of files a User attaches to ONE message
+  (photos and/or PDFs), treated by the Deutsch-Assistent as a single
+  ordered work: queryable as a whole, cited per item ("(Foto 2)",
+  "(PDF S. 3)"), optionally persisted as a markdown Auswertung in the
+  User's workspace. Named Kollektionen keep the User-given name. Lives in
+  the `dokumente` skill's workflow, not in aiui state — a Kollektion is a
+  conversational unit, not a stored object. _Avoid_: "Bundle", "Set",
+  "Dokument" (that's one item of it).
+- **Agent** — a named preset that swaps the session's persona and carried
+  capabilities (ADR-0004): a repo directory `agents/<id>/` holding
+  `agent.md` (frontmatter: name/description/model?/stt?; body = the
+  session's system message) plus optional `skills/` + `extensions/` that
+  load additively for that Agent's sessions. The implicit **default Agent**
+  is the slim πui assistant (ADR-0003). Bound at session build via
+  `ctx.agent` → the `createRuntime` factory's `resourceLoaderOptions`;
+  switching Agents therefore starts a new session. Each session remembers
+  its Agent in the sidecar `.aiui-agents.json` (its home is
+  `server/agents.js`). Agent-carried Resources are deployment-curated
+  product presets — outside per-User Entitlement by design; per-User
+  default-deny is untouched. _Avoid_: "persona" (that's the prompt body),
+  "mode", "bot".
+- **Baseline extension** — a capability every User gets by file entitlement
+  (seeded via `default-user-settings.json`, backfilled by
+  `scripts/enable-baseline-extensions.js`): `generate-image` today. Same stance as the
+  seeded `fetch-url`/`web-search` skills; opt-out is deleting the settings
+  entry. _Avoid_: calling these "Agent tools" (they are per-User, not
+  per-Agent).
+
 ## System prompt
 
 - **System message** — the base system prompt sent to the model at the start

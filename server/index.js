@@ -10,6 +10,8 @@ import * as Mime from './mime.js'
 import { authEnabled, verifyCredentials, issueSession, revokeSession, userLimit, setSessionCookie, clearSessionCookie, clearStaleSessionCookies, readSessionCookies, currentSession, requireAuth, noteLoginAttempt } from './auth.js'
 import { consumeQuota, peekQuota } from './quota.js'
 import { getOrCreateSession, disposeSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, listSessions, switchToSession, getAvailableModels, getCommands, getSessionInfo, getSessionStats, getSessionHistory, newSession, workspaceCwd, getForkTargets, forkSession } from './pi-session.js'
+import { listAgents } from './agents.js'
+import { sttConfigured, sttReachable, sttModel, transcribe } from './stt.js'
 import { resolveBashOutputPath, readBashOutput } from './bash-output.js'
 import { listDir, readTextFile, resolveWorkspacePath, mimeFor } from './workspace-files.js'
 import { searchCatalog } from './skills-catalog.js'
@@ -70,7 +72,9 @@ async function listWorkspaceFiles(dir, query) {
 
 const app = express()
 app.set('trust proxy', true) // behind nginx in prod → real client IP for the login throttle
-app.use(express.json({ limit: '50mb' }))
+// Generous limit: prompts carry image dataUrls (base64) — a multi-page scan
+// set is several MB even after client-side downscaling.
+app.use(express.json({ limit: '200mb' }))
 
 // ── Security headers (before routes so they apply to every response) ──
 app.use((_req, res, next) => {
@@ -207,6 +211,35 @@ app.post('/api/model', async (req, res) => {
   }
 })
 
+// ── Agents (catalog + switching — ADR-0004) ──
+app.get('/api/agents', async (_req, res) => {
+  res.json({
+    agents: listAgents(),
+    stt: {
+      enabled: sttConfigured() && await sttReachable(),
+      model: sttModel(),
+    },
+  })
+})
+
+// Switch the active Agent. The persona binds at session build, so switching
+// starts a new session (the old chat stays in history, runnable under its
+// own agent via the sidecar).
+app.post('/api/agent', async (req, res) => {
+  const { agent } = req.body || {}
+  if (!agent) return res.status(400).json({ error: 'no agent' })
+  try {
+    await newSession(req.user, agent)
+    const bus = getBus(req.user)
+    bus.push('session_status', getSessionInfo(req.user))
+    bus.push('session_history', { entries: [] })
+    bus.push('session_stats', getSessionStats(req.user))
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(400).json({ error: err.message })
+  }
+})
+
 // ── Thinking level ──
 app.get('/api/thinking-level', (req, res) => {
   res.json(getThinkingInfo(req.user))
@@ -264,15 +297,16 @@ app.get('/api/bash-output', async (req, res) => {
 
 // ── New session ──
 app.post('/api/session/new', async (req, res) => {
+  const { agent } = req.body || {}
   try {
-    await newSession(req.user)
+    await newSession(req.user, agent)
     const bus = getBus(req.user)
     bus.push('session_status', getSessionInfo(req.user))
     bus.push('session_history', { entries: [] })
     bus.push('session_stats', getSessionStats(req.user))
     res.json({ ok: true })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    res.status(400).json({ error: err.message })
   }
 })
 
@@ -393,8 +427,8 @@ app.get('/api/changelog', (_req, res) => {
 })
 
 // ── File upload ──
-app.post('/api/upload', upload.array('files', 10), (req, res) => {
-  const base = process.env.VITE_BASE || ''
+app.post('/api/upload', upload.array('files', 20), (req, res) => {
+  const base = (process.env.VITE_BASE || '').replace(/\/+$/, '')
   const files = (req.files || []).map(f => {
     const ext = path.extname(f.originalname).toLowerCase().replace('.', '')
     const mimetype = Mime.mimeFor(ext) || f.mimetype
@@ -418,10 +452,38 @@ app.post('/api/upload', upload.array('files', 10), (req, res) => {
   res.json({ files })
 })
 
+// ── Speech-to-text (agent mic input — proxied so the gateway token never
+// reaches the browser; ADR-0004). Audio is multipart WAV from the client. ──
+const sttUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } })
+app.post('/api/stt', sttUpload.single('audio'), async (req, res) => {
+  if (!sttConfigured()) return res.status(503).json({ error: 'STT is disabled on this server' })
+  if (!req.file?.buffer) return res.status(400).json({ error: 'no audio' })
+  const language = (req.body?.language || 'auto').toString().slice(0, 12)
+  const result = await transcribe(req.file.buffer, language)
+  if (result.error) return res.status(502).json(result)
+  res.json(result)
+})
+
+// Client-side streaming config: lets the browser talk DIRECTLY to the STT
+// gateway (WS streaming with live partials) when it has a route — the server
+// may not (e.g. prod without mesh). The token goes to logged-in users only;
+// browsers cannot set WS headers, hence the ?token= query-param pattern
+// (same as the sttts web demo). Clients without a route fall back to
+// /api/stt, and browsers with Web Speech use that first anyway.
+app.get('/api/stt/config', (req, res) => {
+  if (!sttConfigured()) return res.json({ enabled: false })
+  res.json({
+    enabled: true,
+    gateway: process.env.STT_URL || 'http://dgxp:3001',
+    token: process.env.STT_TOKEN || '',
+    model: sttModel(),
+  })
+})
+
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '..', 'dist')))
 }
-const base = process.env.VITE_BASE || ''
+const base = (process.env.VITE_BASE || '').replace(/\/+$/, '')
 // Mount uploads at both the base-prefixed path (direct access) and bare /uploads
 // (nginx proxy_pass with trailing slash strips the /aiui/ prefix before reaching us).
 app.use(`${base}/uploads`, express.static(uploadsDir))

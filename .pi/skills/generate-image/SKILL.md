@@ -16,7 +16,7 @@ generate-image "logo" -o my-logo.png                           # custom filename
 generate-image "prompt" --json                                 # structured output
 ```
 
-Saves to `uploads/` when that dir exists in the cwd (web-served in πui), printing a web URL like `/uploads/generated-<ts>.png`. Otherwise saves to the cwd and prints an absolute path.
+Saves to `uploads/` in the cwd (the user's workspace in πui — created when missing), printing a web URL like `/aiui/api/file/raw?path=uploads/generated-<ts>.png` that renders directly in the chat. Outside πui it saves to the cwd and prints an absolute path.
 
 ## Install
 
@@ -44,7 +44,7 @@ Call this tool automatically whenever the user asks to **generate, draw, create,
 2. **Embed the image in your reply** using markdown so it renders inline:
    ```
    Here's your image:
-   ![a futuristic city with neon lights](/uploads/generated-1234-0.png)
+   ![a futuristic city with neon lights](/aiui/api/file/raw?path=uploads/generated-1234-0.png)
    ```
 3. Add a one-line caption or note. Keep it concise.
 
@@ -60,7 +60,7 @@ Be **vivid and specific**: subject, style, composition, lighting, mood, color pa
 | `-m, --model` | Model id (default: `z-image-turbo`) |
 | `-n, --number` | Number of images (1–4, default 1) |
 | `-o, --output` | Output filename |
-| `-d, --dir` | Output directory (default: `uploads/` if present) |
+| `-d, --dir` | Output directory (default: `uploads/`, created if missing) |
 | `--json` | Emit `{model, prompt, images:[{path,url,mimeType,size}]}` |
 
 ## Key resolution

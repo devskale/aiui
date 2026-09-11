@@ -20,6 +20,7 @@ const initialState = {
   streaming: false,
   connected: false,
   sessionAlive: false,
+  sessionAgent: 'default',
   sessionModel: null,
   sessionId: null,
   sessionCwd: null,
@@ -44,6 +45,7 @@ function reducer(state, action) {
       return {
         ...state,
         sessionAlive: action.alive,
+        sessionAgent: action.agent ?? state.sessionAgent,
         sessionModel: action.model,
         sessionId: action.sessionId ?? state.sessionId,
         sessionCwd: action.cwd ?? state.sessionCwd,
@@ -166,7 +168,7 @@ function reducer(state, action) {
     }
 
     case 'reset':
-      return { ...initialState, connected: state.connected, sessionAlive: state.sessionAlive, sessionModel: state.sessionModel, sessionStats: state.sessionStats }
+      return { ...initialState, connected: state.connected, sessionAlive: state.sessionAlive, sessionAgent: state.sessionAgent, sessionModel: state.sessionModel, sessionStats: state.sessionStats }
 
     default:
       return state
@@ -238,9 +240,13 @@ export function useAgentEvents(enabled = true) {
     await fetch(apiUrl('/api/abort'), { method: 'POST' })
   }
 
-  const startNewChat = async () => {
+  const startNewChat = async (agentId) => {
     dispatch({ type: 'reset' })
-    await fetch(apiUrl('/api/session/new'), { method: 'POST' })
+    await fetch(apiUrl('/api/session/new'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(agentId ? { agent: agentId } : {}),
+    })
   }
 
   return { ...state, sendPrompt, sendSteer, abortAgent, startNewChat, dispatch }

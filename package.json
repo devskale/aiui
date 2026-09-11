@@ -1,7 +1,7 @@
 {
   "name": "piui",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "concurrently \"pnpm run dev:server\" \"pnpm run dev:client\"",
@@ -10,11 +10,12 @@
     "build": "vite build"
   },
   "dependencies": {
-    "@earendil-works/pi-coding-agent": "^0.84.1",
+    "@earendil-works/pi-coding-agent": "^0.84.2",
     "concurrently": "^9.1.2",
     "express": "^5.1.0",
     "lucide-react": "^1.23.0",
     "multer": "^1.4.5-lts.2",
+    "pdfjs-dist": "^6.2.108",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-markdown": "^9.0.3",

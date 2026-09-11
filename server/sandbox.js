@@ -23,6 +23,7 @@ import { constants as fsConstants } from 'node:fs'
 import { execSync } from 'node:child_process'
 import os from 'node:os'
 import { mimeFor } from './mime.js'
+import { carriedResourceRoots } from './agents.js'
 
 const SEATBELT = fs.existsSync('/usr/bin/sandbox-exec')
 const BWRAP = fs.existsSync('/usr/bin/bwrap') || fs.existsSync('/usr/local/bin/bwrap')
@@ -48,10 +49,14 @@ const TMP_ROOTS = ['/tmp', '/private/tmp', '/var/folders', '/private/var/folders
 // agent must READ these (e.g. a skill's SKILL.md) to actually use a skill —
 // but the sensitive top-level files in the agentDir (auth.json, settings.json,
 // models.json) stay protected, so only the resource subdirs are allow-listed.
+// Agent-carried skill dirs (repo-shipped, ADR-0004) get the same read grant.
 const AGENT_RESOURCE_SUBS = ['git', 'skills', 'prompts', 'extensions', 'packages']
 function agentResourceRoots(cwd) {
   const slug = path.basename(cwd)
-  return AGENT_RESOURCE_SUBS.map(sub => path.join(path.dirname(cwd), '.agent', slug, sub))
+  return [
+    ...AGENT_RESOURCE_SUBS.map(sub => path.join(path.dirname(cwd), '.agent', slug, sub)),
+    ...carriedResourceRoots(),
+  ]
 }
 
 // Read guard: cwd ∪ system temp ∪ the agent's own resource dirs. Throws
@@ -99,6 +104,7 @@ function buildProfile(cwd) {
   (subpath "${home}/.pi/agent")
   (subpath "${home}/.local/bin"))
 (allow file-read* (subpath "${home}/.config/api_keys"))
+${carriedResourceRoots().map(root => `(allow file-read* (subpath "${root}"))`).join('\n')}
 (allow network*)
 `
 }
@@ -147,6 +153,7 @@ function bwrapSpawnHook(cwd) {
   ro(path.join(home, '.pi', 'agent'))         // host skill scripts (launcher targets)
   args.push('--dir', wsParent, '--bind', cwd, cwd) // workspace rw (siblings hidden)
   ro(agentRoot)                               // this user's cloned skills
+  for (const root of carriedResourceRoots()) ro(root) // agent-carried skills (ADR-0004)
   const prefix = 'bwrap ' + args.map(shellQuote).join(' ') + ' /bin/bash -c'
   return ({ command, cwd: workdir, env }) => ({
     command: `${prefix} ${shellQuote(command)}`,

@@ -6,6 +6,40 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 The latest version is shown in the UI under `#/releases`.
 
+## [0.3.0] — 2026-08-16
+
+### Added
+- **Agents** (ADR-0004) — repo-shipped specialist presets: an Agent picker
+  in the topbar, agent cards on the welcome screen, and two shipped Agents:
+  **English Teacher** (tuned for a 12-year-old Austrian learner — playful
+  A2→B1 practice, one gentle correction per message, voice input, spoken
+  answers, and homework photos / PDF worksheets the child can upload) and **Deutsch-Assistent** (German documents & images, PDF
+  reading, multi-page image assemblies). Switching Agents starts a new
+  chat; stored sessions remember their Agent.
+- **Voice input (STT)** — Agents with voice support get a mic button:
+  speech is transcribed via the DGX gateway (Nemotron, auto EN/DE) through
+  a server-side proxy (`POST /api/stt`) and lands in the composer. Enabled
+  for the English Teacher; self-hides when the gateway is unreachable.
+- **Spoken answers (TTS)** — Agents flagged `tts: true` get a speaker
+  toggle in the topbar: each finished answer is read aloud via the
+  browser's speech synthesis (no backend, good English voices on Apple
+  devices). Enabled for the English Teacher.
+- **PDF reading with OCR — baseline for every agent** — a `read_pdf`
+  extension tool: per-page text extraction (pdf.js), automatic LlamaParse
+  cloud-OCR for scans without a text layer (key via credgoo `llamacloud`),
+  and `ocr: true` to force it. Workspace-confined. Shipped as a baseline
+  extension (like generate-image) so the English Teacher can read PDF
+  worksheets too.
+- **Multi-image assemblies** — a set of scanned pages (e.g. a book section)
+  is interpreted as ONE ordered document: the Deutsch-Assistent downscales
+  images client-side before upload (multi-page sets now fit reliably) and
+  synthesizes across page boundaries with per-page citations.
+- **Image generation as an extension** — the `generate-image` skill is now
+  a baseline `generate_image` tool for every user (same TU Aqueduct
+  z-image-turbo backend): no CLI install, images land in the user's
+  workspace and render in chat behind the app's base path. Seeded for new
+  users and backfilled for existing ones at deploy time.
+
 ## [0.2.1] — 2026-07-15
 
 ### Added

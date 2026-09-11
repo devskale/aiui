@@ -83,11 +83,16 @@ function guessMime(b64, url) {
 }
 
 function defaultOutDir() {
-  // Prefer uploads/ (web-served in πui); fall back to cwd.
-  const cwd = process.cwd()
-  const uploads = path.join(cwd, 'uploads')
-  if (fs.existsSync(uploads) && fs.statSync(uploads).isDirectory()) return uploads
-  return cwd
+  // Web-first: uploads/ under the cwd is the workspace's file surface in πui
+  // (create it if missing), so images are reachable via /api/file/raw. The
+  // cwd is the agent's workspace when run from πui, or any project otherwise.
+  const uploads = path.join(process.cwd(), 'uploads')
+  try {
+    fs.mkdirSync(uploads, { recursive: true })
+    return uploads
+  } catch {
+    return process.cwd()
+  }
 }
 
 async function main() {
@@ -146,8 +151,13 @@ async function main() {
       : `generated-${ts}-${i}.${ext}`
     const abs = path.resolve(outDir, file)
     fs.writeFileSync(abs, Buffer.from(b64, 'base64'))
-    // Web URL when in uploads/, else absolute path.
-    const webUrl = inUploads ? `/uploads/${file}` : abs
+    // Web URL when in uploads/, else absolute path. The raw endpoint is
+    // workspace-scoped and served behind the app's base path (VITE_BASE is
+    // set in the πui service env and inherited here; empty in dev, where
+    // Vite proxies /api anyway). Trailing slash stripped — no '//api' join.
+    const webUrl = inUploads
+      ? `${(process.env.VITE_BASE || '').replace(/\/+$/, '')}/api/file/raw?path=uploads/${encodeURIComponent(file)}`
+      : abs
     saved.push({ path: abs, url: webUrl, mimeType: mime, size: fs.statSync(abs).size })
   }
 

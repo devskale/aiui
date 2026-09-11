@@ -3,9 +3,10 @@
 // @-mention autocomplete hooks. Owns text + the textarea ref + send/steer.
 // ════════════════════════════════════════════════════════════════════
 import { useState, useRef, useEffect } from 'react'
-import { File as FileIcon, LoaderCircle, Square, SendHorizontal } from 'lucide-react'
+import { File as FileIcon, LoaderCircle, Mic, Square, SendHorizontal } from 'lucide-react'
 import { useSlashMenu } from '../hooks/useSlashMenu'
 import { useMention } from '../hooks/useMention'
+import { useStt } from '../hooks/useStt'
 import { rewriteSkillCommand } from '../lib/compose'
 
 // Splits a file list into accepted + image-rejected. When the current model
@@ -22,7 +23,7 @@ function splitByImageSupport(files, imageCapable) {
   return { accept, rejectedImages }
 }
 
-export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRemoveAttachment, onAddFiles, onCompact, onNewChat, onOpenModelPicker, imageCapable, inputRef }) {
+export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRemoveAttachment, onAddFiles, onCompact, onNewChat, onOpenModelPicker, imageCapable, inputRef, sttLanguage }) {
   const [text, setText] = useState('')
   const ref = inputRef || useRef(null)
   const fileRef = useRef(null)
@@ -32,6 +33,40 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
   const flashNotice = (msg) => {
     setImageNotice(msg)
     setTimeout(() => setImageNotice(prev => (prev === msg ? '' : prev)), 3200)
+  }
+
+  // Voice input (ADR-0004): OS/browser recognizer when available, else the
+  // STT gateway (streaming WS or batch proxy). Transcript lands in the
+  // textarea; hold-to-talk on the mic, or click to toggle.
+  const stt = useStt({
+    language: sttLanguage || 'auto',
+    onTranscript: (text) => {
+      if (!text) return
+      setText(prev => (prev && prev.trim() ? prev.replace(/\s+$/, '') + ' ' : '') + text)
+      requestAnimationFrame(() => {
+        if (ref.current) {
+          ref.current.style.height = 'auto'
+          ref.current.style.height = Math.min(ref.current.scrollHeight, 200) + 'px'
+          ref.current.focus()
+        }
+      })
+    },
+    onError: flashNotice,
+  })
+
+  // Hold-to-talk: pointerdown arms a hold; release after ≥250ms stops and
+  // inserts. A quick click (<250ms) toggles recording instead (touch-friendly).
+  const holdTimerRef = useRef(null)
+  const holdArmedRef = useRef(false)
+  const micDown = () => {
+    if (stt.state !== 'idle') return
+    holdArmedRef.current = false
+    holdTimerRef.current = setTimeout(() => { holdArmedRef.current = true; stt.start() }, 250)
+  }
+  const micUp = () => {
+    clearTimeout(holdTimerRef.current)
+    if (holdArmedRef.current) stt.stop()          // was a hold → stop + insert
+    else if (stt.state === 'idle') stt.toggle()   // quick click → start; next click stops
   }
 
   const onHostAction = (item) => {
@@ -140,6 +175,12 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
       )}
 
       {imageNotice && <div className="ib-notice">{imageNotice}</div>}
+      {(stt.state === 'recording' || stt.state === 'processing') && (
+        <div className="stt-line">
+          {stt.state === 'processing' ? <LoaderCircle size={12} className="spin" /> : <span className="stt-dot" />}
+          <span className="stt-partial">{stt.partial || (stt.state === 'processing' ? 'transcribing…' : 'listening…')}</span>
+        </div>
+      )}
       {attachments.length > 0 && (
         <div className="attachment-bar">
           {attachments.map(a => (
@@ -165,6 +206,19 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
           placeholder={streaming ? 'Steer π… (queued after current turn)' : 'Ask π anything…  (type / for commands, @ for files)'}
           rows={1}
         />
+        {stt.mode && (
+          <button
+            className={`ib-btn mic ${stt.state === 'recording' ? 'rec' : ''}`}
+            onPointerDown={micDown}
+            onPointerUp={micUp}
+            disabled={stt.state === 'processing'}
+            title={stt.mode === 'webspeech' ? 'Speak (browser speech recognition — hold or click)' : stt.mode === 'ws' ? 'Speak (DGX streaming — hold or click)' : 'Speak (transcribed when you stop)'}
+          >
+            {stt.state === 'recording' ? <Square size={16} />
+              : stt.state === 'processing' ? <LoaderCircle size={18} className="spin" />
+              : <Mic size={18} />}
+          </button>
+        )}
         <button className="ib-btn" onClick={() => fileRef.current?.click()} title={imageCapable ? 'Attach file' : 'Attach file (images disabled — model doesn\'t support them)'}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
         </button>

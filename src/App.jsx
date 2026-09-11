@@ -7,6 +7,8 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { apiUrl } from './lib/api'
 import { Sidebar } from './components/Sidebar'
 import { ModelPicker } from './components/ModelPicker'
+import { AgentPicker } from './components/AgentPicker'
+import { useTts } from './hooks/useTts'
 import { InputBar } from './components/InputBar'
 import { StatsFooter } from './components/StatsFooter'
 import { ThinkingPicker } from './components/ThinkingPicker'
@@ -19,7 +21,7 @@ import { SettingsPanel } from './components/SettingsPanel'
 import { LoginModal } from './components/LoginModal'
 import { UserEntry, AssistantEntry, ErrorEntry } from './components/StreamEntry'
 import { findImageMentions } from './lib/compose'
-import { Folder, Clock } from 'lucide-react'
+import { Folder, Clock, Volume2, VolumeX } from 'lucide-react'
 
 // Format an elapsed duration (ms) as a single largest-unit token.
 // Ladder: <1m → m → h → d → w → mo  (only the largest unit is shown).
@@ -56,27 +58,51 @@ export default function App() {
     checkMe()
   }
 
-  const { entries, current, steerQueue, streaming, connected, sessionAlive, sessionModel, sessionId, sessionCwd, sessionCwdShort, sessionStartedAt, sessionStats, thinkingLevel, isCompacting, autoCompactionEnabled, sendPrompt, sendSteer, abortAgent, startNewChat, dispatch } = useAgentEvents(authed)
+  const { entries, current, steerQueue, streaming, connected, sessionAlive, sessionAgent, sessionModel, sessionId, sessionCwd, sessionCwdShort, sessionStartedAt, sessionStats, thinkingLevel, isCompacting, autoCompactionEnabled, sendPrompt, sendSteer, abortAgent, startNewChat, dispatch } = useAgentEvents(authed)
   const { attachments, addFiles, remove: removeAttachment, clear: clearAttachments, buildPayload } = useAttachments()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [showModelPicker, setShowModelPicker] = useState(false)
+  const [showAgentPicker, setShowAgentPicker] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [sessionRefresh, setSessionRefresh] = useState(0)
   const [showFork, setShowFork] = useState(false)
   const [showFiles, setShowFiles] = useState(false)
   const [showSkills, setShowSkills] = useState(false)
+  const [agents, setAgents] = useState([{ id: 'default', name: 'Assistant' }])
+  const [sttInfo, setSttInfo] = useState({ enabled: false })
   const { route, navigate } = useHashRoute()
   const [model, setModel] = useState('')
   const { visible, imageModels, favModels } = useModels(authed, me?.user)
   const endRef = useRef(null)
   const inputRef = useRef(null)
 
-  useKeyboardShortcuts({
-    onAbort: abortAgent,
-    onNewChat: handleNewChat,
-    inputRef,
-    isStreaming: streaming,
-  })
+  // ── TTS (agent-gated spoken answers — ADR-0004) ──
+  const activeAgent = agents.find(a => a.id === sessionAgent)
+  const ttsAvailable = !!activeAgent?.tts
+  const [ttsOn, setTtsOn] = useState(() => localStorage.getItem('aiui-tts') === '1')
+  const { speaking, speak, cancel } = useTts()
+  const lastSpokenRef = useRef(null)
+
+  // Auto-speak each newly finished assistant answer while the toggle is on.
+  useEffect(() => {
+    if (!ttsOn || !ttsAvailable) return
+    const last = [...entries].reverse().find(e => e.role === 'assistant' && (e.text || '').trim())
+    if (!last) return
+    const key = `${entries.length}:${last.text.slice(0, 80)}`
+    if (lastSpokenRef.current === key) return
+    lastSpokenRef.current = key
+    speak(last.text)
+  }, [entries, ttsOn, ttsAvailable, speak])
+
+  // A new turn interrupts the spoken answer; toggling off stops it.
+  useEffect(() => { if (streaming) cancel() }, [streaming, cancel])
+  const toggleTts = () => {
+    const next = !ttsOn
+    setTtsOn(next)
+    localStorage.setItem('aiui-tts', next ? '1' : '0')
+    if (!next) cancel()
+  }
+
   const scrollContainerRef = useRef(null)
   const stickToBottomRef = useRef(true)  // stick to bottom unless the user scrolled up
   const [dragOver, setDragOver] = useState(false)
@@ -89,6 +115,19 @@ export default function App() {
     const id = setInterval(() => setNow(Date.now()), 60000)
     return () => clearInterval(id)
   }, [sessionAlive, sessionStartedAt])
+
+  // Agent catalog + STT availability (ADR-0004). Fetched once per login.
+  useEffect(() => {
+    if (!authed) return
+    fetch(apiUrl('/api/agents'))
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (!d?.agents?.length) return
+        setAgents(d.agents)
+        setSttInfo(d.stt || { enabled: false })
+      })
+      .catch(() => {})
+  }, [authed])
 
   // Default model = first favorite (if any) that's visible, else the first visible.
   useEffect(() => {
@@ -164,6 +203,38 @@ export default function App() {
     setSessionRefresh(n => n + 1)
   }
 
+  // Switching agents starts a new chat — the persona binds at session build.
+  const handleSelectAgent = async (agentId) => {
+    if (agentId === sessionAgent) { setShowAgentPicker(false); return }
+    if (hasContent && !window.confirm('Switching agents starts a new chat. Continue?')) return
+    setShowAgentPicker(false)
+    dispatch({ type: 'reset' })
+    await fetch(apiUrl('/api/agent'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent: agentId }),
+    }).catch(() => {})
+    setSessionRefresh(n => n + 1)
+  }
+
+  // EmptyState agent cards do the same thing (no confirm — the chat is empty).
+  const handlePickAgent = async (agentId) => {
+    if (agentId === sessionAgent) return
+    await startNewChat(agentId)
+    setSessionRefresh(n => n + 1)
+  }
+
+  // Keyboard shortcuts — must sit BELOW the handler definitions: the object
+  // literal reads handleNewChat's binding at call time, and a const read
+  // before its declaration is a TDZ crash (the minifier only sometimes
+  // reorders it away).
+  useKeyboardShortcuts({
+    onAbort: abortAgent,
+    onNewChat: handleNewChat,
+    inputRef,
+    isStreaming: streaming,
+  })
+
   const handleCompact = async () => {
     await fetch(apiUrl('/api/compact'), { method: 'POST' }).catch(() => {})
   }
@@ -221,6 +292,20 @@ export default function App() {
           {!sidebarOpen && (
             <button className="tb-btn" onClick={() => setSidebarOpen(true)}>☰</button>
           )}
+          {agents.length > 1 && (
+            <button className="tb-agent" onClick={() => setShowAgentPicker(true)} title="Choose agent">
+              {activeAgent?.name || 'Assistant'}
+            </button>
+          )}
+          {ttsAvailable && (
+            <button
+              className={`tb-btn tb-tts ${ttsOn ? 'on' : ''} ${speaking ? 'speaking' : ''}`}
+              onClick={toggleTts}
+              title={ttsOn ? 'Reads answers aloud (on)' : 'Read answers aloud'}
+            >
+              {ttsOn ? <Volume2 size={15} /> : <VolumeX size={15} />}
+            </button>
+          )}
           <button className="tb-model" onClick={() => setShowModelPicker(true)}>
             {connected && sessionAlive && <span className="status-dot alive" title="Session alive" />}
             {sessionModel || model || 'select model'}
@@ -271,7 +356,7 @@ export default function App() {
               <div ref={endRef} />
             </div>
           ) : (
-            <EmptyState />
+            <EmptyState agents={agents} activeAgent={sessionAgent} onPickAgent={handlePickAgent} />
           )}
         </div>
 
@@ -289,6 +374,7 @@ export default function App() {
           onOpenModelPicker={() => setShowModelPicker(true)}
           imageCapable={imageCapable}
           inputRef={inputRef}
+          sttLanguage={agents.find(a => a.id === sessionAgent)?.sttLanguage || 'auto'}
         />
       </main>
 
@@ -298,6 +384,15 @@ export default function App() {
           onSelect={setModel}
           onClose={() => setShowModelPicker(false)}
           onOpenSettings={() => setShowSettings(true)}
+        />
+      )}
+      {showAgentPicker && (
+        <AgentPicker
+          activeAgent={sessionAgent}
+          agents={agents}
+          streaming={streaming}
+          onSelect={handleSelectAgent}
+          onClose={() => setShowAgentPicker(false)}
         />
       )}
       {showFork && (

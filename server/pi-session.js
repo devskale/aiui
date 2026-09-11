@@ -15,6 +15,7 @@ import { resolveWorkspacePath } from './workspace-files.js'
 import * as Entry from '../shared/entry.js'
 import * as Sandbox from './sandbox.js'
 import { sharedRetrySettings } from './shared-settings.js'
+import { getAgent, requireAgent } from './agents.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PROJECT_ROOT = path.join(__dirname, '..')
@@ -35,19 +36,8 @@ async function initShared() {
 // request. Keyed by normalized username.
 const byokRuntimes = new Map() // user → ModelRuntime
 
-// Slim, web-chat-shaped system message (ADR-0003). Replaces pi's CLI-oriented
-// default persona. Skills, project context files, and cwd are appended
-// automatically by the SDK (this string becomes buildSystemPrompt's
-// customPrompt, which preserves them).
-const SLIM_SYSTEM_PROMPT = `You are a helpful coding and general-purpose assistant in \u03c0ui, a web-based chat interface. You operate inside the user's workspace and can read files, run commands, edit code, and write new files.
-
-Tools available: read, bash, edit, write \u2014 plus any extension or skill tools the user has enabled.
-
-Guidelines:
-- Be concise and direct in your responses.
-- Show file paths clearly when working with files.
-- Use bash for exploration (ls, rg, find) and shell commands.
-- Prefer precise edits over full rewrites.`
+// Slim, web-chat-shaped system message (ADR-0003) — lives in agents.js now,
+// alongside the Agent catalog that builds on it (ADR-0004).
 
 // Behavioral defaults seeded into each new User's agentDir/settings.json on
 // first creation (ADR-0001). Entitlement is NOT seeded — default-deny.
@@ -128,7 +118,7 @@ function ctxFor(user) {
       // to already-seeded agentDirs (retry is behavioral, not entitlement).
       ensureSharedRetry(settingsPath)
     }
-    ctx = { cwd, sessionDir, agentDir, customTools: Sandbox.createTools(cwd), runtime: null, startedAt: null }
+    ctx = { cwd, sessionDir, agentDir, customTools: Sandbox.createTools(cwd), runtime: null, startedAt: null, agent: 'default' }
     contexts.set(u, ctx)
   }
   return ctx
@@ -170,6 +160,66 @@ export function workspaceCwd(user) {
   return ctxFor(user).cwd
 }
 
+// ── Session → Agent sidecar (ADR-0004) ──
+// The system prompt is bound when the session is built, so each stored
+// session must remember which Agent it belongs to. A small JSON map in the
+// user's sessionDir (never inside the SDK-owned .jsonl files):
+// { "<sessionId>": "<agentId>" }. Unknown ids fall back to the default.
+const AGENTS_MAP_FILE = '.aiui-agents.json'
+
+function agentsMapPath(ctx) {
+  return path.join(ctx.sessionDir, AGENTS_MAP_FILE)
+}
+
+function readAgentsMap(ctx) {
+  try {
+    return JSON.parse(fs.readFileSync(agentsMapPath(ctx), 'utf8')) || {}
+  } catch {
+    return {}
+  }
+}
+
+function rememberAgent(ctx, sessionId, agentId) {
+  if (!sessionId) return
+  try {
+    const map = readAgentsMap(ctx)
+    if (map[sessionId] === agentId) return
+    map[sessionId] = agentId
+    fs.writeFileSync(agentsMapPath(ctx), JSON.stringify(map, null, 2))
+  } catch { /* sidecar is best-effort; worst case a session falls back to default */ }
+}
+
+// The session id lives in the .jsonl header line, not the filename
+// (filenames are <timestamp>_<id>.jsonl) — read it from the first entry.
+function sessionIdFromPath(filePath) {
+  try {
+    const fd = fs.openSync(filePath, 'r')
+    try {
+      const buf = Buffer.alloc(4096)
+      const n = fs.readSync(fd, buf, 0, buf.length, 0)
+      const line = buf.toString('utf8', 0, n).split('\n')[0]
+      const header = JSON.parse(line)
+      return header?.type === 'session' && typeof header.id === 'string' ? header.id : null
+    } finally {
+      fs.closeSync(fd)
+    }
+  } catch {
+    return null
+  }
+}
+
+// Apply an Agent's optional model pin to a freshly built session. Validated
+// against the user's runtime catalog; a pin missing from the catalog (e.g.
+// BYOK user without that model) is skipped, not fatal.
+async function applyAgentModel(u, session, agent) {
+  if (!agent?.model) return
+  try {
+    const rt = await modelRuntimeFor(u)
+    const model = rt.getModels().find(m => `${m.provider}@${m.id}` === agent.model || m.id === agent.model)
+    if (model) await session.setModel(model)
+  } catch { /* keep the runtime default */ }
+}
+
 // Lazily create a user's AgentSessionRuntime (once per login) and wire the SSE
 // bus to rebind on every session replacement (new/switch/fork/import).
 export async function getOrCreateSession(user) {
@@ -179,13 +229,20 @@ export async function getOrCreateSession(user) {
 
   // The runtime factory closes over the USER: each time the runtime replaces
   // the session it rebuilds cwd-bound services with this user's ModelRuntime,
-  // slim system message (ADR-0003), and sandbox tools.
+  // the active Agent's system message + carried resources (ADR-0004), and
+  // sandbox tools. ctx.agent is read HERE (at build time), so callers change
+  // agents by setting it before triggering a rebuild (new/switch/fork).
   const createRuntime = async ({ cwd, agentDir, sessionManager }) => {
+    const agent = getAgent(ctx.agent)
     const services = await createAgentSessionServices({
       cwd,
       agentDir,
       modelRuntime: await modelRuntimeFor(u),
-      resourceLoaderOptions: { systemPrompt: SLIM_SYSTEM_PROMPT },
+      resourceLoaderOptions: {
+        systemPrompt: agent.systemPrompt,
+        additionalSkillPaths: agent.skillPaths,
+        additionalExtensionPaths: agent.extensionPaths,
+      },
     })
     const result = await createAgentSessionFromServices({
       services,
@@ -214,16 +271,22 @@ export async function getOrCreateSession(user) {
 
   ctx.runtime = runtime
   ctx.startedAt = Date.now()
+  rememberAgent(ctx, runtime.session?.sessionId, ctx.agent)
   getBus(u).push('session_status', getSessionInfo(u))
   return ctx.runtime.session
 }
 
 // Start a brand-new session (for "New Chat"). SDK-owned; bus rebinds via
-// setRebindSession.
-export async function newSession(user) {
+// setRebindSession. An agentId switches the active Agent first (ADR-0004) —
+// the persona is bound at session build, so a new session is how an Agent
+// change takes effect.
+export async function newSession(user, agentId) {
   const ctx = ctxFor(user)
+  if (agentId !== undefined) ctx.agent = requireAgent(agentId).id
   await getOrCreateSession(user)
   await ctx.runtime.newSession()
+  rememberAgent(ctx, ctx.runtime.session?.sessionId, ctx.agent)
+  await applyAgentModel(user, ctx.runtime.session, getAgent(ctx.agent))
   return ctx.runtime.session
 }
 
@@ -242,8 +305,9 @@ export async function prompt(user, text, attachments = []) {
       return { type: 'image', mimeType: match?.[1] || 'image/png', data: match?.[2] }
     })
   // Non-image attachments now land inside the user's workspace (uploads/), so
-  // point the agent at them — its read tool can reach them under the cwd.
-  const files = attachments.filter(a => !a.isImage && a.relPath).map(a => a.relPath)
+  // point the agent at them. PDFs get their own hint — the read tool returns
+  // binary garbage for them; read_pdf (baseline extension) extracts text.
+  const files = attachments.filter(a => !a.isImage && a.relPath)
   let promptText = (text || '').trim()
   // @-mentioned images → attach as vision content. Without this the agent only
   // gets a path; its read tool won't inline a large image ("couldn't be
@@ -251,8 +315,18 @@ export async function prompt(user, text, attachments = []) {
   // the picture with PIL instead of actually seeing it.
   promptText = attachMentionedImages(promptText, cwd, images)
   if (files.length) {
-    const list = files.map(p => `- ${p}`).join('\n')
-    promptText += `\n\n[Attached file(s) — read with your read tool to see their contents:]\n${list}`
+    const pdfs = files.filter(f => /\.pdf$/i.test(f.relPath))
+    const others = files.filter(f => !/\.pdf$/i.test(f.relPath))
+    const sections = []
+    if (pdfs.length) {
+      const list = pdfs.map(p => `- ${p.relPath}`).join('\n')
+      sections.push(`[Attached PDF(s) — read with your read_pdf tool:]\n${list}`)
+    }
+    if (others.length) {
+      const list = others.map(p => `- ${p.relPath}`).join('\n')
+      sections.push(`[Attached file(s) — read with your read tool to see their contents:]\n${list}`)
+    }
+    promptText += `\n\n${sections.join('\n\n')}`
   }
   if (!promptText.trim()) promptText = images.length ? 'Describe this image.' : ''
   const options = { images }
@@ -345,6 +419,7 @@ export function getSessionInfo(user) {
   return {
     alive: session !== null && session !== undefined,
     streaming: session?.isStreaming ?? false,
+    agent: ctx.agent,
     model: session?.model ? `${session.model.provider}@${session.model.id}` : null,
     thinkingLevel: session?.thinkingLevel ?? null,
     isCompacting: session?.isCompacting ?? false,
@@ -419,11 +494,16 @@ export async function listSessions(user) {
 
 // Resume a stored session. SDK-owned (runtime.switchSession); bus rebinds via
 // setRebindSession. cwdOverride pins the session to this user's workspace
-// regardless of what's recorded in the session file header.
+// regardless of what's recorded in the session file header. The session's
+// Agent is restored from the sidecar BEFORE switching, so the factory builds
+// with the right persona.
 export async function switchToSession(user, sessionPath) {
   const ctx = ctxFor(user)
+  const remembered = readAgentsMap(ctx)[sessionIdFromPath(sessionPath) || '']
+  ctx.agent = remembered || 'default'
   await getOrCreateSession(user)
   await ctx.runtime.switchSession(sessionPath, { cwdOverride: ctx.cwd })
+  rememberAgent(ctx, ctx.runtime.session?.sessionId, ctx.agent)
   return ctx.runtime.session
 }
 
@@ -444,6 +524,7 @@ export async function forkSession(user, entryId) {
   const ctx = ctxFor(user)
   await getOrCreateSession(user)
   await ctx.runtime.fork(entryId)
+  rememberAgent(ctx, ctx.runtime.session?.sessionId, ctx.agent) // the child inherits the parent's Agent
   return ctx.runtime.session
 }
 

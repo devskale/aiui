@@ -2,7 +2,9 @@
 
 A web UI for the [π coding agent](https://github.com/earendil-works/pi-coding-agent).
 React frontend + Express backend, SSE-streamed chat, multi-user with per-user
-scoped workspaces and isolated sessions.
+scoped workspaces and isolated sessions. Ships with specialist **Agents**
+(ADR-0004): an English teacher with voice input, and a German documents &
+images assistant with PDF reading — see the picker in the topbar.
 
 ```
 pnpm install
@@ -63,9 +65,9 @@ Deploy target defaults to `lubu`; override with `DEPLOY_HOST` / `DEPLOY_DIR`
 env vars, or set them in a local `.env.local` (not checked in).
 
 Targets `lubu:/home/woodmastr/code/webuis/aiui/` behind nginx at `/aiui/`,
-reached via `skale.dev/aiui` (Vercel redirect). Excludes `workspace/` +
-`uploads/` so user data survives deploys. Full topology + gotchas:
-[`docs/deployment.md`](docs/deployment.md).
+live at `https://lubu.skale.dev/aiui/` (also `neusiedl.duckdns.org:8001`).
+Excludes `workspace/` + `uploads/` so user data survives deploys. Full
+topology + gotchas: [`docs/deployment.md`](docs/deployment.md).
 
 ## Docs
 

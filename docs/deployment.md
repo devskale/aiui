@@ -1,8 +1,9 @@
-# Deployment — skale.dev/aiui → neusiedl.duckdns.org
+# Deployment — lubu.skale.dev/aiui (→ neusiedl.duckdns.org)
 
-How πui reaches the public internet: a Vercel redirect from `skale.dev/aiui`
-to a self-hosted server (`neusiedl.duckdns.org`), through nginx into a systemd
-Node service.
+How πui reaches the public internet: `https://lubu.skale.dev/aiui/` (DNS
+138.2.179.13 → nginx :8001 ssl, cert `lubu.skale.dev`) plus a legacy Vercel
+redirect from `skale.dev/aiui` to `neusiedl.duckdns.org:8001` — both land in
+the same nginx into the systemd Node service.
 
 ## Topology
 

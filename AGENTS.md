@@ -21,6 +21,8 @@ No linter. Tests are plain `node` scripts (`*.test.js`) run directly:
 node shared/entry.test.js
 node server/mime.test.js
 node server/sandbox.test.js
+node server/agents.test.js
+node server/stt.test.js
 node src/lib/models.test.js src/lib/compose.test.js
 ```
 
@@ -29,20 +31,27 @@ node src/lib/models.test.js src/lib/compose.test.js
 ```
 server/
   index.js          Express API: auth, SSE, /api/prompt, /api/abort, models,
-                    thinking, commands, sessions, uploads, files
+                    thinking, agents, stt, commands, sessions, uploads, files
   pi-session.js     ★ the core — per-user session lifecycle (see below)
+  agents.js         ★ the Agent catalog (ADR-0004) — loads agents/<id>/agent.md
   auth.js           login: ~/.aiui-auth.json, scrypt, in-memory session tokens
   quota.js          per-user daily prompt cap (in-memory, UTC reset)
   event-bus.js      SSE fan-out — ONE BUS PER USER (getBus(user))
   sandbox.js        macOS seatbelt: createTools(cwd) | undefined, assertInside
   mime.js           extension → mimetype + isImage
+  stt.js            STT gateway client (/api/stt → dgxp model-proxy, ADR-0004)
+agents/             ★ repo-shipped Agent presets (ADR-0004):
+                      <id>/agent.md (persona + frontmatter), skills/, extensions/
+extensions/         baseline per-User extensions (generate-image; ADR-0004)
 src/
   App.jsx           root: composes sidebar, stream, input, pickers, modals
-  components/        Sidebar, InputBar, StreamEntry, ModelPicker, SettingsPanel,
-                    LoginModal, ThinkingPicker, ForkPicker, FileExplorer, SkillsBrowser, StatsFooter, CommandPanel, …
+  components/        Sidebar, InputBar, StreamEntry, ModelPicker, AgentPicker,
+                    SettingsPanel, LoginModal, ThinkingPicker, ForkPicker,
+                    FileExplorer, SkillsBrowser, StatsFooter, …
   hooks/
     useAgentEvents.js  ★ SSE event reducer — the chat state machine
     useAttachments.js  file upload (images as dataURL, others via /api/upload)
+    useStt.js          mic → WAV → /api/stt → transcript into the input
     useModels.js       model catalog + allowed/favorites (localStorage)
     useMention.js      @-mention file autocomplete
     useSlashMenu.js    /-command menu
@@ -82,8 +91,44 @@ session per user, held in an in-memory `contexts` Map.
 
 `buildSessionOptions(user, …)` constructs a per-user `agentDir`,
 `modelRuntime` (shared or BYOK), `settingsManager`, and a `resourceLoader`
-carrying the slim system message (ADR-0003), then passes all four to
-`createAgentSession`. See "Resource discovery" below.
+carrying the active Agent's system message (ADR-0003/0004), then passes all
+four to `createAgentSession`. See "Resource discovery" and "Agents" below.
+
+### Agents (ADR-0004)
+
+An Agent is a repo-shipped preset in `agents/<id>/`: `agent.md` (frontmatter
+`name`/`description`/`model?`/`stt?`/`sttLanguage?`, body = system message)
+plus optional `skills/` and `extensions/` dirs loaded additively. `ctx.agent`
+(per-user context) is read by the `createRuntime` factory **at build time** —
+switching Agents (`/api/agent`, or `agent` on `/api/session/new`) sets it and
+starts a new session. Stored sessions remember their Agent in
+`<sessionDir>/.aiui-agents.json` (sessionId, read from the .jsonl header →
+agentId); `switchToSession` restores it, forks inherit. An Agent's optional
+`model` pin applies to newly built sessions only (validated against the
+user's catalog; missing → skipped). The catalog loads once at startup —
+`server/agents.js`.
+
+**STT (voice input):** Agents with `stt: true` get a mic button when the
+gateway is reachable. Browser WAV → `POST /api/stt` → `server/stt.js` →
+OpenAI-compatible gateway (`STT_URL`, default `http://dgxp:3001`; optional
+`STT_TOKEN`; `STT_MODEL`). Reachability is probed + cached (10 min) — the
+mic self-hides where the gateway is unroutable (prod today) and self-heals
+when networking lands. Disable outright with `AIUI_STT=off`.
+
+**TTS (spoken answers):** Agents with `tts: true` get a speaker toggle —
+answers are read aloud client-side via browser SpeechSynthesis
+(`src/hooks/useTts.js`), no backend.
+
+**read_pdf OCR:** scanned PDFs (no text layer) go to LlamaParse cloud-OCR
+automatically (`ocr: true` forces it). Key resolution: `LLAMA_CLOUD_API_KEY`
+env → `credgoo llamacloud` CLI → the pdf2md venv python
+(`AIUI_CREDGOO_PY` overrides). On lubu, set the env in the systemd unit
+until credgoo exists there.
+
+**Baseline extensions** (`extensions/`, e.g. `generate-image`) are per-User
+file entitlement — seeded via `default-user-settings.json` (`extensions`
+array, paths relative to the agentDir), backfilled for existing users by
+`scripts/enable-baseline-extensions.js` (run by deploy.sh).
 
 ### Request → response flow
 
@@ -156,7 +201,10 @@ models).
 macOS seatbelt confines the agent to `workspace/<user>/`. `createTools(cwd)`
 returns overridden read/bash/edit/write tools (or `undefined` when
 `AIUI_SANDBOX=0`, in which case the SDK uses its own built-ins). `assertInside`
-is the pure path guard (tested). Off on lubu (Linux) — `AIUI_SANDBOX=0`.
+is the pure path guard (tested). On lubu (Linux) confinement is bubblewrap
+(`bwrap`); `AIUI_SANDBOX=0` disables. The sandbox allow-lists the agentDir
+resource subdirs AND agent-carried skill dirs (`carriedResourceRoots()`),
+so the agent can read a carried SKILL.md.
 
 The per-user `agentDir` lives at `workspace/.agent/<slug>/`, **outside** the
 cwd, so the sandboxed agent cannot read its own entitlement config or BYOK
@@ -178,6 +226,9 @@ in the Node process outside the sandbox.
 | POST | `/api/model` | req | set session model |
 | GET/POST | `/api/thinking-level` | req | get/set thinking level |
 | GET  | `/api/commands` | req | skills/prompts/extensions (the user's ENABLED set) |
+| GET  | `/api/agents` | req | Agent catalog + STT availability (ADR-0004) |
+| POST | `/api/agent` | req | switch Agent (starts a new session) |
+| POST | `/api/stt` | req | voice → text via the STT gateway (agent mic input) |
 | GET  | `/api/skills/search` | req | browse the public skills.sh catalog (read-only; admin curates enablement) |
 | GET  | `/api/files` | req | workspace file list (@-mention) |
 | GET  | `/api/tree` | req | one level of a workspace dir (G5 browser) |
@@ -226,11 +277,19 @@ see [`docs/deployment.md`](docs/deployment.md). Tested live via surf.
 ```
 
 - **On lubu:** `/home/woodmastr/code/webuis/aiui/`
-- **URLs:** `https://neusiedl.duckdns.org:8001/`, `http://lubuntu.local/aiui/`
+- **URLs:** `https://lubu.skale.dev/aiui/` (primary; DNS 138.2.179.13 →
+  nginx :8001 ssl, cert `lubu.skale.dev`, includes `aiui.conf`),
+  `https://neusiedl.duckdns.org:8001/aiui/` (same nginx),
+  `http://lubuntu.local/aiui/` (LAN).
 - **Service:** `~/.config/systemd/user/aiui.service` (port 8082,
   `NODE_ENV=production`, nvm node `~/.nvm/.../v24.13.0/bin/node`).
 - **Nginx:** `location /aiui/` → `127.0.0.1:8082` (needs `proxy_buffering off`
   + `proxy_read_timeout 86400s` for SSE).
+- **STT (ADR-0004):** the dgxp gateway (`http://dgxp:3001`) is reachable
+  from the Mac (dev) but NOT from lubu yet — the mic self-hides there until
+  a route exists (reachability-probed, no config needed). When enabling:
+  set `STT_TOKEN` (gateway Bearer, lives in `~/code/model-proxy/.env` on
+  dgx) in the systemd unit env.
 - **Auth:** `~/.aiui-auth.json` on lubu. Generate a hash:
   `node scripts/hash-passphrase.js '<pw>'`, paste `salt:hash` into `passphrases`.
   Demo account: `demo`/`demo` (quota 10/day).
