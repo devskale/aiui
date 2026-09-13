@@ -21,6 +21,10 @@ The latest version is shown in the UI under `#/releases`.
 
 ### Changed
 
+- **read_pdf caches OCR as markdown (pdf2md-style)** — LlamaParse results are
+  written next to the PDF as `<name>.pdf.md` and served from there on repeat
+  reads while fresh: zero wait, zero credits, full text beyond the 50k-char
+  chat cap, browsable in the file explorer and @-mentionable.
 - **Uploaded files are visible + reusable** — `uploads/` is no longer hidden
   from the file explorer or the @-mention autocomplete: chat uploads stay
   browsable, mentionable, and re-readable (e.g. `read_pdf` in a later chat).

@@ -52,6 +52,24 @@ async function resolveLlamaKey() {
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 
+// ── pdf2md-style markdown cache ──
+// The OCR result is written NEXT TO the PDF as "<name>.pdf.md" and served from
+// there while it's at least as fresh as the PDF. Repeat reads cost zero time
+// and zero LlamaParse credits, and the full markdown stays browsable in the
+// file explorer (the chat result alone is capped at MAX_OUTPUT_CHARS).
+export const cachePathFor = (resolvedPdf) => resolvedPdf + '.md'
+
+export function cacheIsFresh(pdfPath, mdPath = cachePathFor(pdfPath)) {
+  try {
+    return fs.statSync(mdPath).mtimeMs >= fs.statSync(pdfPath).mtimeMs
+  } catch { return false }
+}
+
+function writeOcrCache(resolved, md) {
+  const mdPath = cachePathFor(resolved)
+  try { fs.writeFileSync(mdPath, md); return mdPath } catch { return null }
+}
+
 // Upload → poll → markdown. Premium mode + language follow the pdf2md.skale
 // extractor defaults (premium, result markdown).
 async function llamaparseToMarkdown(absPath, language, signal) {
@@ -130,8 +148,10 @@ export default function (pi) {
       'workspace PDFs — not the read tool (which returns binary garbage for PDFs). ' +
       'Scans without a text layer go to LlamaParse (cloud OCR) automatically; ' +
       'ocr=true forces LlamaParse for text PDFs too (better layout). ' +
+      'OCR results are cached as a sibling "<name>.pdf.md" — repeat reads are served ' +
+      'from that cache instantly (zero credits). ' +
       'params: path, optional pages ("1-3,5"), ocr (bool), language (default "en").',
-    promptSnippet: 'Read PDF files with read_pdf (not read); scans are OCR\'d via LlamaParse automatically.',
+    promptSnippet: 'Read PDF files with read_pdf (not read); scans are OCR\'d via LlamaParse automatically and cached as <name>.pdf.md.',
     parameters: {
       type: 'object',
       properties: {
@@ -154,12 +174,28 @@ export default function (pi) {
       }
       if (!fs.existsSync(resolved)) throw new Error(`File not found: ${params.path}`)
 
+      // pdf2md-style cache-first: a fresh "<name>.pdf.md" sibling serves the
+      // read without pdf.js or LlamaParse.
+      const mdPath = cachePathFor(resolved)
+      if (cacheIsFresh(resolved, mdPath)) {
+        const md = fs.readFileSync(mdPath, 'utf8')
+        const tail = md.length > MAX_OUTPUT_CHARS
+          ? `\n[...truncated — vollständiges Markdown: ${path.relative(cwd, mdPath)}]`
+          : ''
+        return {
+          content: [{ type: 'text', text: `[read_pdf — aus Markdown-Cache: ${path.relative(cwd, mdPath)}]\n\n${md.slice(0, MAX_OUTPUT_CHARS)}${tail}` }],
+          details: { parser: 'cache', mdPath },
+        }
+      }
+
       // Forced cloud-OCR path (LlamaParse): skip local extraction entirely.
       if (params.ocr === true) {
         _onUpdate?.({ content: [{ type: 'text', text: 'LlamaParse OCR is running — this can take 1–2 minutes…' }] })
         try {
           const md = await llamaparseToMarkdown(resolved, params.language, signal)
-          return { content: [{ type: 'text', text: `[LlamaParse OCR — markdown]\n\n${md.slice(0, MAX_OUTPUT_CHARS)}${md.length > MAX_OUTPUT_CHARS ? '\n[...truncated...]' : ''}` }], details: { parser: 'llamaparse' } }
+          const saved = writeOcrCache(resolved, md)
+          const note = saved ? `\n\n[Volltext gespeichert als ${path.relative(cwd, saved)} — erneute Lesezugriffe nutzen diesen Cache]` : ''
+          return { content: [{ type: 'text', text: `[LlamaParse OCR — markdown]${note}\n\n${md.slice(0, MAX_OUTPUT_CHARS)}${md.length > MAX_OUTPUT_CHARS ? '\n[...truncated...]' : ''}` }], details: { parser: 'llamaparse', mdPath: saved ?? undefined } }
         } catch (e) {
           throw new Error(`LlamaParse failed: ${e.message}`)
         }
@@ -194,7 +230,9 @@ export default function (pi) {
             _onUpdate?.({ content: [{ type: 'text', text: 'No text layer — running LlamaParse OCR (1–2 minutes)…' }] })
             try {
               const md = await llamaparseToMarkdown(resolved, params.language, signal)
-              return { content: [{ type: 'text', text: `[Scan detected — extracted via LlamaParse OCR]\n\n${md.slice(0, MAX_OUTPUT_CHARS)}${md.length > MAX_OUTPUT_CHARS ? '\n[...truncated...]' : ''}` }], details: { parser: 'llamaparse' } }
+              const saved = writeOcrCache(resolved, md)
+              const note = saved ? `\n\n[Volltext gespeichert als ${path.relative(cwd, saved)} — erneute Lesezugriffe nutzen diesen Cache]` : ''
+              return { content: [{ type: 'text', text: `[Scan detected — extracted via LlamaParse OCR]${note}\n\n${md.slice(0, MAX_OUTPUT_CHARS)}${md.length > MAX_OUTPUT_CHARS ? '\n[...truncated...]' : ''}` }], details: { parser: 'llamaparse', mdPath: saved ?? undefined } }
             } catch (e) {
               parts.push(`\n[LlamaParse OCR failed: ${e.message}]`)
             }
