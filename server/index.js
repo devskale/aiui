@@ -31,7 +31,10 @@ const execAsync = promisify(exec)
 const IGNORED_DIRS = new Set(['node_modules', '.git', 'dist', 'sessions', 'test-results', 'coverage'])
 
 async function gitListFiles(dir) {
-  const { stdout } = await execAsync('git ls-files --cached --others --exclude-standard', { cwd: dir, maxBuffer: 32 * 1024 * 1024 })
+  // NO --exclude-standard: user workspaces usually sit inside a parent repo
+  // (the aiui checkout) whose .gitignore excludes workspace/ — honoring it
+  // would hide exactly the files we mean to list. keepFile does the cleanup.
+  const { stdout } = await execAsync('git ls-files --cached --others', { cwd: dir, maxBuffer: 32 * 1024 * 1024 })
   return stdout.split('\n').filter(Boolean)
 }
 
