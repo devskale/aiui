@@ -6,6 +6,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 The latest version is shown in the UI under `#/releases`.
 
+## [0.3.1] — 2026-09-13
+
+### Fixed
+
+- **Scoped the JSON body limit** — only `/api/prompt` accepts large bodies
+  (image dataUrls); every other route, including the public `/api/login`,
+  keeps Express' small default. Removes an unnecessary pre-auth memory/DoS
+  surface.
+- **@-mentioned images are size-capped** (10 MB): larger files keep their
+  `@path` token instead of being base64-embedded into the prompt.
+
+### Changed
+
+- **BYOK runtimes re-read on change** — the per-user runtime cache now keys on
+  the `auth.json` mtime, so edited keys take effect without a logout/login.
+- **Idle context eviction** — user contexts idle for longer than
+  `AIUI_IDLE_EVICT_HOURS` (default 24) and not mid-stream are dropped from
+  memory on the next request; stored sessions are untouched and resume lazily.
+
 ## [0.3.0] — 2026-08-16
 
 ### Added

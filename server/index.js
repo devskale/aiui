@@ -72,9 +72,14 @@ async function listWorkspaceFiles(dir, query) {
 
 const app = express()
 app.set('trust proxy', true) // behind nginx in prod → real client IP for the login throttle
-// Generous limit: prompts carry image dataUrls (base64) — a multi-page scan
-// set is several MB even after client-side downscaling.
-app.use(express.json({ limit: '200mb' }))
+// JSON body limits, scoped: only /api/prompt gets the generous parser (prompts
+// carry image dataUrls — base64 — and a multi-page scan set is several MB even
+// after client-side downscaling). It's mounted before the default parser so it
+// wins for that path; everything else (login, model, thinking, …) keeps
+// Express' small default — a public route like /api/login has no business
+// accepting 200 MB bodies.
+app.use('/api/prompt', express.json({ limit: '200mb' }))
+app.use(express.json())
 
 // ── Security headers (before routes so they apply to every response) ──
 app.use((_req, res, next) => {

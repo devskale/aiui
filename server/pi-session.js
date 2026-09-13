@@ -33,8 +33,9 @@ async function initShared() {
 }
 
 // Per-user BYOK runtimes, cached so we don't re-read/parse auth/models per
-// request. Keyed by normalized username.
-const byokRuntimes = new Map() // user → ModelRuntime
+// request. Keyed by normalized username; entries remember the auth.json mtime
+// so an edited key file takes effect without waiting for a logout.
+const byokRuntimes = new Map() // user → { rt: ModelRuntime, mtimeMs }
 
 // Slim, web-chat-shaped system message (ADR-0003) — lives in agents.js now,
 // alongside the Agent catalog that builds on it (ADR-0004).
@@ -79,7 +80,28 @@ function ensureSharedRetry(settingsPath) {
 // cwd/sandbox, BYOK runtime, and entitlement. The runtime factory below injects
 // those per-user inputs; runtime.setRebindSession re-wires the SSE bus whenever
 // the underlying session is replaced.
-const contexts = new Map() // user → { cwd, sessionDir, agentDir, customTools, runtime, startedAt }
+const contexts = new Map() // user → { cwd, sessionDir, agentDir, customTools, runtime, startedAt, lastUsed }
+
+// Idle eviction — drop contexts (runtime + session in memory per user) whose
+// user hasn't made a request for AIUI_IDLE_EVICT_HOURS (default 24) and isn't
+// mid-stream. Exported pure for tests. Sessions persist in the user's
+// sessionDir, so eviction loses nothing but warmth: the next request lazily
+// rebuilds the context and resumes the stored session.
+export function evictIdleContexts(map, idleMs, now = Date.now()) {
+  const evicted = []
+  for (const [u, ctx] of map) {
+    const last = ctx.lastUsed || ctx.startedAt || 0
+    if (now - last < idleMs) continue
+    if (ctx.runtime?.session?.isStreaming) continue
+    if (ctx.runtime) { try { ctx.runtime.dispose?.() } catch {} }
+    map.delete(u)
+    evicted.push(u)
+  }
+  return evicted
+}
+
+const IDLE_EVICT_MS =
+  (parseFloat(process.env.AIUI_IDLE_EVICT_HOURS) > 0 ? parseFloat(process.env.AIUI_IDLE_EVICT_HOURS) : 24) * 3600 * 1000
 
 // Usernames are arbitrary strings (typically emails). The Map key is the raw
 // username; the workspace DIR is derived below (emails aren't safe dir names).
@@ -100,6 +122,7 @@ function workspaceSlug(user) {
 }
 
 function ctxFor(user) {
+  evictIdleContexts(contexts, IDLE_EVICT_MS)
   const u = normUser(user)
   let ctx = contexts.get(u)
   if (!ctx) {
@@ -121,6 +144,7 @@ function ctxFor(user) {
     ctx = { cwd, sessionDir, agentDir, customTools: Sandbox.createTools(cwd), runtime: null, startedAt: null, agent: 'default' }
     contexts.set(u, ctx)
   }
+  ctx.lastUsed = Date.now()
   return ctx
 }
 
@@ -134,15 +158,15 @@ async function modelRuntimeFor(user) {
     await initShared()
     return modelRuntime
   }
-  let rt = byokRuntimes.get(u)
-  if (!rt) {
-    const byokModels = path.join(ctx.agentDir, 'models.json')
-    rt = await ModelRuntime.create({
-      authPath: byokAuth,
-      modelsPath: fs.existsSync(byokModels) ? byokModels : undefined,
-    })
-    byokRuntimes.set(u, rt)
-  }
+  const mtimeMs = fs.statSync(byokAuth).mtimeMs
+  const cached = byokRuntimes.get(u)
+  if (cached && cached.mtimeMs === mtimeMs) return cached.rt
+  const byokModels = path.join(ctx.agentDir, 'models.json')
+  const rt = await ModelRuntime.create({
+    authPath: byokAuth,
+    modelsPath: fs.existsSync(byokModels) ? byokModels : undefined,
+  })
+  byokRuntimes.set(u, { rt, mtimeMs })
   return rt
 }
 
@@ -336,15 +360,20 @@ export async function prompt(user, text, attachments = []) {
 
 // Scan prompt text for @<path> tokens that point at workspace image files,
 // read them, and push them onto `images` as vision content. Strips the token
-// so the model sees the picture directly instead of a bare path.
+// so the model sees the picture directly instead of a bare path. Images above
+// MAX_MENTION_IMAGE_BYTES keep their token instead (embedding one would bloat
+// the request for no gain — the model can't see it either way).
 const IMG_MENTION_RE = /@([\w./-]+\.(?:png|jpe?g|gif|webp|bmp|svg))\b/gi
-function attachMentionedImages(text, cwd, images) {
+export const MAX_MENTION_IMAGE_BYTES = 10 * 1024 * 1024
+export function attachMentionedImages(text, cwd, images) {
   if (!text) return text
   const found = []
   const stripped = text.replace(IMG_MENTION_RE, (token, rel) => {
     let abs
     try { abs = resolveWorkspacePath(cwd, rel) } catch { return token }
-    if (!fs.existsSync(abs)) return token
+    try {
+      if (fs.statSync(abs).size > MAX_MENTION_IMAGE_BYTES) return token
+    } catch { return token }
     found.push({ rel, abs })
     return ''
   })
