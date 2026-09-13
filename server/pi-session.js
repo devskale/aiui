@@ -237,15 +237,57 @@ function sessionIdFromPath(filePath) {
 // Apply an Agent's optional model pin to a freshly built session. Validated
 // against the user's runtime catalog; a pin missing from the catalog (e.g.
 // BYOK user without that model) is skipped, not fatal.
-async function applyAgentModel(u, session, agent) {
-  if (!agent?.model) return
+// Resolve a "provider@id"-or-bare-id ref against the user's catalog + filter
+// and set it on the session. Returns the model when applied.
+async function setModelFromRef(u, session, ref) {
+  if (!ref) return null
   try {
     const rt = await modelRuntimeFor(u)
-    const model = rt.getModels().find(m => `${m.provider}@${m.id}` === agent.model || m.id === agent.model)
+    const model = rt.getModels().find(m => `${m.provider}@${m.id}` === ref || m.id === ref)
     if (model && modelAllowed(modelFilterFor(u), `${model.provider}@${model.id}`, model.id)) {
       await session.setModel(model)
+      return model
     }
-  } catch { /* keep the runtime default */ }
+  } catch { /* keep the current model */ }
+  return null
+}
+
+async function applyAgentModel(u, session, agent) {
+  if (!agent?.model) return
+  await setModelFromRef(u, session, agent.model)
+}
+
+// ── Last-used model (per User, aiui sidecar) ──
+// The picker's choice lives only on the live session, so every new chat /
+// login fell back to the seeded settings default. A tiny sidecar in the
+// agentDir remembers the last USED model; new sessions start with it. Agent
+// model pins (ADR-0004) still win — they are deployment-curated per persona.
+const MODEL_PREF_FILE = '.aiui-model.json'
+
+function modelPrefPath(ctx) {
+  return path.join(ctx.agentDir, MODEL_PREF_FILE)
+}
+
+export function readModelPref(ctx) {
+  try {
+    const v = JSON.parse(fs.readFileSync(modelPrefPath(ctx), 'utf8'))
+    return v && typeof v.provider === 'string' && typeof v.id === 'string' ? v : null
+  } catch { return null }
+}
+
+export function rememberModel(ctx, model) {
+  if (!model?.provider || !model?.id) return
+  try {
+    fs.writeFileSync(modelPrefPath(ctx), JSON.stringify({ provider: model.provider, id: model.id }, null, 2))
+  } catch { /* best-effort, like the agents sidecar */ }
+}
+
+async function applyModelPref(u, session) {
+  const ctx = ctxFor(u)
+  if (getAgent(ctx.agent)?.model) return // agent pin wins
+  const pref = readModelPref(ctx)
+  const model = await setModelFromRef(u, session, pref ? `${pref.provider}@${pref.id}` : null)
+  if (model) getBus(u).push('session_status', getSessionInfo(u)) // picker/status catch up
 }
 
 // Lazily create a user's AgentSessionRuntime (once per login) and wire the SSE
@@ -300,6 +342,7 @@ export async function getOrCreateSession(user) {
   ctx.runtime = runtime
   ctx.startedAt = Date.now()
   rememberAgent(ctx, runtime.session?.sessionId, ctx.agent)
+  await applyModelPref(u, runtime.session) // start where the user left off
   getBus(u).push('session_status', getSessionInfo(u))
   return ctx.runtime.session
 }
@@ -315,6 +358,7 @@ export async function newSession(user, agentId) {
   await ctx.runtime.newSession()
   rememberAgent(ctx, ctx.runtime.session?.sessionId, ctx.agent)
   await applyAgentModel(user, ctx.runtime.session, getAgent(ctx.agent))
+  await applyModelPref(user, ctx.runtime.session) // no-op when the agent pins a model
   return ctx.runtime.session
 }
 
@@ -399,15 +443,17 @@ export async function abort(user) {
 }
 
 export async function setModel(user, modelId) {
-  const s = await getOrCreateSession(user)
-  const rt = await modelRuntimeFor(user)
+  const u = normUser(user)
+  const s = await getOrCreateSession(u)
+  const rt = await modelRuntimeFor(u)
   const available = rt.getModels()
   const model = available.find(m => m.id === modelId || `${m.provider}@${m.id}` === modelId)
   if (!model) throw new Error(`Model not found: ${modelId}`)
-  if (!modelAllowed(modelFilterFor(normUser(user)), `${model.provider}@${model.id}`, model.id)) {
+  if (!modelAllowed(modelFilterFor(u), `${model.provider}@${model.id}`, model.id)) {
     throw new Error(`Model not allowed: ${modelId}`)
   }
   await s.setModel(model)
+  rememberModel(ctxFor(u), model) // new sessions start here
 }
 
 // Model catalog — per-User under hybrid keys (ADR-0002): a BYOK User sees only

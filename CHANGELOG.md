@@ -21,6 +21,11 @@ The latest version is shown in the UI under `#/releases`.
 
 ### Changed
 
+- **New sessions start with the last-used model** — the picker's choice is
+  remembered per User (sidecar `.aiui-model.json` in the agentDir) and
+  applied to fresh sessions (new chat, next login). Agent model pins
+  (ADR-0004) still win over the remembered choice; a model that has since
+  fallen out of the catalog/filter is skipped.
 - **read_pdf caches OCR as markdown (pdf2md-style)** — LlamaParse results are
   written next to the PDF as `<name>.pdf.md` and served from there on repeat
   reads while fresh: zero wait, zero credits, full text beyond the 50k-char

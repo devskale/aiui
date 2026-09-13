@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { evictIdleContexts, attachMentionedImages, MAX_MENTION_IMAGE_BYTES } from './pi-session.js'
+import { evictIdleContexts, attachMentionedImages, MAX_MENTION_IMAGE_BYTES, readModelPref, rememberModel } from './pi-session.js'
 
 // ── evictIdleContexts ──
 test('evict: idle non-streaming contexts are dropped and disposed', () => {
@@ -62,4 +62,21 @@ test('mention: missing files and non-image paths keep their tokens', () => {
   assert.equal(images.length, 0)
   assert.ok(out.includes('@gone.png'))
   fs.rmSync(dir, { recursive: true, force: true })
+})
+
+// ── last-used model sidecar ──
+test('model pref: remember/read roundtrip, malformed file → null', () => {
+  const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aiui-pref-'))
+  const ctx = { agentDir }
+  assert.equal(readModelPref(ctx), null, 'no file yet')
+  rememberModel(ctx, { provider: 'zai', id: 'glm-5.3' })
+  assert.deepEqual(readModelPref(ctx), { provider: 'zai', id: 'glm-5.3' })
+  rememberModel(ctx, { provider: 'unii', id: 'tu@qwen-3.6-35b' })
+  assert.deepEqual(readModelPref(ctx), { provider: 'unii', id: 'tu@qwen-3.6-35b' }, 'latest wins')
+  fs.writeFileSync(path.join(agentDir, '.aiui-model.json'), '{broken')
+  assert.equal(readModelPref(ctx), null, 'corrupt file tolerated')
+  rememberModel(ctx, null)
+  rememberModel(ctx, { id: 'no-provider' })
+  assert.equal(readModelPref(ctx), null, 'invalid remembers ignored')
+  fs.rmSync(agentDir, { recursive: true, force: true })
 })
