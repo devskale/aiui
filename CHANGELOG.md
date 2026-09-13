@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 The latest version is shown in the UI under `#/releases`.
 
+## [0.3.2] — 2026-09-13
+
+### Added
+
+- **Model filter (`include` / `notInclude`)** — restrict the model catalog
+  via `~/.aiui-auth.json`: `models: { include: [...], notInclude: [...] }`
+  deployment-wide, `userModels: { "<user>": {...} }` replaces it per User.
+  Patterns are anchored prefixes on the full `provider@id` — exact
+  (`unii@tu@qwen-3.6-35b-vllm`), provider (`unii@tu@`), wildcard
+  (`unii@tu@qwen*`); `notInclude` wins over `include`. Enforced in
+  `/api/models` (the picker), `POST /api/model`, and agent model pins.
+  Pure logic in `server/model-filter.js`, 9 tests.
+
 ## [0.3.1] — 2026-09-13
 
 ### Fixed

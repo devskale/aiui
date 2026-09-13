@@ -10,18 +10,26 @@
 // Config (AIUI_AUTH_FILE, default ~/.aiui-auth.json):
 //   { "users": ["johann","guest"], "passphrases": ["salt:hash", ...],
 //     "credentials": { "johann": "salt:hash" },   // optional per-User override
-//     "limits": { "guest": 10 } }
+//     "limits": { "guest": 10 },
+//     "models":     { "include": [...], "notInclude": [...] },          // optional
+//     "userModels": { "johann": { "include": [...], "notInclude": [...] } } }
 // Generate a hash:  node scripts/hash-passphrase.js <passphrase>
 //
 // Credential resolution: if `credentials[username]` exists, that User logs in
 // ONLY with those passphrases (string or array) — the shared `passphrases`
 // list no longer applies to them. Everyone else verifies against the shared
 // list. So a per-User entry is a replacement, not an addition.
+//
+// Model filtering (server/model-filter.js): `models` restricts the catalog
+// deployment-wide, `userModels[username]` replaces it for that User. Patterns
+// are anchored prefixes on "provider@id" ("unii@tu@", "unii@tu@qwen*", exact
+// ids); see model-filter.js for the full semantics.
 // ════════════════════════════════════════════════════════════════════
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { patternsOf } from './model-filter.js'
 
 const AUTH_FILE = process.env.AIUI_AUTH_FILE || path.join(os.homedir(), '.aiui-auth.json')
 export const COOKIE_NAME = 'aiui_session'
@@ -85,6 +93,16 @@ export function userLimit(username) {
   const c = loadConfig()
   const n = c?.limits?.[username]
   return Number.isFinite(n) && n >= 0 ? n : null
+}
+
+/** The model filter for a User: `userModels[username]` when present
+ *  (replaces the deployment-wide `models` block), else `models`. Always
+ *  normalized to { include: [prefix...], notInclude: [prefix...] }; empty
+ *  lists mean no restriction. Live-reloads with the config file. */
+export function modelFilterFor(username) {
+  const c = loadConfig()
+  const src = (username && c?.userModels?.[username]) || c?.models || {}
+  return { include: patternsOf(src.include), notInclude: patternsOf(src.notInclude) }
 }
 
 // ── sessions ──

@@ -19,13 +19,15 @@ const cfg = {
   passphrases: [makeHash('shared-secret')],
   credentials: { hak: makeHash('hackler26') },
   limits: { demo: 10 },
+  models: { include: ['unii@tu@'], notInclude: ['unii@tu@llama*'] },
+  userModels: { demo: { include: ['q*'] } },
 }
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aiui-auth-'))
 const authFile = path.join(dir, 'auth.json')
 fs.writeFileSync(authFile, JSON.stringify(cfg))
 process.env.AIUI_AUTH_FILE = authFile
 
-const { authEnabled, verifyCredentials, userLimit } = await import('./auth.js')
+const { authEnabled, verifyCredentials, userLimit, modelFilterFor } = await import('./auth.js')
 
 test('per-User credential replaces the shared passphrase for that User', () => {
   assert.equal(verifyCredentials('hak', 'hackler26'), true, 'own password works')
@@ -42,6 +44,12 @@ test('unknown users always fail; auth counts credentials as a source; limits int
   assert.equal(authEnabled(), true)
   assert.equal(userLimit('demo'), 10)
   assert.equal(userLimit('hak'), null)
+})
+
+test('modelFilterFor: user block replaces the global one, global for the rest', () => {
+  assert.deepEqual(modelFilterFor('demo'), { include: ['q'], notInclude: [] })
+  assert.deepEqual(modelFilterFor('hak'), { include: ['unii@tu@'], notInclude: ['unii@tu@llama'] })
+  assert.deepEqual(modelFilterFor(null), { include: ['unii@tu@'], notInclude: ['unii@tu@llama'] })
 })
 
 // Cleanup after the tests ran — top-level rmSync would delete the config

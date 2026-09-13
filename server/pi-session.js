@@ -16,6 +16,8 @@ import * as Entry from '../shared/entry.js'
 import * as Sandbox from './sandbox.js'
 import { sharedRetrySettings } from './shared-settings.js'
 import { getAgent, requireAgent } from './agents.js'
+import { modelFilterFor } from './auth.js'
+import { filterModels, modelAllowed } from './model-filter.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PROJECT_ROOT = path.join(__dirname, '..')
@@ -240,7 +242,9 @@ async function applyAgentModel(u, session, agent) {
   try {
     const rt = await modelRuntimeFor(u)
     const model = rt.getModels().find(m => `${m.provider}@${m.id}` === agent.model || m.id === agent.model)
-    if (model) await session.setModel(model)
+    if (model && modelAllowed(modelFilterFor(u), `${model.provider}@${model.id}`, model.id)) {
+      await session.setModel(model)
+    }
   } catch { /* keep the runtime default */ }
 }
 
@@ -399,11 +403,11 @@ export async function setModel(user, modelId) {
   const rt = await modelRuntimeFor(user)
   const available = rt.getModels()
   const model = available.find(m => m.id === modelId || `${m.provider}@${m.id}` === modelId)
-  if (model) {
-    await s.setModel(model)
-  } else {
-    throw new Error(`Model not found: ${modelId}`)
+  if (!model) throw new Error(`Model not found: ${modelId}`)
+  if (!modelAllowed(modelFilterFor(normUser(user)), `${model.provider}@${model.id}`, model.id)) {
+    throw new Error(`Model not allowed: ${modelId}`)
   }
+  await s.setModel(model)
 }
 
 // Model catalog — per-User under hybrid keys (ADR-0002): a BYOK User sees only
@@ -412,7 +416,8 @@ export async function setModel(user, modelId) {
 // local/no-auth providers like amd-local/localhost/uart that listCredentials
 // misses), so every listed model is selectable (no silent "No API key" failures).
 export async function getAvailableModels(user) {
-  const rt = await modelRuntimeFor(user)
+  const u = normUser(user)
+  const rt = await modelRuntimeFor(u)
   const models = rt.getModels()
   const providers = [...new Set(models.map(m => m.provider))]
   const authed = new Set()
@@ -420,9 +425,12 @@ export async function getAvailableModels(user) {
     try { if (await rt.getAuth(p)) authed.add(p) } catch {}
   }))
   const usable = authed.size ? models.filter(m => authed.has(m.provider)) : models
+  // Model filter (include / notInclude from the auth config) — the picker can
+  // only offer what's left, and setModel refuses the rest.
+  const visible = filterModels(usable, modelFilterFor(u))
   const grouped = {}
   const imageModels = []
-  for (const m of usable) {
+  for (const m of visible) {
     const provider = m.provider || 'unknown'
     if (!grouped[provider]) grouped[provider] = []
     grouped[provider].push(m.id)

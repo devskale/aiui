@@ -292,7 +292,14 @@ see [`docs/deployment.md`](docs/deployment.md). Tested live via surf.
   dgx) in the systemd unit env.
 - **Auth:** `~/.aiui-auth.json` on lubu. Generate a hash:
   `node scripts/hash-passphrase.js '<pw>'`, paste `salt:hash` into `passphrases`.
-  Demo account: `demo`/`demo` (quota 10/day).
+  Per-User override: `credentials: { "<user>": "salt:hash" }` (replaces the
+  shared list for that user). Demo account: `demo`/`demo` (quota 10/day).
+- **Model filter:** in `~/.aiui-auth.json` — `models: { include: [...],
+  notInclude: [...] }` deployment-wide, `userModels: { "<user>": {...} }`
+  replaces it per User. Patterns are anchored prefixes on `provider@id`:
+  `unii@tu@qwen-3.6-35b-vllm` (exact), `unii@tu@` (provider), `unii@tu@qwen*`
+  (wildcard); `notInclude` wins. Enforced in `/api/models`, `setModel`, and
+  agent model pins (`server/model-filter.js`).
 - **rsync excludes** `workspace/`, `uploads/`, `.pi/` → user data survives deploys.
 - **skale.dev redirect (separate repo):** the `skale.dev/aiui` →
   `neusiedl.duckdns.org:8001/aiui/` redirect lives in the **skalego** repo
