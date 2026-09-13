@@ -432,9 +432,15 @@ app.get('/api/changelog', (_req, res) => {
 })
 
 // ── File upload ──
-app.post('/api/upload', upload.array('files', 20), (req, res) => {
+// dataUrl is opt-in (?dataUrl=1): the input bar needs it to attach images as
+// vision content; the file explorer ignores the response, so it skips the
+// base64 round-trip entirely. Reads are async — a 50MB image must not freeze
+// the event loop (and with it every other user's request).
+app.post('/api/upload', upload.array('files', 20), async (req, res) => {
   const base = (process.env.VITE_BASE || '').replace(/\/+$/, '')
-  const files = (req.files || []).map(f => {
+  const wantDataUrl = req.query.dataUrl === '1'
+  const files = []
+  for (const f of req.files || []) {
     const ext = path.extname(f.originalname).toLowerCase().replace('.', '')
     const mimetype = Mime.mimeFor(ext) || f.mimetype
     const isImage = Mime.isImage(mimetype)
@@ -448,12 +454,12 @@ app.post('/api/upload', upload.array('files', 20), (req, res) => {
       mimetype,
       isImage,
     }
-    if (isImage) {
-      const data = fs.readFileSync(f.path)
+    if (isImage && wantDataUrl) {
+      const data = await fs.promises.readFile(f.path)
       info.dataUrl = `data:${mimetype};base64,${data.toString('base64')}`
     }
-    return info
-  })
+    files.push(info)
+  }
   res.json({ files })
 })
 

@@ -46,7 +46,9 @@ export function useAttachments() {
       const fd = new FormData()
       fd.append('files', file)
       try {
-        const res = await fetch(apiUrl('/api/upload'), { method: 'POST', body: fd })
+        // dataUrl=1: images come back base64-encoded for vision attachments —
+        // the prompt body carries the dataUrl, not the file path.
+        const res = await fetch(apiUrl('/api/upload?dataUrl=1'), { method: 'POST', body: fd })
         if (res.ok) {
           const data = await res.json()
           const serverFile = data.files?.[0]

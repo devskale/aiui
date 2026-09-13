@@ -24,6 +24,14 @@ The latest version is shown in the UI under `#/releases`.
 - **Idle context eviction** — user contexts idle for longer than
   `AIUI_IDLE_EVICT_HOURS` (default 24) and not mid-stream are dropped from
   memory on the next request; stored sessions are untouched and resume lazily.
+- **File explorer (G5) fixes** from review — async upload reads (a 50MB image
+  no longer freezes the event loop for everyone), the base64 `dataUrl` is now
+  opt-in (`?dataUrl=1`, only the input bar needs it), image-ness comes from
+  the server's mime table via `/api/tree` (no client ext-list drift — svg/bmp
+  no longer masquerade as previewable images), upload failures are counted
+  instead of masking as success, a failed folder load shows a retry instead
+  of "No files", the viewer gets a download affordance and an image-error
+  state.
 
 ## [0.3.0] — 2026-08-16
 

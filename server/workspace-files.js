@@ -10,7 +10,7 @@
 import path from 'node:path'
 import fs from 'node:fs'
 import { assertInside } from './sandbox.js'
-import { mimeFor } from './mime.js'
+import { mimeFor, isImage } from './mime.js'
 
 const IGNORED = new Set(['node_modules', '.git', 'dist', 'uploads', 'sessions'])
 const MAX_READ_BYTES = 1024 * 1024
@@ -22,13 +22,20 @@ export function resolveWorkspacePath(cwd, sub) {
   return target
 }
 
-/** One level of a directory: dirs first, then files, ignoring noise. */
+/** One level of a directory: dirs first, then files, ignoring noise. Files
+ *  carry `isImage` from the server's mime table — the single source of truth
+ *  for "previewable as image", so clients never keep their own ext list. */
 export function listDir(cwd, sub) {
   const dir = resolveWorkspacePath(cwd, sub)
   const out = []
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     if (e.name.startsWith('.') || IGNORED.has(e.name)) continue
-    out.push({ name: e.name, dir: e.isDirectory() })
+    const isDir = e.isDirectory()
+    out.push({
+      name: e.name,
+      dir: isDir,
+      isImage: !isDir && isImage(mimeFor(path.extname(e.name))),
+    })
   }
   out.sort((a, b) => (a.dir === b.dir ? a.name.localeCompare(b.name) : a.dir ? -1 : 1))
   return out

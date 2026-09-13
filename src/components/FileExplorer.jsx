@@ -11,13 +11,11 @@ import { apiUrl } from '../lib/api'
 import { useEscape } from '../hooks/useEscape'
 import { UploadCloud, Folder, File as FileIcon } from 'lucide-react'
 
-const IMG_RE = /\.(png|jpe?g|gif|webp|svg|bmp)$/i
-
 export function FileExplorer({ onClose }) {
   useEscape(onClose)
   const [dir, setDir] = useState('')        // current relative dir ('' = root)
   const [entries, setEntries] = useState(null)
-  const [file, setFile] = useState(null)    // { path, name } when viewing
+  const [file, setFile] = useState(null)    // { path, name, isImage } when viewing
   const [content, setContent] = useState(null)
   const [error, setError] = useState(null)
   const [uploading, setUploading] = useState(false)
@@ -30,33 +28,45 @@ export function FileExplorer({ onClose }) {
       const r = await fetch(apiUrl(`/api/tree?path=${encodeURIComponent(d)}`))
       if (!r.ok) throw new Error('load failed')
       setEntries(await r.json())
-    } catch { setEntries([]) }
+    } catch {
+      setEntries(null)
+      setError('folder could not be loaded')
+    }
   }, [])
 
   useEffect(() => { loadDir(dir) }, [dir, loadDir])
 
-  // Upload into the currently-browsed folder, then refresh the listing.
+  // Upload into the currently-browsed folder, then refresh the listing. The
+  // response is ignored server-side (no dataUrl round-trip); failures are
+  // counted so a rejected file doesn't masquerade as success.
   const uploadFiles = useCallback(async (fileList) => {
     if (!fileList || !fileList.length) return
     setUploading(true)
+    let failed = 0
     try {
       for (const file of fileList) {
         const fd = new FormData()
         fd.append('files', file)
-        await fetch(apiUrl(`/api/upload?dir=${encodeURIComponent(dir)}`), { method: 'POST', body: fd })
+        try {
+          const r = await fetch(apiUrl(`/api/upload?dir=${encodeURIComponent(dir)}`), { method: 'POST', body: fd })
+          if (!r.ok) failed++
+        } catch { failed++ }
       }
       await loadDir(dir)
-    } catch {
-      setError('upload failed')
+      if (failed) setError(`upload failed for ${failed} of ${fileList.length} file(s)`)
     } finally {
       setUploading(false)
     }
   }, [dir, loadDir])
 
-  const openFile = async (name) => {
-    const p = dir ? `${dir}/${name}` : name
-    setFile({ path: p, name }); setContent(null); setError(null)
-    if (IMG_RE.test(name)) return // images load straight from /api/file/raw
+  const openFile = (entry) => {
+    const p = dir ? `${dir}/${entry.name}` : entry.name
+    setFile({ path: p, name: entry.name, isImage: !!entry.isImage }); setContent(null); setError(null)
+    if (entry.isImage) return // images load straight from /api/file/raw
+    loadText(p)
+  }
+
+  const loadText = async (p) => {
     try {
       const r = await fetch(apiUrl(`/api/file?path=${encodeURIComponent(p)}`))
       setContent(await r.json())
@@ -92,22 +102,27 @@ export function FileExplorer({ onClose }) {
               <div className="fe-viewer-bar">
                 <button className="fe-back" onClick={() => loadDir(dir)}>← back</button>
                 <span className="fe-viewer-path">{file.path}</span>
+                <a className="fe-back" href={apiUrl(`/api/file/raw?path=${encodeURIComponent(file.path)}`)} download={file.name} title="Download file">⬇ open</a>
               </div>
               {error && <div className="fe-empty">{error}</div>}
-              {IMG_RE.test(file.name) ? (
-                <img className="fe-img" src={apiUrl(`/api/file/raw?path=${encodeURIComponent(file.path)}`)} alt={file.name} />
-              ) : content === null ? (
+              {!error && file.isImage ? (
+                <img className="fe-img" src={apiUrl(`/api/file/raw?path=${encodeURIComponent(file.path)}`)} alt={file.name} onError={() => setError('image could not be loaded')} />
+              ) : !error && content === null ? (
                 <div className="fe-empty">Loading…</div>
-              ) : content.tooLarge ? (
+              ) : !error && content.tooLarge ? (
                 <div className="fe-empty">File is {Math.round(content.size / 1024)}KB — too large to preview (1MB limit).</div>
-              ) : content.error ? (
+              ) : !error && content.error ? (
                 <div className="fe-empty">{content.error}</div>
-              ) : (
+              ) : !error && (
                 <pre className="fe-content">{content.content}</pre>
               )}
             </div>
           ) : entries === null ? (
-            <div className="fe-empty">Loading…</div>
+            error ? (
+              <div className="fe-empty">{error} <button className="fe-back" onClick={() => loadDir(dir)}>retry</button></div>
+            ) : (
+              <div className="fe-empty">Loading…</div>
+            )
           ) : entries.length === 0 ? (
             <div className="fe-empty">No files</div>
           ) : (
@@ -119,7 +134,7 @@ export function FileExplorer({ onClose }) {
                 <li key={e.name}>
                   <button
                     className={`fe-entry ${e.dir ? 'fe-entry--dir' : 'fe-entry--file'}`}
-                    onClick={() => e.dir ? setDir(dir ? `${dir}/${e.name}` : e.name) : openFile(e.name)}
+                    onClick={() => e.dir ? setDir(dir ? `${dir}/${e.name}` : e.name) : openFile(e)}
                   >
                     {e.dir ? <Folder size={14} /> : <FileIcon size={14} />} <span>{e.name}</span>
                   </button>
