@@ -12,7 +12,7 @@ import fs from 'node:fs'
 import { assertInside } from './sandbox.js'
 import { mimeFor, isImage } from './mime.js'
 
-const IGNORED = new Set(['node_modules', '.git', 'dist', 'uploads', 'sessions'])
+const IGNORED = new Set(['node_modules', '.git', 'dist', 'sessions'])
 const MAX_READ_BYTES = 1024 * 1024
 
 /** Resolve a workspace-relative sub-path, enforcing it stays inside cwd. */

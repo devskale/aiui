@@ -19,6 +19,12 @@ The latest version is shown in the UI under `#/releases`.
   `/api/models` (the picker), `POST /api/model`, and agent model pins.
   Pure logic in `server/model-filter.js`, 9 tests.
 
+### Changed
+
+- **Uploaded files are visible + reusable** — `uploads/` is no longer hidden
+  from the file explorer or the @-mention autocomplete: chat uploads stay
+  browsable, mentionable, and re-readable (e.g. `read_pdf` in a later chat).
+
 ## [0.3.1] — 2026-09-13
 
 ### Fixed

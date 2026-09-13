@@ -26,7 +26,9 @@ const execAsync = promisify(exec)
 // ── Workspace file listing (for @-mention autocomplete) ──
 // Scoped to the requesting user's workspace dir (the only place the agent can
 // read). Git-aware (git ls-files); falls back to a bounded walk if no git.
-const IGNORED_DIRS = new Set(['node_modules', '.git', 'dist', 'uploads', 'sessions', 'test-results', 'coverage'])
+// uploads/ is LISTED on purpose — chat uploads stay visible + reusable
+// (browsable, @-mentionable, re-readable via read_pdf).
+const IGNORED_DIRS = new Set(['node_modules', '.git', 'dist', 'sessions', 'test-results', 'coverage'])
 
 async function gitListFiles(dir) {
   const { stdout } = await execAsync('git ls-files --cached --others --exclude-standard', { cwd: dir, maxBuffer: 32 * 1024 * 1024 })
@@ -47,7 +49,7 @@ function walkFiles(dir, base, out, depth) {
   }
 }
 
-// Internal dirs / dotfiles never belong in the mention list (sessions/, uploads/,
+// Internal dirs / dotfiles never belong in the mention list (sessions/,
 // .git/ etc.) — applied to both the git and walk fallbacks for parity.
 function keepFile(rel) {
   if (!rel || rel.startsWith('.')) return false
@@ -93,9 +95,10 @@ app.use((_req, res, next) => {
 
 // ── File upload setup ──
 const storage = multer.diskStorage({
-  // Upload into the user's workspace so the agent's read tool can reach the
-  // file (the shared uploads/ dir is outside the sandbox cwd). 'uploads' is
-  // in IGNORED_DIRS, so the file browser stays tidy but the agent can still read it.
+    // Upload into the user's workspace so the agent's read tool can reach the
+    // file (the shared uploads/ dir is outside the sandbox cwd). 'uploads' is
+    // listed in the file browser + mention autocomplete, so users can see and
+    // reuse what they uploaded (read_pdf etc.).
   destination: (req, _file, cb) => {
     // Target dir: the FileExplorer passes ?dir= (the browsed folder, even ''
     // for root); the InputBar omits it and defaults to 'uploads/'. Validated
