@@ -9,8 +9,14 @@
 //
 // Config (AIUI_AUTH_FILE, default ~/.aiui-auth.json):
 //   { "users": ["johann","guest"], "passphrases": ["salt:hash", ...],
+//     "credentials": { "johann": "salt:hash" },   // optional per-User override
 //     "limits": { "guest": 10 } }
 // Generate a hash:  node scripts/hash-passphrase.js <passphrase>
+//
+// Credential resolution: if `credentials[username]` exists, that User logs in
+// ONLY with those passphrases (string or array) — the shared `passphrases`
+// list no longer applies to them. Everyone else verifies against the shared
+// list. So a per-User entry is a replacement, not an addition.
 // ════════════════════════════════════════════════════════════════════
 import crypto from 'node:crypto'
 import fs from 'node:fs'
@@ -43,10 +49,11 @@ function loadConfig() {
   }
 }
 
-/** Auth is "on" only when the config defines users AND passphrases. */
+/** Auth is "on" only when the config defines users AND any credential source. */
 export function authEnabled() {
   const c = loadConfig()
-  return !!(c && c.users?.length && c.passphrases?.length)
+  return !!(c && c.users?.length &&
+    (c.passphrases?.length || (c.credentials && Object.keys(c.credentials).length)))
 }
 
 // scrypt verify a passphrase against a "salt:hash" (both hex) entry.
@@ -59,12 +66,18 @@ function verifyHash(passphrase, entry) {
   return crypto.timingSafeEqual(computed, expected)
 }
 
-/** username known AND passphrase matches any configured hash. */
+// Normalize a credentials-map entry (string | array) to a list of entries.
+function asList(v) { return Array.isArray(v) ? v : [v] }
+
+/** username known AND passphrase matches their credentials: the per-User
+ *  `credentials[username]` entries when present (replacement semantics),
+ *  otherwise the shared `passphrases` list. */
 export function verifyCredentials(username, passphrase) {
   const c = loadConfig()
   if (!c || !Array.isArray(c.users) || !c.users.includes(username)) return false
-  if (!Array.isArray(c.passphrases)) return false
-  return c.passphrases.some(p => verifyHash(passphrase, p))
+  const own = c.credentials?.[username]
+  const candidates = own ? asList(own) : (Array.isArray(c.passphrases) ? c.passphrases : [])
+  return candidates.some(p => verifyHash(passphrase, p))
 }
 
 /** Per-user daily query limit, or null = unlimited. */
