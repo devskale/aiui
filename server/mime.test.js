@@ -4,7 +4,7 @@
 // ════════════════════════════════════════════════════════════════════
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mimeFor, isImage } from './mime.js'
+import { mimeFor, isImage, rawContentType } from './mime.js'
 
 // ── mimeFor ──
 
@@ -46,6 +46,19 @@ test('isImage: false for non-table mimes and falsy', () => {
   assert.equal(isImage('application/pdf'), false)
   assert.equal(isImage(null), false)
   assert.equal(isImage(''), false)
+})
+
+// ── rawContentType ──
+
+test('rawContentType: images, inline pdf, download-only for the rest', () => {
+  assert.equal(rawContentType('.png'), 'image/png')
+  assert.equal(rawContentType('jpg'), 'image/jpeg')
+  assert.equal(rawContentType('pdf'), 'application/pdf')
+  assert.equal(rawContentType('.PDF'), 'application/pdf')
+  assert.equal(rawContentType('html'), null, 'html stays octet-stream → inert')
+  assert.equal(rawContentType('svg'), null, 'svg stays octet-stream → inert')
+  assert.equal(rawContentType(''), null)
+  assert.equal(rawContentType(null), null)
 })
 
 // ── the anti-drift guarantee (the whole point of candidate #3) ──

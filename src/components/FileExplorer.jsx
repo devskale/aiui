@@ -61,8 +61,9 @@ export function FileExplorer({ onClose }) {
 
   const openFile = (entry) => {
     const p = dir ? `${dir}/${entry.name}` : entry.name
-    setFile({ path: p, name: entry.name, isImage: !!entry.isImage }); setContent(null); setError(null)
-    if (entry.isImage) return // images load straight from /api/file/raw
+    setFile({ path: p, name: entry.name, isImage: !!entry.isImage, contentType: entry.contentType || null })
+    setContent(null); setError(null)
+    if (entry.isImage || entry.contentType === 'application/pdf') return // render straight from /api/file/raw
     loadText(p)
   }
 
@@ -107,6 +108,8 @@ export function FileExplorer({ onClose }) {
               {error && <div className="fe-empty">{error}</div>}
               {!error && file.isImage ? (
                 <img className="fe-img" src={apiUrl(`/api/file/raw?path=${encodeURIComponent(file.path)}`)} alt={file.name} onError={() => setError('image could not be loaded')} />
+              ) : !error && file.contentType === 'application/pdf' ? (
+                <iframe className="fe-pdf" src={apiUrl(`/api/file/raw?path=${encodeURIComponent(file.path)}`)} title={file.name} onError={() => setError('pdf could not be loaded')} />
               ) : !error && content === null ? (
                 <div className="fe-empty">Loading…</div>
               ) : !error && content.tooLarge ? (

@@ -393,12 +393,14 @@ app.get('/api/file', async (req, res) => {
     res.status(400).json({ error: 'invalid path' })
   }
 })
-// Raw bytes (images) with a mime-typed Content-Type.
+// Raw bytes with a real content type for previewable types (images, pdf —
+// the browser renders PDFs in its native viewer); everything else stays
+// application/octet-stream (download-only, no render surface).
 app.get('/api/file/raw', async (req, res) => {
   try {
     const sub = (req.query.path || '').toString()
     const file = resolveWorkspacePath(workspaceCwd(req.user), sub)
-    res.setHeader('Content-Type', mimeFor(path.extname(file)) || 'application/octet-stream')
+    res.setHeader('Content-Type', Mime.rawContentType(path.extname(file)) || 'application/octet-stream')
     fs.createReadStream(file).on('error', () => res.status(404).end()).pipe(res)
   } catch {
     res.status(400).json({ error: 'invalid path' })
