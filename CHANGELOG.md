@@ -13,11 +13,11 @@ The latest version is shown in the UI under `#/releases`.
 - **Model filter (`include` / `notInclude`)** — restrict the model catalog
   via `~/.aiui-auth.json`: `models: { include: [...], notInclude: [...] }`
   deployment-wide, `userModels: { "<user>": {...} }` replaces it per User.
-  Patterns are anchored prefixes on the full `provider@id` — exact
-  (`unii@tu@qwen-3.6-35b-vllm`), provider (`unii@tu@`), wildcard
-  (`unii@tu@qwen*`); `notInclude` wins over `include`. Enforced in
-  `/api/models` (the picker), `POST /api/model`, and agent model pins.
-  Pure logic in `server/model-filter.js`, 9 tests.
+  Patterns anchor at the start of the full `provider@id` — no `*` means
+  prefix (`unii@tu@`, `unii@tu@qwen-3.6-35b-vllm`), `*` means glob anywhere
+  (`unii@tu@qwen*`, `kilo@*free*`, `opencode@*free`); `notInclude` wins over
+  `include`. Enforced in `/api/models` (the picker), `POST /api/model`, and
+  agent model pins. Pure logic in `server/model-filter.js`.
 
 ### Changed
 

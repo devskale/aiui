@@ -12,9 +12,9 @@ const CATALOG = [
 
 const allowed = (filter, provider, id) => modelAllowed(filter, `${provider}@${id}`, id)
 
-test('patternsOf: normalizes strings, arrays, wildcards, empties', () => {
+test('patternsOf: normalizes strings, arrays, empties; preserves stars', () => {
   assert.deepEqual(patternsOf('unii@tu@'), ['unii@tu@'])
-  assert.deepEqual(patternsOf(['unii@tu@qwen*', ' x ']), ['unii@tu@qwen', 'x'])
+  assert.deepEqual(patternsOf(['unii@tu@qwen*', ' x ']), ['unii@tu@qwen*', 'x'])
   assert.deepEqual(patternsOf(undefined), [])
   assert.deepEqual(patternsOf(['', '  ']), [])
 })
@@ -56,6 +56,20 @@ test('empty include = everything, minus notInclude', () => {
   const f = { include: [], notInclude: ['openai-codex@'] }
   assert.ok(allowed(f, 'unii@tu', 'qwen-3.6-35b'))
   assert.ok(!allowed(f, 'openai-codex', 'gpt-6-astra'))
+})
+
+test('glob: * matches anywhere inside the pattern', () => {
+  const f = { include: ['unii@kilo@*free*'], notInclude: [] }
+  assert.ok(allowed(f, 'unii', 'kilo@inclusionai/ling-3.0-flash-vl:free'))
+  assert.ok(allowed(f, 'unii', 'kilo@kilo-auto/free'))
+  assert.ok(!allowed(f, 'unii', 'kilo@liquid/lfm-2.5-2.6b'), 'no free → out')
+  assert.ok(!allowed(f, 'unii', 'tu@qwen-3.6-35b'), 'provider prefix must match too')
+
+  const f2 = { include: ['opencode@*free'], notInclude: [] }
+  assert.ok(allowed(f2, 'opencode', 'deepseek-v4-flash-free'))
+  assert.ok(allowed(f2, 'opencode', 'muse-spark-1.3-contributor-free'))
+  assert.ok(!allowed(f2, 'opencode', 'claude-opus-5'))
+  assert.ok(!allowed(f2, 'openai-codex', 'gpt-6-astra'))
 })
 
 test('filterModels filters the catalog, preserving order', () => {

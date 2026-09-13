@@ -47,9 +47,9 @@ test('unknown users always fail; auth counts credentials as a source; limits int
 })
 
 test('modelFilterFor: user block replaces the global one, global for the rest', () => {
-  assert.deepEqual(modelFilterFor('demo'), { include: ['q'], notInclude: [] })
-  assert.deepEqual(modelFilterFor('hak'), { include: ['unii@tu@'], notInclude: ['unii@tu@llama'] })
-  assert.deepEqual(modelFilterFor(null), { include: ['unii@tu@'], notInclude: ['unii@tu@llama'] })
+  assert.deepEqual(modelFilterFor('demo'), { include: ['q*'], notInclude: [] })
+  assert.deepEqual(modelFilterFor('hak'), { include: ['unii@tu@'], notInclude: ['unii@tu@llama*'] })
+  assert.deepEqual(modelFilterFor(null), { include: ['unii@tu@'], notInclude: ['unii@tu@llama*'] })
 })
 
 // Cleanup after the tests ran — top-level rmSync would delete the config

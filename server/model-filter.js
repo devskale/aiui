@@ -13,25 +13,33 @@
 //   - include empty/absent → everything allowed; otherwise a model must match
 //     at least one include pattern.
 //   - notInclude always wins over include.
-//   - A pattern is an ANCHORED PREFIX on the full id "provider@id"; a trailing
-//     "*" is allowed and purely cosmetic. All three forms therefore work:
-//       "unii@tu@qwen-3.6-35b-vllm"   exact model
-//       "unii@tu@"                     every model of that provider
-//       "unii@tu@qwen*"                every qwen model at that provider
+//   - A pattern is ANCHORED at the start of the full id "provider@id":
+//       without "*" it is a prefix    "unii@tu@"         → every model of that provider
+//       with "*" it is a glob         "unii@tu@qwen*"    → every qwen model there
+//                                     "kilo@*free*"      → ids containing "free"
+//                                     "opencode@*free"   → ids ending in "free"
+//       an exact id matches as a prefix of itself.
 //   - Fallback: a pattern may also match the bare model id ("qwen*" when ids
 //     are unique across providers).
 // ════════════════════════════════════════════════════════════════════
 
 /** Normalize a config value (string | array | absent) to a list of match
- *  prefixes — trailing "*" stripped, empties dropped. */
+ *  patterns — trimmed, empties dropped. Stars are preserved (glob syntax). */
 export function patternsOf(v) {
   return (Array.isArray(v) ? v : v != null ? [v] : [])
-    .map(p => String(p).trim().replace(/\*+$/, ''))
+    .map(p => String(p).trim())
     .filter(Boolean)
 }
 
-export function patternMatches(prefix, fullId, bareId) {
-  return fullId.startsWith(prefix) || bareId.startsWith(prefix)
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+export function patternMatches(pattern, fullId, bareId) {
+  if (pattern.includes('*')) {
+    // anchored glob: "a*b*c" → ^a.*b.*c
+    const re = new RegExp('^' + pattern.split('*').map(escapeRe).join('.*'))
+    return re.test(fullId) || re.test(bareId)
+  }
+  return fullId.startsWith(pattern) || bareId.startsWith(pattern)
 }
 
 /** The gate for one model. filter = { include, notInclude } — raw or
