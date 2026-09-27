@@ -29,11 +29,18 @@ strukturiert.
 Längere Recherchen münden in ein Report-Bündel im Workspace:
 
 ```
-reports/fi-<slug>-<fn>/
+reports/fi-<slug>-<fn>-<4hex>/
   report.md            ← die Analyse (Kernaussagen zuerst, FN + Quellenzitate)
   rohdaten/*.json      ← jede API-Antwort 1:1 (Nachvollziehbarkeit)
   dokumente/*          ← gezogene Urkunden/Bilanz-XML
 ```
+
+**Selbst-Check vor dem Teilen** (jedes Mal, keine Ausnahme):
+1. Jede Zahl im report.md ist auf eine Datei in `rohdaten/` zurückführbar —
+   nichts aus dem Kopf, nichts aus dem Web als Registerdatum ausgeben.
+2. Alle im Report referenzierten Bündel-Dateien existieren tatsächlich
+   (`ls` vor dem Upload).
+3. report.md verlinkt die Interaktive Ansicht (`?fn=<FN>`).
 
 Auf Wunsch („schöner Report", „als Seite teilen", „mit Grafiken") zusätzlich
 `index.html` über deinen `visualize`-Skill — Bilanz-Charts aus

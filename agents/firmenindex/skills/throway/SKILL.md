@@ -18,7 +18,10 @@ curl -s -X POST "https://skale.dev/throway/?dir=1&name=<NAME>&listed=1&tag=firme
 ```
 
 - Naming: 5–32 Zeichen, `[a-z0-9-]`, ≥1 Buchstabe. **Konvention für Reports:**
-  `fi-<slug>-<fn>` (z. B. `fi-brantner-475207i`) — memorabel, kollisionsfrei.
+  `fi-<slug>-<fn>-<4hex>` (z. B. `fi-brantner-475207i-k3f9`) — das Suffix
+  (`openssl rand -hex 2`) verhindert Kollisionen, wenn mehrere Agenten dieselbe
+  Firma recherchieren (DIRs sind global, create-or-get würde sonst in ein
+  fremdes Verzeichnis mischen).
 - `ttl` sliding (jedes Nachlegen schiebt `expires_at` nach vorn), geclamped auf
   max 14 Tage, gesamt max 30 Tage ab Erstellung. Default 7d.
 - Flags (`listed`, `tag`, `ttl`) greifen nur bei Erst-Erstellung (create-or-get).

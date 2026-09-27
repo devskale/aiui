@@ -86,6 +86,11 @@ Es gibt **keine exportierbaren Bild-Assets** (alles JS-rendered). Für Reports:
 1. **Cache-first:** Antwort in den Workspace schreiben (`cache/<fn>.json`) und
    wiederverwenden. Upstream-Rate-Limit **~30 req/min** — höflich batchen,
    kein paralleles Sturmtrommeln.
+1b. **Retry-Budget:** Max **2 Retry-Versuche** pro Call (mit `sleep 20–30`
+   dazwischen). Danach: den Teil als **degradiert** kennzeichnen (Upstream-
+   Timeout/„Bitte später erneut versuchen“ ist ein ehrliches Nein) und mit dem
+   vorhandenen Material weitermachen. Kein Endlos-Retrying — ein fehlender
+   Baustein ist besser als ein nie fertiggestellter Report.
 2. **Fehler sind JSON:** `{"detail":{"error":{type,message}}}` mit passendem
    HTTP-Status — lesen, nicht ignorieren.
 3. **`"degradiert": true`** im Payload → Live-Quelle ausgefallen: im Report
