@@ -1,13 +1,29 @@
 # Ideas from reference repos
 
 Analysis of the reference repos cloned into `inspirations/`, mapped against
-what aiui (`piui`) already has. Each idea is tagged with an estimated effort
-(S/M/L) and where it slots into aiui's existing architecture.
+what aiui (`piui`) already has. Plus findings from the broader coding-agent
+UI landscape (GitHub, web). This is an open ledger — no prioritization or
+effort estimates; use this as a menu of possibilities.
+
+## Reference repos
 
 - `inspirations/chatbot-template` — shadcn-ui/chatbot-template (Next.js + AI SDK UI shell)
 - `inspirations/pi-web` — agegr/pi-web (Next.js browser UI for pi; closest analog to aiui)
 - `inspirations/pi-gui` — minghinmatthewlam/pi-gui (Electron Codex-style desktop app for pi)
 - `inspirations/deepseek-harness` — deepseek-ai/deepseek-harness (plugin-driven agent harness)
+
+## Broader landscape (2026-09)
+
+- **agegr/pi-web** (6.3k⭐) — pi's official web UI: session workspace, git worktrees, web config, i18n.
+- **agent-of-empires/aoe** — TUI + web + CLI + HTTP API; multi-agent parallel runs in tmux, worktrees, Docker/Podman/Apple Containers sandboxing, diff review, mobile-responsive web dashboard.
+- **kierbica/universal-agent-ui** — provider-agnostic frontend: Claude Code, OpenCode, others via adapter pattern; dynamic theming per provider, cost tracking, settings modal.
+- **liuhuanxi-oss/claude-code-web-ui** — Vue 3 + Koa: streaming chat, multi-session, cost/usage analytics, file browser, web terminal (node-pty), cron scheduled jobs, model selector.
+- **CUI / kanna / claude-run** — multiple Claude Code web UIs with session history, streaming, tool visibility.
+- **opencode/web** — official OpenCode web UI; spawned forks: mobile clients (Android/iOS), Obsidian sidebar embed, VSCode extension.
+- **HarnessRouter** — unified API for multiple agent harnesses (Codex, Claude Code, Hermes, PI, DSH) via Unified Harness Protocol (UHP).
+- **omp-deck** — omp (oh-my-pi) cockpit: multi-session chat, kanban board, cron routines, inbox, Telegram bridge, plugin marketplace.
+
+---
 
 aiui's existing primitives: `shared/entry.js` (Entry value, server+client),
 `server/event-bus.js` (one SSE bus per user), `server/pi-session.js` (per-user
@@ -140,7 +156,85 @@ session lifecycle), `server/quota.js` (daily cap), `src/hooks/useAgentEvents.js`
 
 ---
 
-## Prioritized shortlist for aiui
+## 8. Multi-agent / orchestration
+
+- **Subagents runtime** (pi-web `subagent-*` modules) — run sub-agents from the UI; `subagent-runtime`, `subagent-queue`, `subagent-isolation`, `subagent-profile-precedence`, `subagent-prompt` (each with sibling tests).
+- **Agent of Empires model** — multi-agent parallel runs in isolated tmux sessions; TUI + web + CLI + HTTP API surfaces; worktrees + Docker/Podman/Apple Containers sandboxing; diff review; mobile-responsive dashboard.
+- **Universal Agent UI adapter pattern** — provider-agnostic frontend with pluggable adapters (`BaseAdapter` extension); dynamic theming per provider (colors, icons, labels); cost tracking per response; auth status checks; settings modal to enable/disable providers.
+- **omp-deck kanban + routines** — multi-session chat view, kanban board for task status, cron-like scheduled routines, inbox for notifications, Telegram bridge, plugin marketplace.
+- **Multi-agent coordination** (lightson-os/coders-war-room) — real-time coordination of multiple Claude Code agents; tmux-based sessions, live dashboard, file browser, drag-and-drop task assignment.
+
+## 9. Scheduling / automation
+
+- **Cron scheduled jobs** (liuhuanxi-oss/claude-code-web-ui, deepseek-harness `schedule`) — cron表达式调度自动执行提示词; one-shot and fixed-rate reminders over session log; manual trigger/pause/resume; execution logs.
+- **Agent-of-empires profiles + repo hooks** — per-agent profiles with custom commands, repo-level hooks, diff review workflows.
+
+## 10. Analytics / cost tracking
+
+- **Usage analytics dashboard** (liuhuanxi-oss/claude-code-web-ui, universal-agent-ui) — total token usage (input/output), cost tracking in USD, 30-day trend charts, breakdown by model.
+- **Provider usage quotas** (pi-web) — show provider-level quota usage in the model picker.
+- **Cost + duration per response** (universal-agent-ui) — display cost and duration for each agent response.
+- **Session monitor dashboard** (Claude-Code-Agent-Monitor) — real-time tracking of sessions, agent activity, tool usage, subagent orchestration; Kanban status board; live analytics; notifications.
+
+## 11. Terminal / shell integration
+
+- **Web terminal** (liuhuanxi-oss/claude-code-web-ui, pi-web `custom-ui-terminal`) — full terminal in browser via node-pty + WebSocket; interactive shell commands; tmux session attachment.
+- **Integrated PTY terminal** (pi-gui) — terminal pane inside the desktop app for running commands alongside agent chat.
+
+## 12. Mobile / cross-platform
+
+- **Mobile-responsive web UI** (agent-of-empires, acp-ui, agent-os) — structured mobile view for phones/tablets; PWA support; touch-optimized controls.
+- **Native mobile apps** (bmpenuelas/opencode-mobile-client, ferdiu/opencode-wrapper-android) — Android/iOS webview wrappers with native notification support.
+- **Desktop apps** (vastsa/PI-Desktop, pi-gui, cdesktop) — Electron/Rust host core; native menus, tray, system notifications; offline-first architecture.
+- **Obsidian sidebar embed** (emmet24/obsidian-opencode-wsl) — embed web UI in Obsidian via WSL bridge.
+- **VSCode extension** (cpkt9762/opencode-web-for-vscode) — embed web UI in VSCode sidebar.
+
+## 13. Safety / guardrails
+
+- **Pre-execution guard** (kenryu42/cc-safety-net) — blocks destructive Git and filesystem commands before tool calls run; supports multiple agents (Amp, Claude Code, Codex, Cursor, Pi, etc.).
+- **RiskConfirmation primitive** (deepseek-harness) — modal dialog gating sensitive actions behind explicit checkbox acknowledgment; warning icon + description; confirm button disabled until checked.
+- **Sandbox policies** (deepseek-harness `sandbox-policy`, `sandbox-local`, `sandbox-windows-acl`) — native sandbox implementations (Linux landlock, Windows ACL, macOS seatbelt).
+
+## 14. Extensions / plugins
+
+- **Plugin marketplace** (omp-deck, deepseek-harness Cordis) — user-installable plugins; everything-is-a-plugin architecture; composability model for tools/skills/models.
+- **Extension display** (pi-gui `extension-display`, `extension-session-ui`) — show active extensions per session; extension-specific UI controls.
+- **MCP adapter** (nicobailon/pi-mcp-adapter) — token-efficient MCP adapter for Pi.
+- **Web search extension** (nicobailon/pi-web-access) — web search and content extraction for Pi.
+
+## 15. Session / project management
+
+- **Persistent task workspace** (gcywcsyxx/JerryCodexUI) — DeepSeek-ready workspace with paste uploads, persistent tasks across sessions.
+- **Faryo Codex mobile agent** (SongJunguo/faryo-codex-web-ui) — live tmux sessions, structured history, Markdown/KaTeX rendering, reliable delivery, PWA, secure remote access.
+- **Session isolation** (agent-os) — isolated workspaces per session with git integration.
+
+## 16. Blackboard / persistent workspace
+
+- **Blackboard (wie Claude App)** — ein persistentes, frei editierbares Markdown-Dokument pro User/Projekt, das wie eine „Tafel“ (blackboard) funktioniert: Agent und User teilen sich denselben laufenden Notizzettel. Der Agent kann darauf schreiben/löschen/umschreiben, der User kann es direkt im Browser editieren — und beide sehen live, was der andere ändert.
+  - **Wie es funktionieren könnte:** Wir schreiben eine Markdown-Datei (z. B. `workspace/<user>/blackboard.md`) als gemeinsame Quelle der Wahrheit. Der Agent bekommt sie als Tool („write to blackboard“/„read blackboard“), die UI zeigt sie als editierbares Panel (nicht nur Chat-Stream), und Änderungen werden live via Event bus / SSE synchronisiert.
+  - **Warum es gut passt:** aiui hat bereits per-User Workspaces, den Event bus für Live-Sync und Markdown-Rendering. Es hebt aiui von reinem Chat zu einem kollaborativen Arbeitsraum — der Agent arbeitet *in* einem Dokument, nicht nur in Antworten.
+  - **Referenzen:** Claude App's „blackboard“/canvas-Konzept; Notion-artige Live-Dokumente; `workspace-files.js` (aiui) als bestehende Basis für Datei-Zugriff.
+  - **Offene Fragen:** Ein einziges Blackboard pro User oder pro Projekt/Session? Konfliktlösung bei gleichzeitigem Editieren? Soll es in den Sandbox-Zugriff des Agents eingebunden sein (schreiben darf nur der Agent + User, nicht der Sandbox)?
+
+---
+
+## Notes on architecture patterns
+
+- **Adapter pattern** (universal-agent-ui) — single `BaseAdapter` interface; new providers via one file; dynamic UI theming from adapter metadata.
+- **Plugin/composability model** (deepseek-harness Cordis) — everything is a plugin; host/client contract boundary; codegen-from-source-of-truth + verify discipline.
+- **tmux-based isolation** (agent-of-empires) — agents run in persistent tmux sessions; survive disconnects; TUI/web reattach.
+- **Unified Harness Protocol** (HarnessRouter) — open standard for unifying agent harness APIs; sessions, streaming, files, cancellation, failure handling.
+- **Thin SDK adapter** (pi-gui `pi-sdk-driver`) — wrap pi SDK closely; don't reimplement runtime behavior.
+- **Pure, heavily-unit-tested lib modules** (pi-web) — almost every lib file has a matching `*.test.mjs` sibling.
+- **Module-level handler registry** (pi-web `useKeyboardShortcuts.ts`) — tiny global registry avoids prop-drilling.
+- **Shadow tools for side-effect-free sub-runs** (pi-web `session-title.ts`) — stub `execute` to throw when only text generation is needed.
+- **JSONL/disk as source of truth** (pi-gui) — read pi's JSONL session files as authoritative for closed sessions.
+
+---
+
+## Previously prioritized shortlist (for reference)
+
+*This section captures earlier prioritization; treat as historical context, not current guidance.*
 
 High value / low effort (do first):
 1. **Files-written chips** per turn (S)
