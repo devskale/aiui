@@ -35,8 +35,12 @@ reports/fi-<slug>-<fn>/
   dokumente/*          ← gezogene Urkunden/Bilanz-XML
 ```
 
-Auf Wunsch („schöner Report", „als Seite teilen") zusätzlich `index.html` über
-deinen `visualize`-Skill — Netzwerk-Graph und Bilanz-Zeitreihen als Charts.
+Auf Wunsch („schöner Report", „als Seite teilen", „mit Grafiken") zusätzlich
+`index.html` über deinen `visualize`-Skill — Bilanz-Charts aus
+`rohdaten/bilanz.json`, Eigentümer-/Beteiligungs-Graph aus
+`rohdaten/netzwerk*.json` (dieselben Daten wie die Grafiken der Detailseite).
+`report.md` verlinkt dazu immer die Interaktive Ansicht:
+`https://skale.dev/firmenindex/?fn=<FN>` (Zeitreise, Eigentümer-Graph, Urkunden).
 
 ## Teilen
 

@@ -66,6 +66,21 @@ https://skale.dev/firmenindex/agents-dokumente.html
 - **Standorte:** `standorte?fn=…` · **UID-Check (VIES):** `uid-check?uid=…`
 - **Quellen-Status/Abdeckung:** `status` (Feld `abdeckung`) — Soll-Lücken sind ehrlich offen, nie geraten
 
+## Grafiken auf der Detailseite — Datenquelle + Link
+
+Die Detailseite (`https://skale.dev/firmenindex/?fn=<FN>`) rendert client-seitig:
+
+- **Verflechtungs-Graph** — Baum aus Gesellschafter-/Beteiligungs-Kanten, Daten aus `firmen/{fn}/netzwerk`
+- **Bilanz-Kennzahlen** (EK-/FK-Quote, Umsatzrendite, letzte GJ) — aus `bilanz?fn=…` (E-Bilanz-XML, HVD; jede Zahl trägt ihren Urkunden-Beleg)
+- **Zeitreise** (Vollzüge, Urkunden) — aus `lookup/merged` + `hvd/historie`
+
+Es gibt **keine exportierbaren Bild-Assets** (alles JS-rendered). Für Reports:
+
+1. `report.md` verlinkt die **Interaktive Ansicht**: `https://skale.dev/firmenindex/?fn=<FN>`
+2. Eigene Grafiken (report.html via `visualize`) baust du aus denselben
+   Endpoints — die Antworten liegen dir in `rohdaten/` vor. Bilanz-Charts aus
+   `bilanz.json`, Eigentümer-/Beteiligungs-Graph aus `netzwerk*.json`.
+
 ## Arbeitsregeln
 
 1. **Cache-first:** Antwort in den Workspace schreiben (`cache/<fn>.json`) und
