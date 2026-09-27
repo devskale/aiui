@@ -144,12 +144,15 @@ function bwrapSpawnHook(cwd) {
     '--dir', home,
   ]
   const ro = (p) => { if (fs.existsSync(p)) args.push('--ro-bind', p, p) }
+  const rw = (p) => { if (fs.existsSync(p)) args.push('--bind', p, p) }
   ro(path.join(home, '.local'))              // uv, credgoo, skill launchers
   if (fs.existsSync(path.join(home, '.config'))) {
     args.push('--dir', path.join(home, '.config'))
     ro(path.join(home, '.config', 'api_keys')) // credgoo key store (skills)
   }
-  ro(path.join(home, '.cache'))
+  // uv (web-search/fetch-url) schreibt Cache + venvs — seatbelt erlaubt ~/.cache
+  // rw, bwrap muss das auch (ro-bind ließ `uv run` mit EROFS sterben).
+  rw(path.join(home, '.cache'))
   ro(path.join(home, '.pi', 'agent'))         // host skill scripts (launcher targets)
   args.push('--dir', wsParent, '--bind', cwd, cwd) // workspace rw (siblings hidden)
   ro(agentRoot)                               // this user's cloned skills
@@ -158,7 +161,15 @@ function bwrapSpawnHook(cwd) {
   return ({ command, cwd: workdir, env }) => ({
     command: `${prefix} ${shellQuote(command)}`,
     cwd: workdir,
-    env: { ...env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' },
+    env: {
+      ...env,
+      // keep git from reading the user's global config under HOME (hidden)
+      GIT_CONFIG_GLOBAL: '/dev/null',
+      GIT_CONFIG_SYSTEM: '/dev/null',
+      // uv venvs/locks leben im (beschreibbaren) Cache — Skill-Dirs sind ro
+      UV_PROJECT_ENVIRONMENT: path.join(home, '.cache', 'aiui-uv', 'venv'),
+      UV_CACHE_DIR: path.join(home, '.cache', 'aiui-uv', 'uv-cache'),
+    },
   })
 }
 
