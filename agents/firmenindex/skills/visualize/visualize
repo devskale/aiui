@@ -1,0 +1,477 @@
+#!/usr/bin/env bash
+# visualize — render a set of things as ONE self-contained HTML document.
+#
+#   visualize open   <file.html>            # open an HTML file in the browser
+#   visualize share  <file.html>            # upload to throway, print the URL
+#   visualize share  --dir <dir>            # upload a dir (recursively; nested files flattened)
+#   visualize validate <file.html>          # check it's one file (local refs fail, popular CDNs ok)
+#   visualize lint <file.html>              # style taste-gate: flag decorative AI-tells
+#   visualize chartcheck <file.html>        # dataviz integrity gate (evident-charts influence)
+#   visualize --help
+#
+# The skill itself (see SKILL.md) is what *understands* the request and builds the
+# HTML. This launcher is the plumbing: open locally, share to a URL, validate.
+set -uo pipefail
+
+SELF="${BASH_SOURCE[0]}"
+while [ -L "$SELF" ]; do
+    DIR="$(cd "$(dirname "$SELF")" && pwd)"
+    SELF="$(readlink "$SELF")"
+    [[ "$SELF" != /* ]] && SELF="$DIR/$SELF"
+done
+SKILL_DIR="$(cd "$(dirname "$SELF")" && pwd)"
+STAMP_FILE="$SKILL_DIR/.last-update"
+AUTO_UPDATE_DAYS=7
+
+# Enclosing git repo root (pi-package layout: <repo>/skills/<skill>/, .git is at ../..).
+GIT_ROOT="$SKILL_DIR"
+while [ -n "$GIT_ROOT" ] && [ ! -d "$GIT_ROOT/.git" ]; do
+    GIT_ROOT="$(dirname "$GIT_ROOT" 2>/dev/null)"
+    [ "$GIT_ROOT" = "/" ] && GIT_ROOT=""
+done
+GIT_ROOT="${GIT_ROOT:-$SKILL_DIR}"
+
+THROWAWAY="https://lubu.skale.dev/throway"
+
+# Percent-encode a query-param value (bash-only; keeps the RFC-3986 unreserved set,
+# assumes ASCII filenames — slugs are the norm).
+urlencode() {
+    local s="$1" out="" c i h
+    for (( i=0; i<${#s}; i++ )); do
+        c="${s:i:1}"
+        case "$c" in
+            [a-zA-Z0-9._~-]) out+="$c" ;;
+            *) printf -v h '%%%02X' "'$c"; out+="$h" ;;
+        esac
+    done
+    printf '%s' "$out"
+}
+
+# ── Auto-update check (non-blocking) ──
+if [ -d "$GIT_ROOT/.git" ]; then
+    needs_update=false
+    if [ ! -f "$STAMP_FILE" ]; then
+        needs_update=true
+    else
+        last_ts=$(cat "$STAMP_FILE" 2>/dev/null || echo 0)
+        now_ts=$(date +%s)
+        [ $(( (now_ts - last_ts) / 86400 )) -ge "$AUTO_UPDATE_DAYS" ] && needs_update=true
+    fi
+    if $needs_update; then
+        ( cd "$GIT_ROOT" && git pull --ff-only --quiet 2>/dev/null && date +%s > "$STAMP_FILE" ) &>/dev/null &
+    fi
+fi
+
+usage() {
+    cat <<'EOF'
+visualize — render a set of things as ONE self-contained HTML document.
+
+Usage:
+  visualize open <file.html>      # open the HTML in your browser (macOS / Linux / Windows)
+  visualize share <file.html>     # upload to the throwaway store, print the URL
+  visualize share --dir <dir>     # upload a dir (recursively; nested files flattened)
+  visualize validate <file.html>  # verify it's one file: local refs fail, popular CDNs ok
+  visualize lint <file.html>      # style taste-gate: flag decorative AI-tells
+  visualize chartcheck <file.html> # dataviz integrity gate: bar baseline, log scale, process notes, source
+  visualize --help                # this help
+
+The agent builds the HTML (see SKILL.md). This launcher only opens, shares, validates, lints, chartchecks.
+EOF
+}
+
+[ $# -ge 1 ] || { usage >&2; exit 2; }
+cmd="$1"; shift
+
+case "$cmd" in
+    --help|-h) usage; exit 0 ;;
+
+    --update|--self-update)
+        echo "Updating visualize..."
+        cd "$GIT_ROOT"
+        git pull --ff-only 2>&1 || true
+        date +%s > "$STAMP_FILE"
+        echo "✓ Updated $(date)"
+        exit 0
+        ;;
+    --selfcheck)
+        vversion() { grep -m1 '^version:' "$SKILL_DIR/SKILL.md" 2>/dev/null | grep -o '[0-9][0-9.]*' || echo "?"; }
+        last="never"
+        if [ -f "$STAMP_FILE" ]; then
+            ts="$(cat "$STAMP_FILE" 2>/dev/null)"
+            last="$ts"
+            # BSD date: -r <epoch>; GNU date: -d @<epoch>. Probe which one we have.
+            case "$(date -r 0 '+%Y' 2>/dev/null)" in
+                1970) last=$(date -r "$ts" "+%Y-%m-%d %H:%M" 2>/dev/null) ;;
+                *)    last=$(date -d "@$ts" "+%Y-%m-%d %H:%M" 2>/dev/null) ;;
+            esac
+            [ -n "${last:-}" ] || last="$ts"
+        fi
+        echo "visualize v$(vversion)"
+        echo "  dir:   $SKILL_DIR"
+        echo "  last:  $last"
+        echo "  curl:  $(command -v curl >/dev/null 2>&1 && echo yes || echo no)"
+        exit 0
+        ;;
+
+    open)
+        [ $# -eq 1 ] || { echo "visualize open: expected one file" >&2; exit 2; }
+        f="$1"; [ -f "$f" ] || { echo "visualize open: not a file: $f" >&2; exit 2; }
+        if command -v open >/dev/null 2>&1; then          # macOS
+            open "$f"
+        elif command -v xdg-open >/dev/null 2>&1; then    # Linux
+            xdg-open "$f"
+        elif command -v cmd.exe >/dev/null 2>&1; then     # Git Bash / WSL
+            # cmd's `start` is a builtin — command -v never finds it; go via cmd.exe.
+            wpath="$f"
+            command -v cygpath >/dev/null 2>&1 && wpath="$(cygpath -w "$f")"
+            command -v wslpath >/dev/null 2>&1 && wpath="$(wslpath -w "$f")"
+            cmd.exe /c start "" "$wpath"
+        else
+            echo "visualize open: no opener found; open manually: $f" >&2
+            exit 1
+        fi
+        echo "visualize: opened $f"
+        ;;
+
+    share)
+        # Dir mode: upload a whole directory as a browseable throway dir.
+        if [ "${1:-}" = "--dir" ]; then
+            d="${2:-}"
+            [ -n "$d" ] && [ -d "$d" ] || { echo "visualize share --dir: expected a directory" >&2; exit 2; }
+            curl -sf "$THROWAWAY/api" >/dev/null 2>&1 || echo "visualize: (couldn't read throway contract; proceeding)" >&2
+            resp="$(curl -sf -X POST "$THROWAWAY/?dir=1")" || { echo "visualize share --dir: create failed" >&2; exit 1; }
+            dirurl="$(printf '%s' "$resp" | python3 -c 'import sys,json; print(json.load(sys.stdin)["url"])' 2>/dev/null)"
+            [ -n "${dirurl:-}" ] || { echo "visualize share --dir: could not parse dir URL" >&2; exit 1; }
+            # Upload every file under $d recursively. throway dirs are flat (files are
+            # addressed as <key>/<name>), so nested files get their relative path folded
+            # into the filename (sub/dir/f.txt → sub-dir-f.txt); collisions get -2/-3
+            # suffixes before the extension. Bash 3.2-safe: no associative arrays.
+            seen=""
+            uniq_name() {
+                local name="$1" base ext cand i=2
+                base="${name%.*}"; ext="${name##*.}"
+                [ "$base" = "$name" ] && ext=""
+                cand="$name"
+                while printf '%s' "$seen" | grep -qxF "$cand"; do
+                    if [ -n "$ext" ]; then cand="$base-$i.$ext"; else cand="$base-$i"; fi
+                    i=$((i+1))
+                done
+                printf '%s' "$cand"
+            }
+            n=0; failed=0
+            while IFS= read -r -d '' f; do
+                rel="${f#"$d"/}"
+                name="$rel"
+                [ "$name" = "$(basename "$rel")" ] || name="${rel//\//-}"
+                name="$(uniq_name "$name")"
+                seen="$seen$name"$'\n'
+                if curl -sf -X POST "$dirurl" -F "file=@$f;filename=$name" >/dev/null 2>&1; then
+                    n=$((n+1))
+                else
+                    failed=$((failed+1))
+                    echo "visualize share --dir: upload failed: $rel" >&2
+                fi
+            done < <(find "$d" -type f -print0)
+            [ "$n" -gt 0 ] || { echo "visualize share --dir: no files uploaded" >&2; exit 1; }
+            [ "$failed" -eq 0 ] || echo "visualize: $failed file(s) failed to upload — dir is incomplete" >&2
+            echo "$dirurl"
+            echo "visualize: shared dir '$d' -> $dirurl  ($n files, expires ~4h after last add)"
+            exit 0
+        fi
+        [ $# -eq 1 ] || { echo "visualize share: expected one file" >&2; exit 2; }
+        f="$1"; [ -f "$f" ] || { echo "visualize share: not a file: $f" >&2; exit 2; }
+        name="$(basename "$f")"
+        enc="$(urlencode "$name")"
+        # Read the /api contract first (per the service's own instructions), then upload.
+        curl -sf "$THROWAWAY/api" >/dev/null 2>&1 || echo "visualize: (couldn't read throway contract; proceeding)" >&2
+        resp="$(curl -sf -X POST "$THROWAWAY/?name=$enc" --data-binary @"$f")" \
+            || { echo "visualize share: upload failed" >&2; exit 1; }
+        # Extract the url field. Prefer python3 (json) for correctness.
+        if command -v python3 >/dev/null 2>&1; then
+            url="$(printf '%s' "$resp" | python3 -c 'import sys,json; print(json.load(sys.stdin)["url"])' 2>/dev/null)"
+        fi
+        [ -n "${url:-}" ] || url="$(printf '%s' "$resp" | sed -n 's/.*"url":"\([^"]*\)".*/\1/p')"
+        [ -n "${url:-}" ] || { echo "visualize share: could not parse URL from response: $resp" >&2; exit 1; }
+        echo "$url"
+        echo "visualize: shared $name -> $url  (expires in ~4h)"
+        ;;
+
+    lint)
+        [ $# -eq 1 ] || { echo "visualize lint: expected one file" >&2; exit 2; }
+        f="$1"; [ -f "$f" ] || { echo "visualize lint: not a file: $f" >&2; exit 2; }
+        if command -v python3 >/dev/null 2>&1; then
+            python3 - "$f" <<'PYEOF'
+import sys, re
+path = sys.argv[1]
+src = open(path, encoding='utf-8', errors='replace').read()
+
+# strip comments so colors inside html/css comments don't count
+src = re.sub(r'<!--.*?-->', '', src, flags=re.S)
+
+warns = []
+
+# Neutral ink/paper/muted palette — links/buttons must stay in this family.
+NEUTRAL = {'0f172a','1a1a1a','fafaf9','f4f4f5','ffffff','e4e4e7','e5e5e5',
+           '6b7280','71717a','a1a1aa','e2e8f0','64748b','f8fafc','cbd5e1',
+           '94a3b8','475569','334155','1e293b'}
+# Backgrounds that never read as "colored badge" (paper/line neutrals).
+BG_NEUTRAL = {'ffffff','fafaf9','f4f4f5','e4e4e7','e5e5e5'}
+
+def add(msg):
+    warns.append(msg)
+
+def bad_bg(decls):
+    m = re.search(r'(?:^|[;\s])background(?:-color)?\s*:\s*#([0-9a-fA-F]{6})\b', decls)
+    return m and m.group(1).lower() not in BG_NEUTRAL
+
+# Parse <style> blocks into (selector, declarations) rules; inline style=""
+# attributes become rules keyed by their element tag.
+rules = []
+for m in re.finditer(r'<style[^>]*>(.*?)</style>', src, flags=re.S):
+    css = re.sub(r'/\*.*?\*/', '', m.group(1), flags=re.S)
+    for rm in re.finditer(r'([^{}]+)\{([^{}]*)\}', css):
+        rules.append((rm.group(1).strip(), rm.group(2)))
+for m in re.finditer(r'<([a-zA-Z][a-zA-Z0-9]*)[^>]*?\sstyle="([^"]*)"', src):
+    rules.append((m.group(1), m.group(2)))
+
+LINK_SEL = re.compile(r'(?:^|[\s,>+~(])(?:a|button)(?=$|[\s,>+~:.{\[])')
+
+def rem_to_px(v):
+    m = re.match(r'([\d.]+)(px|rem)\b', v)
+    if not m:
+        return 0.0
+    return float(m.group(1)) * (16 if m.group(2) == 'rem' else 1)
+
+for sel, decls in rules:
+    # 1. Decorative tell: saturated accent on links/buttons/TOC.
+    if LINK_SEL.search(sel):
+        cm = re.search(r'(?:^|[;\s])color\s*:\s*#([0-9a-fA-F]{6})\b', decls)
+        if cm and cm.group(1).lower() not in NEUTRAL:
+            add(f'saturated accent on a link/button (selector "{sel[:40]}")')
+    # 2. Decorative tell: pastel pill capsule (border-radius:999px + colored bg).
+    if re.search(r'border-radius\s*:\s*99[0-9]px', decls) and bad_bg(decls):
+        add(f'pastel pill capsule (border-radius:999px + colored background, "{sel[:40]}")')
+    # 3. Decorative tell: LARGE colored circle badge. Small category dots
+    #    (<~20px) are structural color and pass.
+    if re.search(r'border-radius\s*:\s*50%', decls) and bad_bg(decls):
+        sizes = [rem_to_px(v) for v in
+                 re.findall(r'(?:^|[;\s])(?:width|height)\s*:\s*([\d.]+(?:px|rem))', decls)]
+        if sizes and max(sizes) >= 20:
+            add(f'large colored circle badge (border-radius:50% + colored background + >=20px, "{sel[:40]}")')
+
+# Structural color (category hues on text/kickers, semantic .ok/.warn/.bad,
+# small dots, tinted grouping) is allowed — it carries meaning, so no check here.
+
+if warns:
+    print('visualize lint: style taste-gate — decorative AI-tells found:')
+    for w in dict.fromkeys(warns):
+        print('  - ' + w)
+    print('Fix before sharing. Structural color (category dots, section accents,')
+    print('semantic .ok/.warn/.bad) is fine — see promptlib.md §1–2.')
+    sys.exit(1)
+else:
+    print('visualize lint: OK — no decorative AI-tells (structural color allowed)')
+PYEOF
+        else
+            # python3-less fallback: a few simple greps
+            bad="$(grep -oE 'border-radius:99[0-9]px[^}]*background:#[0-9a-fA-F]{6}' "$f" | head -5)"
+            if [ -n "$bad" ]; then
+                echo "visualize lint: possible colored pill badges found:" >&2
+                echo "$bad" | sed 's/^/  /' >&2
+                exit 1
+            fi
+            echo "visualize lint: OK (basic check — install python3 for full taste-gate)" >&2
+        fi
+        ;;
+
+    chartcheck)
+        [ $# -eq 1 ] || { echo "visualize chartcheck: expected one file" >&2; exit 2; }
+        f="$1"; [ -f "$f" ] || { echo "visualize chartcheck: not a file: $f" >&2; exit 2; }
+        # Dataviz integrity gate. Evident-charts influence: a page can lie about
+        # the data (truncated bar baseline, unlabelled log scale, TODO left on
+        # the chart, a file name standing in for a publisher). Only what is
+        # provable from the markup is checked - data-integrity rules need the
+        # data, see references/chart-integrity.md. python3-less: skip, not block.
+        if ! command -v python3 >/dev/null 2>&1; then
+            echo "visualize chartcheck: python3 not found — install python3 for the dataviz gate" >&2
+            exit 0   # kein python3 = kein blocking (best-effort, wie jscheck/node)
+        fi
+        exec python3 "$SKILL_DIR/scripts/chartcheck.py" "$f"
+        ;;
+
+    jscheck)
+        [ $# -eq 1 ] || { echo "visualize jscheck: expected one file" >&2; exit 2; }
+        f="$1"; [ -f "$f" ] || { echo "visualize jscheck: not a file: $f" >&2; exit 2; }
+        # JS quality gate: node --check auf jeden <script>-block + TDZ-heuristik
+        # (befund 2026-09-27: 'Cannot access node before initialization' —
+        # ein .on() vor der const-declaration lief unentdeckt durch validate)
+        if ! command -v node >/dev/null 2>&1; then
+            echo "visualize jscheck: node not found — install nodejs for the JS gate" >&2
+            exit 0   # kein node = kein blocking (best-effort)
+        fi
+        tmpdir="$(mktemp -d)"
+        trap 'rm -rf "$tmpdir"' EXIT
+        found_err=0
+        block=0
+        # extrahiere inline <script>-blöcke (ohne src=)
+        while IFS= read -r line; do
+            if echo "$line" | grep -q '<script[[:space:]]*>'; then
+                block=$((block+1))
+                rm -f "$tmpdir/block.js"; touch "$tmpdir/block.js"
+                in_block=1
+                continue
+            fi
+            if echo "$line" | grep -q '</script>'; then
+                in_block=0
+                if [ -s "$tmpdir/block.js" ]; then
+                    if ! node --check "$tmpdir/block.js" 2>/dev/null; then
+                        echo "visualize jscheck: ✗ script-block #$block has a syntax error:" >&2
+                        node --check "$tmpdir/block.js" 2>&1 | head -5 | sed 's/^/    /' >&2
+                        found_err=1
+                    fi
+                fi
+                continue
+            fi
+            [ -n "${in_block:-}" ] && [ "$in_block" = "1" ] && echo "$line" >> "$tmpdir/block.js"
+        done < "$f"
+
+        # TDZ-heuristik: variablen-nutzung vor const/let-declaration
+        # (muster: `.on(` oder `.attr(` oder `.style(` auf eine variable
+        #  die erst später als const/let deklariert wird)
+        if command -v python3 >/dev/null 2>&1; then
+            python3 - "$f" <<'JSEOF'
+import sys, re
+src = open(sys.argv[1], encoding='utf-8', errors='replace').read()
+scripts = re.findall(r'<script[^>]*>(.*?)</script>', src, re.DOTALL)
+js = '\n'.join(s for s in scripts if 'src=' not in s[:50])
+issues = []
+# finde alle const/let deklarationen mit ihrer position
+decls = {}
+for m in re.finditer(r'\b(?:const|let)\s+([a-zA-Z_$][\w$]*)', js):
+    name = m.group(1)
+    if name not in decls:
+        decls[name] = m.start()
+# prüfe: wird die variable VOR ihrer deklaration mit .on(/.attr(/.style( genutzt?
+for name, pos in decls.items():
+    # suche nutzungen wie `name.on(`, `name.attr(`, `name.style(` vor pos
+    for m in re.finditer(re.escape(name) + r'\.(?:on|attr|style|text|join|call)\s*\(', js[:pos]):
+        # ist diese nutzung in einem anderen script-block oder kommentar?
+        line_start = js.rfind('\n', 0, m.start()) + 1
+        line = js[line_start:js.find('\n', m.start())]
+        if '//' not in line[:m.start() - line_start]:
+            issues.append(f'  TDZ: "{name}" used at pos {m.start()} before declaration at pos {pos}')
+            issues.append(f'    line: {line.strip()[:80]}')
+if issues:
+    print('visualize jscheck: ✗ temporal-dead-zone violations:')
+    for i in issues[:10]:
+        print(i)
+    sys.exit(1)
+JSEOF
+            [ $? -ne 0 ] && found_err=1
+        fi
+
+        if [ $found_err -eq 0 ]; then
+            echo "visualize jscheck: OK — $block script blocks, no syntax errors, no TDZ violations"
+        else
+            echo "visualize jscheck: FAILED — fix the errors above" >&2
+            exit 1
+        fi
+        ;;
+
+    validate)
+        [ $# -eq 1 ] || { echo "visualize validate: expected one file" >&2; exit 2; }
+        f="$1"; [ -f "$f" ] || { echo "visualize validate: not a file: $f" >&2; exit 2; }
+        # One-file rule: the HTML is the only artifact. Dependencies (script/link/
+        # img/iframe, CSS @import/url(), JS imports) must be inline or point at a
+        # popular public CDN; plain <a href> is navigation and never counts.
+        if command -v python3 >/dev/null 2>&1; then
+            python3 - "$f" <<'PYEOF'
+import sys, re
+path = sys.argv[1]
+src = open(path, encoding='utf-8', errors='replace').read()
+
+KNOWN_CDNS = ('cdn.tailwindcss.com', 'cdn.jsdelivr.net', 'unpkg.com',
+              'cdnjs.cloudflare.com', 'esm.sh', 'cdn.skypack.dev',
+              'fonts.googleapis.com', 'fonts.gstatic.com', 'cdn.plot.ly')
+
+bad = []
+
+def is_known(url):
+    m = re.match(r'https?://([^/]+)', url)
+    if not m:
+        return False
+    host = m.group(1).lower()
+    return any(host == c or host.endswith('.' + c) for c in KNOWN_CDNS)
+
+def check(kind, ref):
+    ref = ref.strip()
+    if not ref or ref.startswith(('#', 'data:', 'blob:')):
+        return
+    if ref.startswith(('http://', 'https://')):
+        if not is_known(ref):
+            bad.append(f'unknown external {kind}: {ref}')
+    else:
+        bad.append(f'local file reference in {kind} (breaks the single file): {ref}')
+
+# 1. Dependency attributes — a plain <a href> is navigation, not a dependency.
+for m in re.finditer(r'<(?:script|img|source|iframe|audio|video|embed|track)\b[^>]*?\ssrc="([^"]*)"', src):
+    check('src', m.group(1))
+for m in re.finditer(r'<link\b[^>]*?\shref="([^"]*)"', src):
+    check('link href', m.group(1))
+
+# 2. CSS @import and url() — <style> blocks and inline style attrs included.
+#    SVG fragment refs (url(#id)) and data: URIs pass.
+for m in re.finditer(r'@import\s+(?:url\(\s*)?["\']?([^)"\';\s]+)', src):
+    check('css @import', m.group(1))
+for m in re.finditer(r'url\(\s*["\']?([^"\')]+)["\']?\s*\)', src):
+    check('css url()', m.group(1))
+
+# 3. JS module imports from URLs (the mermaid-via-CDN pattern).
+for m in re.finditer(r'\bimport\s*["\']([^"\']+)["\']', src):
+    check('js import', m.group(1))
+for m in re.finditer(r'\bimport\s+[^"\';]*?\bfrom\s*["\']([^"\']+)["\']', src):
+    check('js import', m.group(1))
+for m in re.finditer(r'\bimport\s*\(\s*["\']([^"\']+)["\']', src):
+    check('js import', m.group(1))
+
+if bad:
+    print('visualize validate: NOT a single file — dependency references found:')
+    for line in dict.fromkeys(bad):
+        print('  - ' + line)
+    print('Popular CDNs are fine (' + ', '.join(KNOWN_CDNS[:5]) + ', ...).')
+    print('Everything else: inline it or use a popular CDN; local sibling files always fail.')
+    sys.exit(1)
+else:
+    print(f'visualize validate: OK — one file ({len(src)} bytes; content inline, CDN deps allowed)')
+PYEOF
+            # propagate the gate's verdict: without this the script fell through
+            # to the jscheck run below, whose success reset the exit code to 0,
+            # so a dependency violation exited clean (4 red validate tests).
+            [ $? -ne 0 ] && exit 1
+        else
+            # python3-less fallback: basic grep for local + non-allowlisted deps
+            KNOWNS='https?://(cdn\.tailwindcss\.com|cdn\.jsdelivr\.net|unpkg\.com|cdnjs\.cloudflare\.com|esm\.sh|cdn\.skypack\.dev|fonts\.googleapis\.com|fonts\.gstatic\.com|cdn\.plot\.ly)'
+            bad="$(
+                {
+                    grep -oE '<(script|img|source|iframe|audio|video|embed|track|link)[^>]*\b(src|href)="[^"]+"' "$f" \
+                        | grep -vE '(src|href)="(https?://|data:|#)'
+                    grep -oE '<(script|img|source|iframe|audio|video|embed|track|link)[^>]*\b(src|href)="https?://[^"]+"' "$f" \
+                        | grep -vE "$KNOWNS"
+                    grep -oiE '@import[^;"]*' "$f" | grep -E 'https?://' | grep -vE "$KNOWNS"
+                    grep -oiE 'url\(["'"'"']?https?://[^)"'"'"']+' "$f" | grep -vE "$KNOWNS"
+                } | head -20
+            )"
+            if [ -n "$bad" ]; then
+                echo "visualize validate: NOT a single file — dependency references found:" >&2
+                echo "$bad" | sed 's/^/  /' >&2
+                exit 1
+            fi
+            echo "visualize validate: OK — one file (basic check — install python3 for the full gate)"
+        fi
+        # JS quality gate läuft immer mit (befund 2026-09-27)
+        "$0" jscheck "$f" || exit 1
+        ;;
+
+    *)
+        echo "visualize: unknown command: $cmd" >&2; usage >&2; exit 2 ;;
+esac

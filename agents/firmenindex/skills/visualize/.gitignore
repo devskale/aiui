@@ -1,0 +1,6 @@
+.venv/
+.env
+uv.lock
+*.egg-info/
+.last-update
+scripts/__pycache__/

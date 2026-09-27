@@ -1,0 +1,466 @@
+# Prompt library — great visualizations
+
+A cookbook of prompts/patterns that reliably produce *lovely* self-contained HTML
+visualizations. These are the moves that separate a "fine" page from one the user
+says *"that's lovely."* Read this when building; don't read it to decide what to build.
+
+> **How to use:** this is a library, not a script. Pick the moves that fit the subject
+> and intent. The single strongest predictor of a lovely page is **real, specific
+> content** + one clear visual structure — everything else is polish on top.
+
+---
+
+## 0. The foundation: real content, one structure
+
+> **NON-NEGOTIABLE — the decorative "AI-generated" tells. NEVER use these.** They instantly
+> read as "LLM slop":
+> - **Pastel pill capsules** on cards/items (small rounded `border-radius:999px` chips).
+> - **A saturated accent color on links/buttons/TOC** (e.g. teal/blue/indigo link text).
+> - **Large colored numbered circles** (~20px+) on section headings or flow steps.
+> - **Color without a job.** Hue that encodes nothing — a rainbow of tags where the
+>   category doesn't matter, accent swashes, gradient banners. If you can't say what a
+>   color *means*, it's decoration — cut it.
+>
+> The base stays **neutral editorial**: muted ink on warm paper, hairline `--line`
+> borders, links as ink with a hairline underline. On top of that, **color works as
+> structure** (§1–2): category hues on small elements, severity colors when the color
+> IS the data, one accent hue on section numbers/kickers. That's the line: *decorative*
+> color screams "generated"; *structural* color reads as designed.
+
+Before any styling, nail these two:
+
+- **Use the actual subject.** If the user asks to visualize "the repo," read the repo and
+  surface *real* items with *real* one-line descriptions. Never invent or pad. A page of
+  genuine specifics beats a page of generic placeholders every time.
+- **Pick ONE structure** (from structures.md) and commit to it. Don't blend cards + grid +
+  timeline + flow on one page unless the content is genuinely two-sided.
+
+Everything below is polish that makes that foundation sing.
+
+---
+
+## 1. Establish a visual identity (the "house style")
+
+Set up a small **token system** and stick to it. Reference tokens by **semantic role**, not
+by hex value — the type/module recipes say `accent`, never `#10b981`. This is what makes
+the page feel *designed* rather than *default*, and keeps every page on the same skin
+without re-deciding colours each time.
+
+```css
+:root {
+  /* semantic roles — the only colours a page should name */
+  --paper:  #fafaf9;   /* page background (warm off-white, stone-50) */
+  --paper-2:#f4f4f5;   /* secondary fill: cards, containers, wells */
+  --ink:    #1a1a1a;   /* primary text + emphasis (near-black) */
+  --muted:  #6b7280;   /* secondary text, default arrow stroke */
+  --soft:   #a1a1aa;   /* tertiary: sublabels, boundary labels */
+  --line:   #e5e5e5;   /* hairline borders */
+  --accent: #10b981;   /* ONE focal accent — emerald, indigo, or similar */
+  --accent-tint: rgba(16,185,129,.08); /* fill for accent-bordered boxes */
+  --link:   #1a1a1a;   /* links as ink (hairline underline), not saturated */
+
+  /* structural colour — hues that carry information (see below) */
+  --cat-1:  #5e7a9b;   /* category hues, muted editorial family */
+  --cat-2:  #7c8f6f;
+  --cat-3:  #b8915a;
+  --cat-4:  #9c6b50;
+  --cat-5:  #6e6479;
+  --ok:     #15803d;   /* semantic severity — use only when it IS the data */
+  --warn:   #b45309;
+  --bad:    #b91c1c;
+}
+```
+
+Rules:
+- **One accent rule.** `accent` is reserved for the 1–2 things the reader should look at
+  first (headings, key highlights, a tint). Everything else in neutrals. Two accents =
+  noise. If you're tempted to colour a third thing, it isn't the focus — leave it neutral.
+- **Colour is structure, not decoration.** Structural colour lives on *small* elements:
+  category dots and swatches, 2–3px rules and left borders, small uppercase kickers,
+  status values. Never on body text, never as large fills. Every hue must encode
+  something (§2 below).
+- **Semantic roles, not hex.** Recipes and modules reference `accent`, `muted`, `cat-1`,
+  `ok` — never raw values. Changing the skin means changing this block, not hunting hex
+  values through the page.
+- **Warm paper background** (`#fafaf9` stone-50) reads more editorial than pure white.
+- **System-ui font stack** — zero font downloads, looks native everywhere:
+  `font-family: system-ui, -apple-system, "Segoe UI", sans-serif;`
+
+### Light ↔ dark inversion (optional)
+
+If a page needs a dark variant, **flip the neutrals, keep the accent family.** Invert the
+RGB of `paper`/`paper-2`/`ink`/`muted`/`soft`/`line` (light `ink` becomes dark `paper`),
+and give the accent a slight hue-shift brighter so it reads on dark paper. Keep the same
+opacities. The semantic *roles* stay identical — only the material changes.
+
+```css
+:root[data-theme="dark"] {
+  --paper:   #1a1a1a;  /* ink flipped */
+  --paper-2: #262626;
+  --ink:     #fafaf9;  /* paper flipped */
+  --muted:   #a1a1aa;
+  --soft:    #6b7280;
+  --line:    rgba(250,250,249,.12);
+  --accent:  #34d399;  /* brighter accent for dark paper */
+  --accent-tint: rgba(52,211,153,.10);
+}
+```
+
+### Series palette (multi-series charts only)
+
+A small set of **desaturated, editorial-tone** colours for chart types that genuinely need
+to distinguish overlapping entities. The **1-accent rule still holds** — `accent` is
+reserved for the focal series; the palette covers the rest. **Don't backfill these to
+non-chart types** — cards, trees, and system maps continue to use muted-ink variants.
+
+```css
+:root {
+  --series-1:#7c8f6f; --series-2:#5e7a9b; --series-3:#b8915a;
+  --series-4:#9c6b50; --series-5:#6e6479;
+}
+```
+
+Fills sit at ~0.18 opacity; strokes use the full colour.
+
+---
+
+## 2. Group with colour, not with borders
+
+The single highest-impact move for "a set of things." When items fall into categories,
+**colour-code the categories** and show a legend.
+
+- Give each category a distinct hue from the **`--cat-1..5` family** (muted, editorial —
+  not saturated dashboard tones).
+- Add a compact **legend** under the header so the colours read instantly.
+- Category colour sits on **small elements**: the legend dot, a card's category label, a
+  quiet left border. Categories are **plain text + a dot**, not saturated pills. When the
+  grouping is just a label (not a thing to distinguish at a glance), plain muted text in
+  the card footer reads cleaner than any badge.
+
+```css
+/* small structural swatches — square-ish, quiet, never pills */
+.dot { display:inline-block; width:.62rem; height:.62rem; border-radius:2px;
+       margin-right:.35rem; vertical-align:middle; }
+```
+
+Legend (in the header):
+
+```html
+<div class="legend">
+  <span><span class="dot" style="background:var(--cat-1)"></span>Web</span>
+  <span><span class="dot" style="background:var(--cat-2)"></span>Browser</span>
+  <span><span class="dot" style="background:var(--cat-3)"></span>Media</span>
+</div>
+```
+
+### Where colour earns its place (structure, not decoration)
+
+- **Categories / groups** — `--cat-1..5` on dots, swatches, 2px left borders, small
+  uppercase labels. One hue = one category, applied consistently from legend to cards.
+- **Severity / status** — `--ok/--warn/--bad` when the colour IS the data: audit
+  findings, test results, priorities, verdicts. The value text takes the colour (or a
+  small dot precedes it) — that's information, not slop.
+- **Report sections** — the section number or kicker takes one category hue
+  (`--cat-1` throughout, or a hue per theme); optionally a thin 2px rule under the
+  heading in the same hue. Consistency reads as designed.
+- **Never** — saturated link/button text, pastel pill capsules, large numbered circles
+  (~20px+), saturated fills or gradients, colour that encodes nothing.
+
+> **Multi-series charts** use the series palette in §1 — desaturated editorial tones, not
+> saturated accents. The 1-accent rule still holds: `accent` marks the focus, the series
+> palette marks the categories.
+
+---
+
+## 3. The card grid — the workhorse for "a set of things"
+
+Cards with a title, one muted line, and a badge. This is the default for heterogeneous
+sets and reads beautifully.
+
+```css
+.grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:1rem; }
+.card { background:#fff; border:1px solid var(--line); border-radius:.75rem;
+        padding:1.25rem; transition:transform .12s ease, box-shadow .12s ease; }
+.card:hover { transform:translateY(-2px); box-shadow:0 6px 18px rgba(26,26,26,.08); }
+.card h3 { font-size:1.05rem; margin:0 0 .4rem; }
+.card p  { color:var(--muted); font-size:.88rem; margin:0 0 .9rem; }
+```
+
+`repeat(auto-fill, minmax(280px, 1fr))` is the magic line — it wraps responsively with no
+media queries.
+
+---
+
+## 4. Header & scannable hierarchy
+
+- **Big title** (`~2rem`, tight letter-spacing `-.02em`), then a **one-line sub** in muted
+  that states the intent.
+- **Section headers** in `uppercase, letter-spacing .08em` — they read as wayfinding, not
+  content.
+- **Sparse prose everywhere.** If a sentence could be a bullet, make it a bullet. If a
+  bullet could be cut, cut it. The *visuals* carry the meaning.
+
+### Rhythm & style carry structure — not just colour
+
+Colour *confirms* structure; rhythm and style must carry it alone (the test: does the
+page still read in grayscale?). Three channels, used together:
+
+- **Rhythm** — tight within a group, air between groups: cards of one category sit at
+  `1rem` gaps; consecutive grids separate (`.grid+.grid{margin-top:1.75rem}`); sections
+  breathe at `2.75rem`. Indent is depth (tree `.connector`); size is importance
+  (h1 → h2 → card title).
+- **Style** — weight is hierarchy: directories `700`, items `500`; labels uppercase +
+  letter-spaced for wayfinding; hairlines contain, they never decorate. One deliberate
+  type scale, steps of ~1.2 (`2rem` title → `1.2` section → `1.05` item → `.88` muted) —
+  no ad-hoc sizes.
+- **Colour** — category hues and severity only where the hue IS data (§1–2): the
+  confirmation channel, never the only one.
+
+**Why this works (grounded).** Users parse a layout *before* they read labels — the
+Gestalt first read (Wertheimer 1923; Palmer 1992). Proximity groups by **ratio**, not
+absolute distance: the within-group gap must be visibly smaller than the between-group
+gap, or grouping collapses. Similarity needs a second shared trait besides hue — ~8% of
+men are red-green deficient, and **WCAG 1.4.1** (Level A) forbids colour as the only
+carrier: every hue we ship sits next to its text label. A border (common region) is the
+*strongest* cue — it overrides proximity (Palmer 1992); use it to mark real boundaries,
+not to box every line ("card soup"). A connector line is a relationship claim — never
+draw one you don't mean.
+
+---
+
+## 5. Provenance footer (the "lovely" finishing touch)
+
+End with a quiet footer that says how the page was made. It's a small human touch that
+makes the page feel intentional and trustworthy.
+
+```html
+<div class="footer">
+  Built with the <code>visualize</code> skill · one self-contained HTML file ·
+  shared via <code>lubu.skale.dev/throway</code> · expires ~4h
+</div>
+```
+
+```css
+.footer { margin-top:3rem; padding-top:1.5rem; border-top:1px solid var(--line);
+          color:var(--muted); font-size:.82rem; }
+.footer code { background:#fff; border:1px solid var(--line); border-radius:.35rem;
+               padding:.1rem .4rem; font-size:.8rem; }
+```
+
+---
+
+## 6. Anti-patterns (what kills a visualization)
+
+- **Generic dashboard** — dense tables of numbers, heavy chrome, saturated corporate
+  colours. Editorial, not enterprise.
+- **Kitchen sink** — every structure on one page. One strong structure wins.
+- **Prose walls** — paragraphs where bullets/visuals belong.
+- **Invented content** — placeholder names, fake stats, "Item 1" cards. Use the real thing.
+- **No hierarchy** — everything the same size/weight. Titles, sections, cards, muted text:
+  each level visibly different.
+- **Local sibling files** — the HTML must be the only file (no `style.css`, `app.js`,
+  images next to it). Popular CDN packages (Mermaid, chart renderers) are fine; keep the
+  layout in inline CSS so the page still renders offline.
+- **Colored pill badges on every card** — the tell-tale AI-generated look. Small rounded
+  `border-radius:999px` capsules with pastel backgrounds and uppercase text scream "LLM
+  slop." **Never use them.** Categories go as plain muted text in the card footer, or as a
+  quiet legend — not a colored pill on each item.
+- **Inline-duplicated styles** — the same `style="…"` string copy-pasted onto every
+  card/row. All module CSS lives once in the shared base (modules.md); write short
+  class-based HTML instead.
+- **Long tokens in narrow cards** — paths, URLs, and package names don't wrap at slashes;
+  without `overflow-wrap:anywhere` (or ellipsis) they spill out of the card. Budget for
+  the longest identifier when gridding.
+
+---
+
+## 6.5 Design principles (grounded in research)
+
+These come from Edward Tufte's data-visualization principles — the gold standard used by
+the FT, The Economist, Bloomberg, McKinsey. They make a report/visualization *trustworthy*,
+not just pretty.
+
+**1. Maximise the data-ink ratio.** `Data-Ink / Total Ink`. Every drop of ink should
+represent data. Erase non-data-ink (borders, backgrounds, unnecessary gridlines) and
+redundant duplicates. → In our pages: hairline `--line` borders, warm paper, no heavy
+chrome. Don't add decorative boxes/borders that carry no information.
+
+**2. Show data in comparison.** An isolated number is meaningless — the question is always
+"compared to what?" Juxtaposition creates meaning. → In our pages: use `table`,
+`before-after`, or side-by-side cards to put values in context, never a lone figure.
+
+**3. No chartjunk.** Decorative elements that add no information undermine authority —
+they signal the data alone isn't compelling. → In our pages: every visual element must
+earn its place. No gratuitous gradients, shadows, or icons that don't communicate.
+
+**4. Reveal mechanism, not just outcome.** Great graphics show *why*, not just *what*.
+Minard's map of Napoleon's campaign reveals the cause (winter), not just the loss. → In
+our pages: when showing a result, show the flow/process that produced it (`flow` module,
+a `mermaid` graph, a pipeline).
+
+**5. Show relevant complexity.** Oversimplifying misleads. Show how variables interact
+when that interaction is the point. → In our pages: use `system-map` or multivariate
+`table`s when the relationships matter, not a reductive single view.
+
+**6. Guard the lie factor.** The graphic must accurately reflect the data — no distorted
+scales, truncated axes, or area-as-one-dimensional tricks. → In our pages: keep charts
+honest; don't exaggerate differences to make a point.
+
+> **Apply these through the module system.** The modules are designed to embody these
+> principles (hairlines, comparison, mechanism via flow/mermaid, honest scales). When
+> composing, ask: *is every element earning its ink? is this shown in comparison? does it
+> reveal the mechanism?* If not, cut or rework it.
+
+---
+
+## 7. Quick recipe — "a set of things" (the repo card grid)
+
+The exact recipe that produced the skale-skills overview:
+
+1. **Subject:** read the repo; list the real skills/extensions with one-line descriptions.
+2. **Structure:** `overview-grid` of `cards`.
+3. **Identity:** emerald accent, stone paper, system-ui.
+4. **Grouping:** colour-coded categories (web/browser/media/diagram/proto/ext) + header
+   legend — category dots (§2), not saturated pills.
+5. **Hierarchy:** big title → one-line sub → section headers → cards → muted prose.
+6. **Provenance footer** with the visualize/throway note.
+7. **Validate:** `visualize validate <file>` (self-contained) → `open` → `share`.
+
+---
+
+## 8. Quick recipe — the annotated repo tree
+
+For "show me what's in this repo / show the tree" — don't dump a bare `tree`/`find`
+output. **Annotate it** so each node tells you what it *is*. This is the move that makes
+it lovely.
+
+1. **Get the real tree:** `find . -maxdepth 2 -not -path './.git/*' ...` (prune venvs,
+   node_modules, caches) — but treat it as a *skeleton*, not the deliverable.
+2. **Structure:** `hierarchy` — nested indented rows with connector lines, not boxes.
+3. **Annotate every node:** name + one-line muted description + a colour-coded tag.
+4. **Colour-code by kind:** skill / extension / prompt / core / docs / test — with a
+   legend of category dots (§2: `--cat-1..5` on small swatches, never saturated badges).
+5. **Icons per node** (📁 dir, 📄 file, plus a per-kind emoji) for quick scanning.
+6. **Collapse deep dirs** — show the top ~2 levels richly, and summarise deeper ones
+   (e.g. `deprecated/ → retired skills`) rather than listing every file.
+7. **Provenance footer** + validate → open → share.
+
+### Tree CSS (the essentials)
+
+```css
+.row{display:flex;align-items:baseline;gap:.6rem;padding:.18rem 0;border-radius:.35rem}
+.row:hover{background:#fff}
+.name{font-weight:600}
+.name.dir{color:var(--ink)}
+.desc{color:var(--muted);font-size:.8rem;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tag{flex:none;font-size:.68rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600}
+.tag .dot{margin-right:.25rem}
+.connector{border-left:1px solid var(--line);margin-left:.5rem;padding-left:1rem}
+```
+
+Nest children in a `.connector` div (a left hairline + indent) under the parent row.
+The `.desc` uses `flex:1` + ellipsis so annotations truncate gracefully on narrow screens.
+
+### Anti-patterns specific to trees
+
+- **Bare `tree` dump** — raw file listing with no meaning. Always annotate.
+- **Collapse-everything JS** — collapse is a nice-to-have; the page must render
+  statically. Use indentation, not `<details>`/JS, for the default view.
+- **Infinite depth** — don't render 8 levels of node_modules. Summarise deep dirs.
+
+---
+
+## 9. Quick recipe — the system map (multi-repo / multi-service platform)
+
+For an **orchestrator/metarepo/platform** — a repo that coordinates sub-repos, a fleet of
+servers, and a pipeline. A flat tree undersells it; build a **multi-panel system map**.
+This is the recipe that produced the kontext.one map.
+
+**First — understand the platform.** Read the README, the central config (e.g. `repos.yml`,
+`package.json` scripts), and the sub-repos. Ask: is this a normal codebase, or an
+orchestrator whose *relationships* are the point? If the latter, use a system map.
+
+Then pick the panels that fit (not all always apply):
+
+1. **Repo topology** — a metarepo box containing its sub-repos; each sub-repo gets a card
+   with role tag (frontend/backend/lib/data) + deploy target.
+2. **Pipeline / data flow** — the end-to-end flow as numbered horizontal steps.
+3. **Fleet** — the servers/machines as a grid, each with role + what runs there.
+4. **Tree (top level)** — the orchestration skeleton (CLI, central config, sub-repos,
+   docs, tests).
+
+### Key CSS
+
+**Metarepo box + sub-repo cards:**
+
+```css
+.meta{background:#fff;border:1px solid var(--line);border-radius:.9rem;padding:1.4rem}
+.subgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:.9rem}
+.subrepo{background:var(--paper);border:1px solid var(--line);border-radius:.6rem;padding:.9rem}
+.subrepo .sr-name{font-weight:600;display:flex;justify-content:space-between;align-items:center}
+.subrepo .sr-desc{color:var(--muted);font-size:.8rem;margin:.3rem 0 .6rem}
+.sr-meta{font-size:.72rem;color:var(--muted)}
+.sr-meta span{background:#fff;border:1px solid var(--line);border-radius:999px;padding:.1rem .45rem}
+```
+
+**Horizontal flow steps:**
+
+```css
+.flow{display:flex;align-items:stretch;gap:.4rem;flex-wrap:wrap}
+.step{flex:1;min-width:130px;background:#fff;border:1px solid var(--line);border-radius:.6rem;padding:.7rem;text-align:center}
+.step .st-n{display:inline-block;background:var(--accent);color:#fff;width:1.2rem;height:1.2rem;border-radius:50%;font-size:.7rem;line-height:1.2rem}
+.arrow{align-self:center;color:var(--muted);font-size:1.1rem}
+```
+
+**Server cards:** a grid of `.server` cards (name, role, meta) — same shape as `.subrepo`.
+
+### Numbered panels
+
+Give each panel a numbered heading badge (`.panel h2 .n`) so the page reads as a guided
+tour: 1 Repo topology → 2 Pipeline → 3 Fleet → 4 Tree.
+
+### Anti-patterns specific to system maps
+
+- **Flat tree for an orchestrator** — a metarepo's *relationships* are the point; a tree
+  hides them. Use a system map.
+- **Every panel on every repo** — only include panels that fit. A simple 2-repo setup
+  doesn't need a 4-panel map.
+- **Static data** — the flow/fleet/topology must reflect the real `repos.yml`/config, not
+  invented servers or stages.
+
+---
+
+## 10. When to recommend d2 / figure (don't force an inline diagram)
+
+`visualize` builds simple diagrams inline (SVG arrows, Mermaid) — fine for a small graph
+embedded in a page. But some challenges are **better handed to `d2` or `figure`**, and you
+should **recommend them** (you can't auto-invoke them — they're manual-only).
+
+**Recommend `d2`** for complex technical graphs: sequence / ER / class diagrams,
+dependency or call graphs with many nodes, anything that needs auto-layout + self-
+verification, or a diagram that is *the deliverable* (`.svg`/`.png`/`.pdf` to commit).
+
+**Recommend `figure`** for hand-drawn, presentation-quality explainers — sketchy pipeline /
+workflow / architecture figures for a slide or report.
+
+**Build inline** only when the diagram is simple (a few nodes) and *one element among
+many* in a quick shareable page. Don't bounce the user to d2/figure for a trivial graph.
+
+**Pattern-aware routing (see patterns.md).** The semantic pattern you chose also points
+where the diagram belongs. Use the pattern's complexity budget as the tripwire: if the
+real content exceeds it, hand it off rather than force it into the page.
+
+| Pattern | Inline (page) | Hand to `d2` | Hand to `figure` |
+|---|---|---|---|
+| Fan-in queue / bottleneck | few sources, one bottleneck as a panel | many producers, dense fan-in, capacity is the point | — |
+| Stage framework w/ semantic slots | 3–4 stages as a timeline | — | polished editorial explainer for a deck |
+| Unstructured → structured artifact | simple source→artifact pair | — | hand-drawn transformation sketch |
+| Paired trace / divergence | 2 traces, ≤6 rules as aligned rows | many rules, rule-by-rule states are the point | — |
+| Trust boundary | ≤3 zones, few paths inline | many routed paths, boundary is the deliverable | — |
+| Governance / control catalog | ≤24 controls as a table | — | — (table is fine) |
+| Loop / flywheel | small 4–8 station loop | long write-back, dense cycle | — |
+| Provenance / evidence trail | ≤12 findings as a hierarchy | — | editorial evidence figure |
+
+**How to recommend:** one line at the end of the page, e.g. *"This graph is complex — for
+a proper auto-laid-out diagram run `/skill:d2`; for a hand-drawn figure `/skill:figure`."*
+Don't over-recommend.
