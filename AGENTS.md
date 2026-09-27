@@ -5,6 +5,9 @@ React frontend + Express backend that wraps the **pi SDK**
 streaming. Multi-user: each logged-in user gets a scoped workspace and an
 isolated session.
 
+Review layer: `CODING_STANDARDS.md` — judgement rules a diff is reviewed
+against (isolation, shape ownership, SDK boundary).
+
 ## Commands
 
 ```bash
@@ -12,6 +15,10 @@ pnpm dev            # server (:3001) + client (:5173, proxies /api → 3001)
 pnpm dev:server     # server only (--watch auto-restart)
 pnpm dev:client     # Vite dev server only
 pnpm build          # production build → dist/
+pnpm test           # node --test server/ src/ shared/  (auch im pre-commit)
+pnpm run check:sdk  # SDK-Imports gegen installierte Version prüfen (pre-commit)
+pnpm smoke          # Server booten + Models/Agents-Endpoints (kein Model-Call)
+pnpm smoke:full     # + Bild-only-Roundtrip (echter Model-Call)
 ./deploy.sh         # build, rsync to lubu, restart systemd service
 ```
 

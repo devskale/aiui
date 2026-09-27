@@ -1,0 +1,4 @@
+# aiui pre-commit: SDK-Oberfläche prüfen, dann Tests (beide < 2s).
+# smoke[[:full]] läuft NICHT hier (bootet Server) — manuell oder bei Dep-Änderungen.
+pnpm run check:sdk
+pnpm test

@@ -7,10 +7,15 @@
     "dev": "concurrently \"pnpm run dev:server\" \"pnpm run dev:client\"",
     "dev:server": "node --watch server/index.js",
     "dev:client": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "test": "node --test server/ src/ shared/",
+    "check:sdk": "node scripts/check-sdk-exports.js",
+    "smoke": "node scripts/smoke.js",
+    "smoke:full": "node scripts/smoke.js --full",
+    "prepare": "husky"
   },
   "dependencies": {
-    "@earendil-works/pi-coding-agent": "^0.85.1",
+    "@earendil-works/pi-coding-agent": "^0.87.1",
     "concurrently": "^9.1.2",
     "express": "^5.1.0",
     "lucide-react": "^1.23.0",
@@ -26,6 +31,7 @@
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
     "@vitejs/plugin-react": "^4.4.1",
+    "husky": "^9.1.7",
     "vite": "^6.3.5"
   }
 }
