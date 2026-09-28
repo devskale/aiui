@@ -2,11 +2,12 @@
 // StreamEntry — renders a single stream entry (user, assistant, error)
 // Tool calls rendered pi-TUI-style: icon + name + args, expandable output
 // ════════════════════════════════════════════════════════════════════
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { apiUrl } from '../lib/api'
-import { File as FileIcon, Terminal, Pen, Sparkles, Copy, Download, ChevronDown, ChevronRight } from 'lucide-react'
+import { parseFollowUps } from '../lib/followUps'
+import { File as FileIcon, Terminal, Pen, Sparkles, Copy, Download, ChevronDown, ChevronRight, CornerDownRight } from 'lucide-react'
 
 // ── Tool helpers (ported from pi-gui timeline-item.tsx patterns) ──
 function parseArgs(args) {
@@ -302,7 +303,26 @@ export function UserEntry({ text, images, onCopy }) {
   )
 }
 
-export function AssistantEntry({ entry, isStreaming, onCopy }) {
+// ── FollowUps — clickable tail questions ("Mögliche Vertiefungen") ──
+// v1 bridge until the canvas panel owns a structured `next` (ADR-0005):
+// parsed client-side from the settled message (src/lib/followUps.js).
+// Click sends the question through the normal prompt path.
+function FollowUps({ questions, onAsk }) {
+  if (!onAsk || !questions?.length) return null
+  return (
+    <div className="followups">
+      <div className="followups-head">Mögliche Vertiefungen</div>
+      {questions.map((q, i) => (
+        <button key={i} type="button" className="followup-chip" onClick={() => onAsk(q)}>
+          <CornerDownRight size={14} className="followup-icon" />
+          <span className="followup-text">{q}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+export function AssistantEntry({ entry, isStreaming, onCopy, interactive, onAsk }) {
   const thinkingText = entry.thinkingText || ''
   const hasThinkingText = thinkingText.trim().length > 0
   // Live entry: phase flags (reducer-owned) drive the indicator.
@@ -312,7 +332,13 @@ export function AssistantEntry({ entry, isStreaming, onCopy }) {
     : hasThinkingText
   const thinkingDone = isStreaming ? entry.thinkingDone : true
   const hasTools = entry.toolCalls && entry.toolCalls.length > 0
-  const hasText = entry.text && entry.text.trim()
+  // Clickable follow-ups: only the settled chat tail (never the live entry).
+  const followUps = useMemo(
+    () => (interactive && !isStreaming ? parseFollowUps(entry.text) : null),
+    [interactive, isStreaming, entry.text]
+  )
+  const mdText = followUps ? followUps.bodyText : entry.text
+  const hasText = mdText && mdText.trim()
 
   return (
     <div className="entry-assistant">
@@ -322,10 +348,11 @@ export function AssistantEntry({ entry, isStreaming, onCopy }) {
       {hasTools && <ToolGroup toolCalls={entry.toolCalls} />}
       {hasText && (
         <div className="entry-text">
-          <Markdown remarkPlugins={[remarkGfm]} components={mdComponents}>{entry.text}</Markdown>
+          <Markdown remarkPlugins={[remarkGfm]} components={mdComponents}>{mdText}</Markdown>
           {isStreaming && <span className="entry-streaming" />}
         </div>
       )}
+      {followUps && <FollowUps questions={followUps.questions} onAsk={onAsk} />}
       {onCopy && (
         <button className="copy-entry" onClick={(e) => onCopy(e.currentTarget.parentElement)} title="Copy">
           {COPY_ICON}

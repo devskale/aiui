@@ -38,7 +38,8 @@
         ],
         "textContains": [
           "STRABAG",
-          "FN"
+          "FN",
+          "Mögliche Vertiefungen"
         ],
         "textMin": 300,
         "toolMax": 60,

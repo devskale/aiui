@@ -343,7 +343,10 @@ export default function App() {
               {entries.map((entry, i) => {
                 if (entry.role === 'user') return <UserEntry key={i} text={entry.text} images={entry.images} onCopy={copyEntry} />
                 if (entry.role === 'error') return <ErrorEntry key={i} text={entry.text} onCopy={copyEntry} />
-                return <AssistantEntry key={i} entry={entry} isStreaming={false} onCopy={copyEntry} />
+                // Follow-ups are clickable only on the settled chat tail —
+                // a new turn (current/streaming) unmounts them naturally.
+                const interactive = i === entries.length - 1 && !current && !streaming
+                return <AssistantEntry key={i} entry={entry} isStreaming={false} onCopy={copyEntry} interactive={interactive} onAsk={handleSend} />
               })}
               {current && <AssistantEntry entry={current} isStreaming={true} onCopy={copyEntry} />}
               {steerQueue.map((text, i) => (

@@ -52,9 +52,20 @@ Jeder Recherchier-Auftrag läuft in dieser Reihenfolge:
    Nummern-Bezug — was steht fest, was fehlt noch, was ist degradiert. Kein
    Abschluss-Ton — die Recherche läuft weiter. Aber auch keine stille Pause über
    Minuten: der Nutzer sieht immer, wo du bist.
-4. **Vertiefungsrunde vor dem Abschluss.** Bei Tiefenrecherchen gilt: bevor du
-   abschließt, nimm deine eigenen offenen Fragen und schließe die
-   **beantwortbaren selbst** — eine Vertiefungsrunde (~10–15 Tool-Calls Budget):
+4. **Vertiefungen nur auf Wunsch — Rundenmodell ist Standard.** Eine Runde
+   beantwortet die gestellte Frage **vollständig**: alle Basisteilaufgaben
+   des Plans, mit Zwischenständen wie oben. Am Runden-Ende steht der
+   Zwischenbericht (§5) — und dann **Stopp**: nicht selbst weitervertiefen,
+   kein Report-Bündel anstoßen, keine nächste Runde starten. Der Nutzer
+   entscheidet per Klick auf eine Vertiefung oder per Antwort („② dazu",
+   „alle übrigen“, „überspring ③“, „Report jetzt bündeln“, neue Frage).
+   Ausnahme: Der Auftrag selbst verlangt mehr (z. B. „… und teile das
+   Bündel auf throway“) — dann gehört das noch in denselben Zug.
+   **Autonome Vollrecherche nur auf ausdrücklichen Wunsch** („vertiefe
+   selbst", „recherchiere in einem Durchgang bis zum Ende", „mach komplett
+   fertig“): dann Basis + Vertiefungsrunde + Abschluss in einem Turn.
+   Eine Vertiefungsrunde (~10–15 Tool-Calls Budget) schließt die
+   beantwortbaren offenen Fragen:
    - Anteilsverhältnisse/Zeitpunkte → `hvd/historie` + Urkunden
      (`hvd/suche-urkunde`, dann `urkunde-get` für GV-/Beteiligungs-PDFs)
    - Bilanzen der Beteiligungen → `bilanz?fn=…` je relevanter FN
@@ -63,17 +74,26 @@ Jeder Recherchier-Auftrag läuft in dieser Reihenfolge:
    Was danach offen bleibt, ist eine **echte** Lücke — und wird so benannt:
    „nicht öffentlich“ (Quelle existiert nicht) vs. „nicht recherchiert“
    (Budget aufgebraucht) — niemals vermischen.
-5. **Abschluss mit Lücken.** Jede abgeschlossene Recherche endet mit:
+5. **Runden-Ende: Lücken + Angebot.** Jeder Zwischenbericht und jeder
+   Abschluss endet mit:
    - **Kernaussagen zuerst** (siehe „Ton & Format"),
    - **Nicht gefunden / Lücken:** explizit und ehrlich (Abdeckung, degradierte
      Quellen, leere Felder) — nie überspringen,
-   - **2–3 Folgefragen** aus genau diesen Lücken, je mit `→ `-Präfix — nur
-     solche, die du mit deinen Quellen wirklich beantworten kannst
+   - **2–3 Folgefragen — immer anbieten, auch ohne Lücken**: aus den
+     Lücken, oder — wenn keine bestehen — aus naheliegenden Vertiefungen
+     (Bilanzen, Historie, Verflechtungen der Beteiligten). Nur solche,
+     die du mit deinen Quellen wirklich beantworten kannst
      (z. B. „→ Eigentümerstruktur 2015? Vollzugs-Historie ab 2010 ziehen").
+     **Format exakt einhalten** (die Web-UI rendert sie als klickbare
+     Vertiefungen): eigene Überschriften-Zeile `**Mögliche Vertiefungen**`,
+     darunter je Frage eine Zeile `- → Frage?` (Leerzeilen dazwischen sind
+     okay) — und **danach nichts mehr**: die Fragen sind das Ende der
+     Nachricht, kein Schluss- oder Angebotssatz.
 
 ## Reports
 
-Längere Recherchen münden in ein Report-Bündel im Workspace:
+Längere Recherchen münden — auf ausdrücklichen Wunsch des Nutzers oder im
+autonomen Abschluss — in ein Report-Bündel im Workspace:
 
 ```
 reports/fi-<slug>-<fn>-<4hex>/
@@ -140,6 +160,8 @@ Denk dran: throway ist öffentlich — bei sensiblen Kontexten vorher fragen.
 ## Ton & Format
 
 - Kernaussagen zuerst, Details danach; Firmenwerte immer mit FN zitieren
-  (z. B. „Brantner Österreich GmbH (FN 475207 i)").
+  (z. B. „Musterbau Österreich GmbH (FN 123456w)") — FN immer ohne
+  Leerzeichen zwischen Ziffern und Buchstaben (`123456w`, nie `123456 w`).
+  (Beispielfirma ist fiktiv.)
 - Tabellen für Stammdaten, Personen/Organe und Bilanzzahlen.
 - Unsicherheiten und Lücken (z. B. nicht im Bestand) explizit sagen.

@@ -6,6 +6,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 The latest version is shown in the UI under `#/releases`.
 
+## [Unreleased]
+
+### Added
+
+- **Klickbare „Mögliche Vertiefungen“** — der Firmenindex-Agent beendet
+   Tiefenrecherchen mit Folgefragen; die Web-UI rendert sie jetzt als
+   klickbare Zeilen: ein Klick schickt die Frage als nächsten Prompt und
+   startet damit die Vertiefung. Rein client-seitig geparst aus der
+   fertigen Antwort (`src/lib/followUps.js`, strikt + lautlos degrade:
+   passt das Format nicht, bleibt alles beim gewohnten Markdown — auch
+   bei alten Sessions/Replay). Das Agent-Prompt pinnt das Format jetzt
+   exakt (Überschrift `**Mögliche Vertiefungen**`, je Zeile `- → Frage?`,
+   danach nichts mehr); die Strabag-E2E pinnt die Überschrift zusätzlich
+   per `textContains`. v2-Heimat ist `canvas.json → next[]` (ADR-0005) —
+   die Chip-Komponente wird dort wiederverwendet.
+
+### Changed
+
+- **Firmenindex: Rundenmodell statt Autonomie** — Standard ist jetzt
+   schrittweise: eine Runde beantwortet die gestellte Frage vollständig
+   (Plan + Zwischenstände) und endet mit Zwischenbericht + klickbaren
+   „Möglichen Vertiefungen“ — dann Stopp. Nicht selbst weitervertiefen,
+   kein unaufgefordertes Report-Bündel: der Nutzer steuert per Klick oder
+   Antwort („② dazu“, „alle übrigen“, „überspring ③“, „Report jetzt
+   bündeln“). Autonome Vollrecherche nur auf ausdrücklichen Wunsch
+   („vertiefe selbst“, „in einem Durchgang bis zum Ende“); Aufträge, die
+   Bündel + Share selbst verlangen, laufen weiter in einem Zug.
+
 ## [0.4.0] — 2026-09-28
 
 ### Added
