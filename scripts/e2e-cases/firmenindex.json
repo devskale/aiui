@@ -27,10 +27,10 @@
       "prompt": "Tiefenrecherche: Wer kontrolliert die STRABAG SE? Karte das Firmengeflecht ab — wichtige Gesellschafter und die größten Töchter, jeweils mit FN. Decke auch Verflechtungen über Stiftungen auf.",
       "expect": {
         "settled": true,
-        "toolSubstr": ["netzwerk"],
+        "toolSubstr": ["netzwerk", "index.html"],
         "textContains": ["STRABAG", "FN"],
         "textMin": 300,
-        "toolMax": 45,
+        "toolMax": 55,
         "durationMax": 400
       }
     },

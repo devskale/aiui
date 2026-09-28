@@ -59,17 +59,39 @@ Längere Recherchen münden in ein Report-Bündel im Workspace:
 
 ```
 reports/fi-<slug>-<fn>-<4hex>/
+  index.html           ← die HTML-Reportseite (visualize, Report-Modus) — Visitenkarte
   report.md            ← die Analyse (Kernaussagen zuerst, FN + Quellenzitate)
-  rohdaten/*.json      ← jede API-Antwort 1:1 (Nachvollziehbarkeit)
+  rohdaten/*.json      ← jede API-Antwort 1:1 (Beleg-Ebene, Nachvollziehbarkeit)
   dokumente/*          ← gezogene Urkunden/Bilanz-XML
 ```
+
+**index.html ist Standard, kein Optional** — professionelle Empfänger (Anwälte,
+Journalisten, Führungskräfte) lesen kein rohes JSON: die HTML-Seite (über deinen
+`visualize`-Skill, Report-Modus: exec summary → Struktur → Grafiken → Lücken)
+ist die **Visitenkarte des Bündels**; die rohdaten bleiben als Beleg-Ebene
+verlinkt/erwähnt, aber nie das Gesicht.
+
+**Grafik-Sprache für Juristen — zwei Formen, konsequent:**
+
+1. **Balkendiagramme** für Zahlen über Zeit: Bilanzsumme, Eigenkapital, Umsatz,
+   Ergebnis je Jahr — als Balkenreihe (visualize-Struktur `barchart`), Werte
+   direkt an den Balken, Quelle (Urkunde) am Chart.
+2. **Firmen-Tree** für Struktur: Eigentümer oben, Gesellschaft unten — Gesellschafter
+   und Beteiligungen als Hierarchie (visualize-Struktur `hierarchy`/`tree`), je
+   Knoten mit FN, Personen kursiv, Stiftungen markiert; Kante = Beteiligung.
+
+Diese zwei Formen bevorzugen; komplexere Diagramm-Arten nur, wenn sie der Frage
+wirklich dienen. Vor dem Upload `visualize validate` + `visualize lint`; bei
+Charts `chartcheck`. Daten wie immer: Balken aus `rohdaten/bilanz.json`, Tree aus
+`rohdaten/netzwerk*.json` (dieselben Daten wie die Grafiken der Detailseite).
 
 **Selbst-Check vor dem Teilen** (jedes Mal, keine Ausnahme):
 1. Jede Zahl im report.md ist auf eine Datei in `rohdaten/` zurückführbar —
    nichts aus dem Kopf, nichts aus dem Web als Registerdatum ausgeben.
 2. Alle im Report referenzierten Bündel-Dateien existieren tatsächlich
    (`ls` vor dem Upload).
-3. report.md verlinkt die Interaktive Ansicht (`?fn=<FN>`).
+3. report.md verlinkt die Interaktive Ansicht (`?fn=<FN>`); index.html ist
+   validiert (`visualize validate` + `lint`) und als eine Datei self-contained.
 
 Auf Wunsch („schöner Report", „als Seite teilen", „mit Grafiken") zusätzlich
 `index.html` über deinen `visualize`-Skill — Bilanz-Charts aus
@@ -84,7 +106,8 @@ Soll die Recherche geteilt werden, lädst du das Bündel als **DIR auf throway**
 deines `throway`-Skills hoch. Deine **letzte Antwort** nach einem Upload muss
 — auch nach vorherigen Zwischenberichten — zwingend enthalten:
 
-1. den Link (`https://skale.dev/throway/d/<name>`),
+1. den Link auf die **index.html** (`https://skale.dev/throway/d/<name>/index.html`,
+   falls gebaut, sonst die DIR-Übersicht `…/d/<name>`),
 2. eine 1–3-Zeilen-Zusammenfassung,
 3. das Ablaufdatum (`expires_at`).
 
