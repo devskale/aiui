@@ -10,6 +10,10 @@ The latest version is shown in the UI under `#/releases`.
 
 ### Added
 
+- **`scripts/surf-login.sh`** — Auto-Login für Browser-Tests gegen eine
+   auth-geschützte aiui-Instanz (liest `{ user, pass, url }` aus
+   `~/.aiui/agenttest-creds.json`, chmod 600 — secret-frei, deploybar).
+   Dazu auf lubu der Quota-limitierte Test-User `agenttest` (40/Tag).
 - **Canvas Phase B** — Topbar-Toggle für das Recherche-Panel (einmal
    geschlossen blieb es unbezahlbar geschlossen); Struktur-Karten als
    echter Baum mit Konnektor-Linien statt Einrück-Text; Zahlen-/Geldwerte
