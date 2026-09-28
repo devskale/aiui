@@ -33,6 +33,57 @@ session lifecycle), `server/quota.js` (daily cap), `src/hooks/useAgentEvents.js`
 
 ---
 
+## Delta-Review 2026-09-28 (repos re-pulled: pi-web 0.9.3, pi-gui 1.0.1, dsh 0.2.0-rc.1)
+
+Since the Sep-14 ledger, aiui shipped 0.3.1–0.4.0 (FileExplorer G5, model filter,
+last-used model, read_pdf cache, Agents, E2E suite, share/report bundles,
+Canvas ADR-0005, Firmenindex-Agent, global Esc abort). Already covered → dropped
+from the menu. New/risen candidates from the re-pulled repos:
+
+- **Scroll-to-latest button** (pi-web #845) — floating button above the composer
+  when the viewport is detached from the live tail. Counterpart to our smart
+  autoscroll. **S — trivial, do first.**
+- **Changes card per turn** (pi-gui #178) — at the end of each turn that edited
+  files: file count, per-file + total line counts, first 5 files + Show more;
+  clicking a row opens the diff. The matured version of "files-written chips".
+  Perfect fit for Firmenindex report bundles (index.html, rohdaten/, zip).
+  **S–M — top pick.**
+- **Browser notifications on turn finish** — long research turns (E2E: 375s+)
+  make this genuinely useful now, not just polish. **S.**
+- **Chat minimap + per-turn tool-call count badge** (pi-web #939) — navigating
+  long research sessions; a 1-line answer and a 45-tool deep-research turn
+  become distinguishable at a glance. **M — more valuable since 0.4.0.**
+- **Queued messages while streaming** (pi-web ChatInput) + **draft persistence**
+  (pi-web `draft-store.ts`) — during multi-minute research turns users want to
+  pre-type. Still unimplemented in aiui. **S–M.**
+- **Remember open session per browser tab** (pi-web #887) — nice for parallel
+  workflows across tabs. **S–M.**
+- **Models panel refresh button + minimal-edit enable switches** (pi-web #938,
+  #930; subagents individually switchable #934) — direction for our
+  SettingsPanel/model-filter UX. **S.**
+- **Auth hardening to port** (pi-web 0.9.2/0.9.3): Basic-Auth attempt
+  throttling, reject login redirects resolving to another origin, keep secrets
+  out of agent/terminal shells. aiui is publicly exposed (nginx/duckdns) —
+  **audit against these. S.**
+- **Streaming/session robustness checklist** (pi-web): first-streamed-chunk
+  duplication (#835), Strict-Mode event-stream reopen (#933), session-list
+  scroll perf (#940) — check whether aiui has the same classes of bug; our new
+  E2E suite is the right place to pin them.
+- **Turn duration ("Worked for")** (pi-gui #177) + **usage ring** (pi-gui #182) —
+  StatsFooter already covers tokens/cost/context; only polish if desired.
+- **dsh 0.2 web UI**: plugin manager + task-manager "process rows" — maps to
+  our Resource-universe admin UX and to Canvas cards for the Firmenindex
+  subtask list (ADR-0005). Strategic, **L**, decide deliberately.
+- **Scheduled tasks** (pi-gui cron, matured in 1.0) — still open from §9;
+  multi-user quota questions first. **L.**
+- Not adopted: pi-gui theme presets (single-CSS-file is a hard boundary),
+  worktree sidebar folders (sandbox isolates; workspaces aren't git repos),
+  dsh telemetry/session-log upload.
+- chatbot-template: only 3 minor commits (cn alias, merge adjacent text parts,
+  deps) — nothing new to take.
+
+---
+
 ## 1. Chat UX / streaming
 
 - **Chat minimap** (pi-web `ChatMinimap.tsx`) — a thin right-edge scrollbar
