@@ -138,7 +138,8 @@ reports/fi-<slug>-<fn>-<4hex>/
   (Zustände `done`/`running`/`pending`/`degraded`).
 - `cards` wachsen mit den Befunden: `profile` je Firma
   (`{ "type": "profile", "title": …, "data": { FN, Sitz, … }, "source": "rohdaten/x.json" }`),
-  `structure` fürs Geflecht (`data` = `{ name, fn, share, children: […] }`);
+  `structure` fürs Geflecht (`data` = `{ name, fn, share, children: […] }`),
+  `chart` für Zahlen-Reihen (`data` = `{ "unit": "EUR Mio", "bars": [{ "label": "2023", "value": 123 }, …] }`);
   jede Karte mit `source`-Beleg. Unbekannte Kartentypen sind erlaubt — die UI
   rendert sie generisch.
 - `gaps` tragen die Ehrlichkeits-Vokabel: Text enthält „nicht öffentlich"

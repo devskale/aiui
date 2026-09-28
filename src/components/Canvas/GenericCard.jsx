@@ -27,11 +27,17 @@ export class CardBoundary extends Component {
 const isHomogeneousObjects = (v) =>
   Array.isArray(v) && v.length > 0 && v.every((x) => x && typeof x === 'object' && !Array.isArray(x))
 
+const FN_RE = /^\d{5,6}[a-z]$/
+const FN_VIEW = (fn) => `https://skale.dev/firmenindex/?fn=${fn}`
+
 function Value({ v }) {
   if (v == null) return <span className="cv-muted">—</span>
   if (typeof v === 'boolean') return <span>{v ? 'ja' : 'nein'}</span>
   if (typeof v === 'number') return <span className="cv-num">{v}</span>
   if (typeof v === 'string') {
+    // FN-Werte verlinken auf die interaktive Firmenindex-Ansicht (Zeitreise,
+    // Eigentümer-Graph, Urkunden) — Visualisierung gratis statt Selbstbau.
+    if (FN_RE.test(v)) return <a className="cv-fn-link" href={FN_VIEW(v)} target="_blank" rel="noopener noreferrer">{v} ↗</a>
     // Zahlen-/Geld-/Prozentwerte tabellarisch: sortierbarer Blick in kv-Tabellen
     return /^[\s\d.,]+(?:\s?(?:%|EUR|Mrd\.|Mio\.|Mio|TS?D?\$?|[kKmM]?\$|€))?\s*$/.test(v) && /\d/.test(v)
       ? <span className="cv-num">{v}</span>
