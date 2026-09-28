@@ -40,3 +40,29 @@ export function matchesCanvasGlob(glob, path) {
   }
   return false
 }
+
+/** Extrahiert den Canvas-Pfad aus einem Tool-Call — effektbasiert, nicht
+ *  namensbasiert (ADR: „detects tool_execution_end on a matching path"):
+ *  - write/edit: der Pfad aus den Args (file_path/path/…)
+ *  - bash: jedes Token, das auf canvas.json endet und dem Glob entspricht
+ *    (fängt `> pfad`, `cat << EOF > pfad`, `tee pfad`, `cp x pfad` ab —
+ *    Modelle schreiben die Datei gelegentlich per Heredoc statt write)
+ * @returns {string|null} den gematchten Pfad oder null */
+export function canvasPathFromToolCall(glob, tc) {
+  if (!glob || !tc || typeof tc !== 'object') return null
+  let args = tc.args
+  if (typeof args === 'string') { try { args = JSON.parse(args) } catch { return null } }
+  if (!args || typeof args !== 'object') args = {}
+  const name = String(tc.name || '')
+  if (/write|edit/i.test(name)) {
+    const p = args.file_path || args.filePath || args.path || args.filename || ''
+    return matchesCanvasGlob(glob, p) ? p : null
+  }
+  if (/bash/i.test(name) && typeof args.command === 'string') {
+    if (!/canvas\.json/i.test(args.command)) return null
+    for (const tok of args.command.split(/[\s'"`;&|]+/)) {
+      if (/canvas\.json$/i.test(tok) && matchesCanvasGlob(glob, tok)) return tok
+    }
+  }
+  return null
+}

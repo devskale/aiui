@@ -14,15 +14,11 @@
 // ════════════════════════════════════════════════════════════════════
 import { useEffect, useRef, useState } from 'react'
 import { apiUrl } from '../lib/api'
-import { matchesCanvasGlob } from '../lib/canvas-glob'
+import { canvasPathFromToolCall } from '../lib/canvas-glob'
 import { parseCanvas } from '../lib/canvas-parse'
 
 // Tool-Args der Write/Edit-Tools: Pfad-Extraktion wie StreamEntry.
-function extractToolPath(args) {
-  if (!args || typeof args !== 'object') return ''
-  if (typeof args === 'string') { try { args = JSON.parse(args) } catch { return '' } }
-  return args.file_path || args.filePath || args.path || args.filename || ''
-}
+// (Effekt-Extraktion inkl. bash-Redirects: canvasPathFromToolCall)
 
 /**
  * @param {{ glob: string|null, entries: Array, current: object|null }} props
@@ -44,9 +40,8 @@ export function useCanvas({ glob, entries, current }) {
     for (const e of [...(entries || []), current].filter(Boolean)) {
       for (const tc of e.toolCalls || []) {
         if (tc.status !== 'done' && tc.status !== 'error') continue
-        if (!/write|edit/i.test(tc.name)) continue
-        const p = extractToolPath(tc.args)
-        if (p && matchesCanvasGlob(glob, p)) { path = p; writes++ }
+        const p = canvasPathFromToolCall(glob, tc)
+        if (p) { path = p; writes++ }
       }
     }
     const key = `${path}#${writes}`
