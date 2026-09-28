@@ -180,10 +180,14 @@ export function useAgentEvents(enabled = true) {
 
   useEffect(() => {
     if (!enabled) return
-    const es = new EventSource(apiUrl('/api/events'))
-
-    es.onopen = () => dispatch({ type: 'connected' })
-    es.onerror = () => dispatch({ type: 'disconnected' })
+    // Robust against service restarts (deploys): a reconnect attempt that
+    // hits a 502 window puts the EventSource into CLOSED — the browser then
+    // NEVER retries. We recreate it with backoff; every fresh connect gets
+    // status+history+stats pushed by the server → full resync after restart.
+    let es = null
+    let retryTimer = null
+    let backoff = 1000
+    let disposed = false
 
     const events = [
       'agent_start', 'agent_end', 'agent_settled',
@@ -199,19 +203,31 @@ export function useAgentEvents(enabled = true) {
       'error',
     ]
 
-    const handlers = events.map(event => {
-      const handler = (e) => {
-        try {
-          const data = JSON.parse(e.data)
-          dispatch({ type: event, ...data })
-        } catch {}
+    const connect = () => {
+      es = new EventSource(apiUrl('/api/events'))
+      es.onopen = () => { dispatch({ type: 'connected' }); backoff = 1000 }
+      es.onerror = () => {
+        dispatch({ type: 'disconnected' })
+        if (es.readyState === EventSource.CLOSED && !disposed) {
+          retryTimer = setTimeout(connect, backoff)
+          backoff = Math.min(backoff * 2, 10000)
+        }
+        // CONNECTING = the browser retries on its own — leave it be.
       }
-      es.addEventListener(event, handler)
-      return { event, handler }
-    })
+      for (const event of events) {
+        es.addEventListener(event, (e) => {
+          try {
+            const data = JSON.parse(e.data)
+            dispatch({ type: event, ...data })
+          } catch {}
+        })
+      }
+    }
+    connect()
 
     return () => {
-      handlers.forEach(({ event, handler }) => es.removeEventListener(event, handler))
+      disposed = true
+      clearTimeout(retryTimer)
       es.close()
     }
   }, [enabled])
