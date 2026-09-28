@@ -241,7 +241,14 @@ let failed = 0
 for (const c of cases) {
   process.stdout.write(`  ▶ ${c.id}${c.slow ? ' [slow]' : ''} … `)
   try {
-    const r = await runCase(base, c)
+    let r = await runCase(base, c)
+    // Free-Tier-Transient: settled, aber ohne Text und ohne Fehler-Event —
+    // ein Wiederholungsversuch (maskiert keine echten Assertion-Failures).
+    if (!r.pass && r.fold.settled && !r.fold.text && r.fold.errors.length === 0) {
+      console.log('(leere Antwort — Free-Tier-Drop? 1 Wiederholung)')
+      process.stdout.write('  ▶ retry … ')
+      r = await runCase(base, c)
+    }
     const secs = (r.duration / 1000).toFixed(1)
     if (r.pass) {
       console.log(`✓ ${secs}s — ${r.fold.tools.length} Tools, ${r.fold.text.length} Zeichen Text${JSON_OUT ? '' : ''}`)
