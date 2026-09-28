@@ -37,12 +37,22 @@ curl -s -X POST "https://skale.dev/throway/d/<key>" -F "f=@report.md" -F "f=@roh
 
 ## Bündelstruktur (Report-Share)
 
+⚠️ **DIRs sind flach** — Slashes in Dateinamen werden serverseitig gestript
+(Security-Invariante), Unterordner gibt es nicht. Deshalb:
+
 ```
-report.md            ← die Analyse (der Einstieg)
-index.html           ← optional, via visualize-Skill
-rohdaten/*.json      ← die API-Antworten 1:1
-dokumente/*          ← Urkunden / Bilanz-XML
+<d>/
+  index.html    ← die Visitenkarte (wenn gebaut)
+  report.md     ← die Analyse (der Einstieg)
+  rohdaten.zip  ← rohdaten/*.json + dokumente/* MIT Struktur gezippt
 ```
+
+- Subordner-Inhalte (rohdaten/, dokumente/) als **eine ZIP-Datei** hochladen
+  (`cd <bundle> && zip -r rohdaten.zip rohdaten dokumente` o. ä.) — Struktur
+  und Dateinamen bleiben im Archiv erhalten.
+- Nie viele JSONs flach einzeln hochladen (Breadcrumb-Liste wird unlesbar).
+- Einzelne Nachläge-Files (korrigierte report.md) dürfen flach — sie gehören
+  ohnehin nach oben.
 
 ## Limits & Ehrlichkeit
 

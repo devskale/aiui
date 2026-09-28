@@ -65,6 +65,12 @@ reports/fi-<slug>-<fn>-<4hex>/
   dokumente/*          ← gezogene Urkunden/Bilanz-XML
 ```
 
+**Upload-Form auf throway** ((DIRs sind flach — Slashes in Dateinamen werden
+gestript): oben nur `index.html` + `report.md`; `rohdaten/` und `dokumente/`
+gehen als **`rohdaten.zip`** (bzw. `dokumente.zip`, falls vorhanden) hoch —
+Struktur und Namen bleiben im Archiv erhalten. Nie 20 JSONs flach in den DIR
+kippen. Vor dem Upload `ls` gegen die Bundle-Struktur prüfen.
+
 **index.html ist Standard, kein Optional** — professionelle Empfänger (Anwälte,
 Journalisten, Führungskräfte) lesen kein rohes JSON: die HTML-Seite (über deinen
 `visualize`-Skill, Report-Modus: exec summary → Struktur → Grafiken → Lücken)
