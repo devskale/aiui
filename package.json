@@ -8,7 +8,7 @@
     "dev:server": "node --watch server/index.js",
     "dev:client": "vite",
     "build": "vite build",
-    "test": "node --test server/ src/ shared/",
+    "test": "node --test extensions/*.test.js server/*.test.js shared/*.test.js src/lib/*.test.js",
     "check:sdk": "node scripts/check-sdk-exports.js",
     "smoke": "node scripts/smoke.js",
     "smoke:full": "node scripts/smoke.js --full",
