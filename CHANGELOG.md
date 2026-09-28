@@ -10,6 +10,13 @@ The latest version is shown in the UI under `#/releases`.
 
 ### Added
 
+- **Persistente Session-Tokens** — Logins überleben Service-Restarts
+   (Deploys) statt bei jedem Neustart zu sterben: Sessions liegen gehasht
+   (sha256) in `~/.aiui-sessions.json` — neben der Auth-Config, außerhalb
+   jedes Sandbox-Workspace; ein geleaktes Backup der Datei reicht zum
+   Login nicht aus. Atomare Writes (0600), Ablaufen wird beim Boot und
+   bei jedem Save geputzt, TTL bleibt 7 Tage.
+
 - **`scripts/surf-login.sh`** — Auto-Login für Browser-Tests gegen eine
    auth-geschützte aiui-Instanz (liest `{ user, pass, url }` aus
    `~/.aiui/agenttest-creds.json`, chmod 600 — secret-frei, deploybar).

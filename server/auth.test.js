@@ -55,3 +55,44 @@ test('modelFilterFor: user block replaces the global one, global for the rest', 
 // Cleanup after the tests ran — top-level rmSync would delete the config
 // before the deferred test callbacks execute.
 after(() => fs.rmSync(dir, { recursive: true, force: true }))
+
+// ── persistente Sessions (Restart-Survival, Hash-only-Storage) ──
+const sessionsFile = path.join(dir, '.aiui-sessions.json')
+
+test('issueSession persistiert gehasht — Restart überlebt, roher Token nie auf Platte', async () => {
+  const a1 = await import('./auth.js')
+  const token = a1.issueSession('hak')
+  assert.ok(a1.lookupSession(token), 'live lookup ok')
+  const raw = fs.readFileSync(sessionsFile, 'utf8')
+  assert.ok(!raw.includes(token), 'raw token NIE in der Datei')
+  assert.ok(raw.includes(crypto.createHash('sha256').update(token).digest('hex')), 'hash-key vorhanden')
+  // Restart-Simulation: frische Modul-Instanz mit gleichem ENV/Datei
+  const a2 = await import('./auth.js?restart=1')
+  const s = a2.lookupSession(token)
+  assert.ok(s, 'lookup überlebt den Restart')
+  assert.equal(s.user, 'hak')
+})
+
+test('revokeSession entfernt den Eintrag auch persistent', async () => {
+  const a1 = await import('./auth.js?r1')
+  const token = a1.issueSession('demo')
+  a1.revokeSession(token)
+  const a2 = await import('./auth.js?r2')
+  assert.equal(a2.lookupSession(token), null, 'nach Restart ebenfalls weg')
+})
+
+test('abgelaufene Einträge werden beim Laden entfernt', async () => {
+  // Craft: eigener Token + abgelaufener Eintrag in der Datei
+  const myToken = 'tok-' + crypto.randomBytes(8).toString('hex')
+  const h = crypto.createHash('sha256').update(myToken).digest('hex')
+  const now = Date.now()
+  const data = JSON.parse(fs.readFileSync(sessionsFile, 'utf8') || '{}')
+  data[h] = { user: 'demo', expiresAt: now + 60_000 }
+  data['deadbeef'] = { user: 'demo', expiresAt: now - 1000 }
+  fs.writeFileSync(sessionsFile, JSON.stringify(data), { mode: 0o600 })
+  const a3 = await import('./auth.js?r3')
+  assert.equal(a3.lookupSession(myToken)?.user, 'demo', 'gültiger Eintrag überlebt')
+  assert.equal(a3.lookupSession('deadbeef-old'), null)
+  const after = JSON.parse(fs.readFileSync(sessionsFile, 'utf8'))
+  assert.ok(!after['deadbeef'], 'abgelaufener Eintrag aus der Datei geputzt (beim nächsten save)')
+})

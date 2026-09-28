@@ -43,7 +43,8 @@ server/
                     thinking, agents, stt, commands, sessions, uploads, files
   pi-session.js     ★ the core — per-user session lifecycle (see below)
   agents.js         ★ the Agent catalog (ADR-0004) — loads agents/<id>/agent.md
-  auth.js           login: ~/.aiui-auth.json, scrypt, in-memory session tokens
+  auth.js           login: ~/.aiui-auth.json, scrypt, persistente Sessions
+                    (gehasht in ~/.aiui-sessions.json — überleben Deploys)
   quota.js          per-user daily prompt cap (in-memory, UTC reset)
   event-bus.js      SSE fan-out — ONE BUS PER USER (getBus(user))
   sandbox.js        macOS seatbelt: createTools(cwd) | undefined, assertInside

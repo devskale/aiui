@@ -36,7 +36,45 @@ export const COOKIE_NAME = 'aiui_session'
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7 // 7 days
 
 // session token → { user, expiresAt }
+// Persisted (hashed) across restarts so logins survive deploys — see below.
 const sessions = new Map()
+
+// ── session persistence ──
+// Deploys restart the service and used to wipe every login. Sessions now
+// live in a file SIBLING to the auth config (home dir — outside every
+// sandboxed workspace, out of agent reach). Only sha256(token) is stored:
+// a leaked/backed-up file is useless for logging in. Expired entries are
+// pruned on load and on save; writes are atomic (tmp + rename, mode 0600).
+const SESSIONS_FILE = path.join(path.dirname(AUTH_FILE), '.aiui-sessions.json')
+const hashToken = (t) => crypto.createHash('sha256').update(t).digest('hex')
+
+function loadSessions() {
+  let dropped = 0
+  try {
+    const raw = JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf-8'))
+    const now = Date.now()
+    for (const [h, s] of Object.entries(raw || {})) {
+      if (s && typeof s.user === 'string' && Number(s.expiresAt) > now) {
+        sessions.set(h, { user: s.user, expiresAt: Number(s.expiresAt) })
+      } else dropped++
+    }
+  } catch { /* fehlt/korrupt → leer starten */ }
+  // Boot putzt die Datei gleich mit — abgelaufene akkumulieren nicht.
+  if (dropped > 0) saveSessions()
+}
+
+function saveSessions() {
+  const now = Date.now()
+  const out = {}
+  for (const [h, s] of sessions) if (s.expiresAt > now) out[h] = s
+  try {
+    const tmp = SESSIONS_FILE + '.tmp'
+    fs.writeFileSync(tmp, JSON.stringify(out), { mode: 0o600 })
+    fs.renameSync(tmp, SESSIONS_FILE)
+  } catch { /* best effort — der Speicher bleibt führend */ }
+}
+
+loadSessions()
 
 // config cache (reloaded when the file mtime changes → live edits)
 let config = null
@@ -108,16 +146,22 @@ export function modelFilterFor(username) {
 // ── sessions ──
 export function issueSession(user) {
   const token = crypto.randomBytes(32).toString('hex')
-  sessions.set(token, { user, expiresAt: Date.now() + SESSION_TTL_MS })
+  sessions.set(hashToken(token), { user, expiresAt: Date.now() + SESSION_TTL_MS })
+  saveSessions()
   return token
 }
 export function lookupSession(token) {
-  const s = token && sessions.get(token)
+  const h = token && hashToken(token)
+  const s = h && sessions.get(h)
   if (!s) return null
-  if (s.expiresAt < Date.now()) { sessions.delete(token); return null }
+  if (s.expiresAt < Date.now()) { sessions.delete(h); saveSessions(); return null }
   return s
 }
-export function revokeSession(token) { if (token) sessions.delete(token) }
+export function revokeSession(token) {
+  if (!token) return
+  sessions.delete(hashToken(token))
+  saveSessions()
+}
 
 // ── cookies ──
 // Read ALL aiui_session cookie values. Several may be present — stale
