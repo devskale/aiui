@@ -17,8 +17,11 @@ const MAX_READ_BYTES = 1024 * 1024
 
 /** Resolve a workspace-relative sub-path, enforcing it stays inside cwd. */
 export function resolveWorkspacePath(cwd, sub) {
-  const target = sub ? path.join(cwd, sub) : cwd
-  assertInside(cwd, target) // throws if escaped (handles absolute + .. )
+  // Absolute sub-paths (tool args sometimes carry them, e.g. the agent's
+  // write tool): path.join would wrongly NEST them under cwd
+  // (…/_local/Users/…) → ENOENT. Resolve as-is; assertInside still guards.
+  const target = path.isAbsolute(sub) ? path.resolve(sub) : (sub ? path.join(cwd, sub) : cwd)
+  assertInside(cwd, target) // throws if escaped (handles .. and outside-absolutes)
   return target
 }
 

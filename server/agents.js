@@ -70,6 +70,7 @@ function loadOneAgent(id) {
     description: String(frontmatter.description || ''),
     systemPrompt: content,
     model: frontmatter.model ? String(frontmatter.model) : null,
+    canvas: frontmatter.canvas ? String(frontmatter.canvas) : null,
     stt: frontmatter.stt === true,
     sttLanguage: frontmatter.sttLanguage ? String(frontmatter.sttLanguage) : 'auto',
     tts: frontmatter.tts === true,
@@ -118,8 +119,8 @@ function allAgents() {
 
 /** Catalog for the UI: metadata only, no prompt bodies. */
 export function listAgents() {
-  return allAgents().map(({ id, name, description, model, stt, sttLanguage, tts }) =>
-    ({ id, name, description, model, stt, sttLanguage, tts }))
+  return allAgents().map(({ id, name, description, model, canvas, stt, sttLanguage, tts }) =>
+    ({ id, name, description, model, canvas, stt, sttLanguage, tts }))
 }
 
 /** Full Agent def by id. Unknown/absent ids fall back to the default. */

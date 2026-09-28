@@ -307,7 +307,8 @@ export function UserEntry({ text, images, onCopy }) {
 // v1 bridge until the canvas panel owns a structured `next` (ADR-0005):
 // parsed client-side from the settled message (src/lib/followUps.js).
 // Click sends the question through the normal prompt path.
-function FollowUps({ questions, onAsk }) {
+// Exported: the Canvas panel's `next` section reuses the same chips.
+export function FollowUps({ questions, onAsk }) {
   if (!onAsk || !questions?.length) return null
   return (
     <div className="followups">

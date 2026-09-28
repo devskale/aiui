@@ -77,7 +77,8 @@
       "expect": {
         "settled": true,
         "toolSubstr": [
-          "lookup%2Fmerged"
+          "lookup%2Fmerged",
+          "canvas.json"
         ],
         "textContains": [
           "378576f",

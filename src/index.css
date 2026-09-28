@@ -413,6 +413,84 @@ pre code { background: none; padding: 0; font-size: 13px; }
   margin: 0; border: none; border-radius: 0; max-height: 420px;
 }
 
+/* ═══ CANVAS PANEL (ADR-0005) ═══ */
+.canvas-panel {
+  width: 400px; min-width: 320px; max-width: 480px;
+  background: var(--bg-surface); border-left: 1px solid var(--border-subtle);
+  display: flex; flex-direction: column; overflow-y: auto; z-index: 15;
+}
+.cv-header {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;
+  padding: 14px 14px 10px; border-bottom: 1px solid var(--border-subtle);
+  position: sticky; top: 0; background: var(--bg-surface); z-index: 2;
+}
+.cv-header-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cv-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.cv-subtitle { font-size: 12px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; }
+.cv-close {
+  background: none; border: none; color: var(--text-4); cursor: pointer;
+  padding: 3px; border-radius: 4px; display: flex;
+}
+.cv-close:hover { color: var(--text-2); background: var(--bg-hover); }
+.cv-body { padding: 10px 14px 16px; display: flex; flex-direction: column; gap: 14px; }
+.cv-section { display: flex; flex-direction: column; gap: 6px; }
+.cv-section-head {
+  font-size: 10px; font-weight: 600; color: var(--text-3);
+  text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;
+}
+/* Fortschritt */
+.cv-pg-row { display: flex; align-items: baseline; gap: 7px; font-size: 12.5px; color: var(--text-2); }
+.cv-pg-row .cv-pg-ic { flex-shrink: 0; transform: translateY(2px); }
+.cv-pg-row.done .cv-pg-label { color: var(--text-3); }
+.cv-pg-row.running .cv-pg-label { color: var(--text); font-weight: 500; }
+.cv-pg-ic.done { color: var(--accent); }
+.cv-pg-ic.running { color: var(--text-2); }
+.cv-pg-ic.pending { color: var(--text-4); }
+.cv-pg-ic.degraded { color: var(--warn); }
+.cv-pg-note { color: var(--text-4); font-size: 11px; margin-left: auto; text-align: right; }
+/* Karten */
+.cv-card {
+  background: var(--bg-elevated); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius); padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.cv-card--error { border-color: rgba(239,68,68,.4); color: var(--danger); font-size: 12px; }
+.cv-card-title { font-size: 12.5px; font-weight: 600; color: var(--text); }
+.cv-card-source { font-size: 10.5px; color: var(--text-4); text-decoration: none; font-family: 'JetBrains Mono', monospace; }
+.cv-card-source:hover { color: var(--accent); }
+.cv-kv, .cv-table { border-collapse: collapse; font-size: 12px; width: 100%; }
+.cv-kv td, .cv-table td, .cv-table th { padding: 2px 6px 2px 0; vertical-align: top; text-align: left; }
+.cv-kv-key { color: var(--text-3); white-space: nowrap; }
+.cv-table th { color: var(--text-3); font-weight: 500; font-size: 11px; }
+.cv-details summary { cursor: pointer; color: var(--text-3); font-size: 11.5px; }
+.cv-json {
+  font-size: 11px; background: var(--bg); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm); padding: 8px; overflow-x: auto; margin: 0;
+}
+.cv-md { font-size: 12.5px; color: var(--text-2); }
+.cv-md p { margin: 0 0 4px; }
+.cv-md p:last-child { margin: 0; }
+/* Struktur-Baum */
+.cv-structure { font-size: 12.5px; }
+.cv-node-line { display: flex; align-items: baseline; gap: 6px; padding: 1px 0; }
+.cv-node-name { color: var(--text); }
+.cv-node-fn { color: var(--text-4); font-size: 10.5px; font-family: 'JetBrains Mono', monospace; }
+.cv-node-share {
+  font-size: 10.5px; color: var(--accent); background: rgba(16,185,129,.08);
+  border-radius: 4px; padding: 0 5px;
+}
+/* Lücken */
+.cv-gap { font-size: 12px; color: var(--text-2); display: flex; align-items: baseline; gap: 7px; }
+.cv-gap-badge {
+  font-size: 9.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  border-radius: 4px; padding: 1px 6px; white-space: nowrap;
+}
+.cv-gap-badge.nonpublic { color: var(--danger); background: rgba(239,68,68,.1); }
+.cv-gap-badge.notsearched { color: var(--warn); background: rgba(245,158,11,.1); }
+/* Sonstiges */
+.cv-notice { font-size: 12px; color: var(--warn); padding: 12px 14px 4px; }
+.cv-report-hint { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-4); }
+
 /* ═══ FOLLOW-UPS (klickbare „Mögliche Vertiefungen" am Chat-Ende) ═══ */
 .followups {
   display: flex; flex-direction: column; gap: 6px;

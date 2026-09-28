@@ -10,6 +10,42 @@ The latest version is shown in the UI under `#/releases`.
 
 ### Added
 
+- **Canvas Phase A (ADR-0005)** — das Recherche-Panel materialisiert sich
+   live während der Recherche und nach Replay/Session-Wechsel: Fortschritt
+   (Teilaufgaben mit done/running/pending/degraded), Karten (`profile`,
+   `structure`, sonst generische Fallbacks: kv-Tabelle/Tabelle/Markdown/
+   JSON, je Karte ein ErrorBoundary), Lücken mit Ehrlichkeits-Badges
+   („nicht öffentlich“ vs „nicht recherchiert“) und `next` als dieselben
+   klickbaren Chips wie der Chat-Block. Rein klientseitig: useCanvas
+   beobachtet write/edit-Tool-Calls gegen die Frontmatter-Glob-Deklaration
+   (`canvas: reports/**/canvas.json`), fetcht über den bestehenden
+   `/api/file`-Endpoint — SSE-Protokoll unberührt; Server-Beteiligung =
+   3-Zeilen-Frontmatter-Passthrough in `/api/agents`. Parser + Glob sind
+   reine, getestete Module (`src/lib/canvas-{parse,glob}.js`, Versionstoleranz
+   + Längenkappen + Rohdaten-Fallback).
+
+### Fixed
+
+- **`/api/file`: absolute Pfade** — `resolveWorkspacePath` schachtelte
+   absolute sub-Pfade unter dem cwd ein (`…/_local/Users/…` → ENOENT,
+   als „invalid path“ verschluckt). Absolute Pfade innerhalb des
+   Workspace lösen jetzt direkt auf; außerhalb wirft der Guard wie zuvor
+   (Unit-Tests ergänzt).
+
+### Changed
+
+- **Firmenindex: Model-Pin auf `unii@tu@qwen-3.6-35b-vllm`** — das
+   Canvas-Commitment (Plan → canvas.json je Rechercheblock → Block-Format)
+   befolgte stepfun-flash:free in 4/4 Läufen nicht, qwen erfüllt alle Pins
+   (Seinfeld-E2E grün inkl. `toolSubstr: canvas.json`). Beide gratis; ~83 s
+   vs ~45 s. Revert = eine Zeile Frontmatter, falls Free-Tier wichtiger ist
+   als Canvas.
+- **Firmenindex-Agent: Canvas-Pflicht im Recherche-Flow (Punkt 3)** mit
+   vollständigen Inline-Beispiel (fiktive Musterbau GmbH) + „mit dem
+   write-Tool“ — Planschwelle gekippt: jeder Auftrag bekommt einen (Mini-)Plan.
+  
+### Added
+
 - **Retro-Guardrails** — Pre-Commit-Hook zeigt im Erfolg nur die
    Test-Summary statt ~200 Zeilen Testnamen (`AIUI_HOOK_VERBOSE=1` für
    vollen Output; FAIL druckt weiterhin alles); **Spaced-FN-Lint** für

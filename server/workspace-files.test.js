@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { listDir } from './workspace-files.js'
+import { listDir, resolveWorkspacePath } from './workspace-files.js'
 
 test('listDir: marks images via the server mime table, hides noise, dirs first', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aiui-list-'))
@@ -35,4 +35,14 @@ test('listDir: marks images via the server mime table, hides noise, dirs first',
   assert.equal(byName['sub'].isImage, false, 'dirs are never images')
   assert.equal(byName['sub'].contentType, null, 'dirs have no content type')
   fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('resolveWorkspacePath: absolute sub-path inside cwd resolves as-is (not nested)', () => {
+  const cwd = '/srv/ws/alice'
+  const abs = '/srv/ws/alice/reports/fi-x/canvas.json'
+  assert.equal(resolveWorkspacePath(cwd, abs), abs)
+})
+
+test('resolveWorkspacePath: absolute sub-path outside cwd throws', () => {
+  assert.throws(() => resolveWorkspacePath('/srv/ws/alice', '/etc/passwd'), /outside workspace/)
 })

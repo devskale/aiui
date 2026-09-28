@@ -20,6 +20,8 @@ import { ReleaseNotes } from './components/ReleaseNotes'
 import { SettingsPanel } from './components/SettingsPanel'
 import { LoginModal } from './components/LoginModal'
 import { UserEntry, AssistantEntry, ErrorEntry } from './components/StreamEntry'
+import { ResearchCanvas } from './components/Canvas/ResearchCanvas.jsx'
+import { useCanvas } from './hooks/useCanvas'
 import { findImageMentions } from './lib/compose'
 import { Folder, Clock, Volume2, VolumeX } from 'lucide-react'
 
@@ -75,6 +77,11 @@ export default function App() {
   const { visible, imageModels, favModels } = useModels(authed, me?.user)
   const endRef = useRef(null)
   const inputRef = useRef(null)
+
+  // ── Canvas (ADR-0005): Panel nur für Agents mit Canvas-Deklaration ──
+  const canvasGlob = agents.find(a => a.id === sessionAgent)?.canvas || null
+  const canvasState = useCanvas({ glob: canvasGlob, entries, current })
+  const [canvasOpen, setCanvasOpen] = useState(() => localStorage.getItem('aiui-canvas-open') !== '0')
 
   // ── TTS (agent-gated spoken answers — ADR-0004) ──
   const activeAgent = agents.find(a => a.id === sessionAgent)
@@ -380,6 +387,14 @@ export default function App() {
           sttLanguage={agents.find(a => a.id === sessionAgent)?.sttLanguage || 'auto'}
         />
       </main>
+
+      {canvasState.canvas && canvasOpen && (
+        <ResearchCanvas
+          state={canvasState}
+          onAsk={handleSend}
+          onClose={() => { setCanvasOpen(false); localStorage.setItem('aiui-canvas-open', '0') }}
+        />
+      )}
 
       {showModelPicker && (
         <ModelPicker
