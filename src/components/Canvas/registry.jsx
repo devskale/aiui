@@ -70,8 +70,10 @@ function StructureCard({ card }) {
   )
 }
 
-export const CARD_REGISTRY = {
-  profile: ProfileCard,
-  structure: StructureCard,
-  chart: ChartCard,
-}
+// Typ-Aliasse: Modelle benennen denselben Typ gelegentlich anders
+// (beobachtet: "barchart" statt "chart" bei korrekter Datenstruktur).
+const CHART_ALIASES = ['chart', 'barchart', 'bar-chart', 'bars']
+
+export const CARD_REGISTRY = Object.fromEntries(
+  [...CHART_ALIASES.map((t) => [t, ChartCard]), ['profile', ProfileCard], ['structure', StructureCard]]
+)
