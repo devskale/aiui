@@ -8,7 +8,7 @@ images assistant with PDF reading — see the picker in the topbar.
 
 ```
 pnpm install
-pnpm dev      # server :3001 + client :5173 (proxies /api → 3001)
+pnpm dev      # server :3107 + client :5173 (proxies /api → 3107)
 ```
 
 Open http://localhost:5173. Auth is **off** by default (open in dev); turn it

@@ -508,6 +508,6 @@ const base = (process.env.VITE_BASE || '').replace(/\/+$/, '')
 app.use(`${base}/uploads`, express.static(uploadsDir))
 app.use(`/uploads`, express.static(uploadsDir))
 
-const PORT = process.env.PORT || 3001
+const PORT = process.env.PORT || 3107
 const HOST = process.env.HOST || '127.0.0.1'
 app.listen(PORT, HOST, () => console.log(`πui server running on http://${HOST}:${PORT}`))

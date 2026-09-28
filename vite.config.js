@@ -13,7 +13,7 @@ export default defineConfig({
     allowedHosts: ['lubuntu.local', 'neusiedl.duckdns.org'],
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:3001',
+        target: `http://127.0.0.1:${process.env.PORT || 3107}`,
         changeOrigin: true,
       },
     },

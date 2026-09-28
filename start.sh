@@ -2,17 +2,17 @@
 # Start πui locally on the Mac.
 #
 # Usage:
-#   ./start.sh          # dev mode (Vite HMR on :5173, API on :3001)
-#   ./start.sh prod     # production mode, single server on :3001 (serves dist/)
+#   ./start.sh          # dev mode (Vite HMR on :5173, API on :3107)
+#   ./start.sh prod     # production mode, single server on :3107 (serves dist/)
 #   ./start.sh build    # just build dist/ and exit
 #
-# Dev:  open http://localhost:5173   (Vite proxies /api → :3001)
-# Prod: open http://localhost:3001
+# Dev:  open http://localhost:5173   (Vite proxies /api → :3107)
+# Prod: open http://localhost:3107
 set -euo pipefail
 cd "$(dirname "$0")"
 
 MODE="${1:-dev}"
-PORT="${PORT:-3001}"
+PORT="${PORT:-3107}"
 
 case "$MODE" in
   prod)

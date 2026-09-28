@@ -11,7 +11,7 @@ against (isolation, shape ownership, SDK boundary).
 ## Commands
 
 ```bash
-pnpm dev            # server (:3001) + client (:5173, proxies /api → 3001)
+pnpm dev            # server (:3107) + client (:5173, proxies /api → 3107)
 pnpm dev:server     # server only (--watch auto-restart)
 pnpm dev:client     # Vite dev server only
 pnpm build          # production build → dist/
