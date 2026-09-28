@@ -25,27 +25,24 @@
     },
     {
       "id": "netzwerk-strabag",
-      "description": "Tiefenrecherche Verflechtungen: STRABAG SE — netzwerk/gf-Geflecht, Struktur-Antwort",
+      "description": "Tiefenrecherche STRABAG — Geflecht + selbständige Vertiefung (hvd/bilanz), ohne Share-Last",
       "agent": "firmenindex",
-      "timeout": 600,
+      "timeout": 700,
       "slow": true,
-      "prompt": "Tiefenrecherche: Wer kontrolliert die STRABAG SE? Karte das Firmengeflecht ab — wichtige Gesellschafter und die größten Töchter, jeweils mit FN. Decke auch Verflechtungen über Stiftungen auf. Teile das fertige Bündel auf throway (index.html, report.md, rohdaten.zip).",
+      "prompt": "Tiefenrecherche: Wer kontrolliert die STRABAG SE? Karte das Firmengeflecht ab — wichtige Gesellschafter und die größten Töchter, jeweils mit FN. Vertiefe die offenen Anteilsfragen selbst (Historie, Urkunden, Bilanzen der Beteiligungen).",
       "expect": {
         "settled": true,
         "toolSubstr": [
           "netzwerk",
-          "index.html",
-          "rohdaten.zip",
           "hvd"
         ],
         "textContains": [
           "STRABAG",
-          "FN",
-          "throway"
+          "FN"
         ],
         "textMin": 300,
-        "toolMax": 55,
-        "durationMax": 580
+        "toolMax": 60,
+        "durationMax": 680
       }
     },
     {
@@ -105,6 +102,27 @@
         "textMin": 200,
         "toolMax": 45,
         "durationMax": 400
+      }
+    },
+    {
+      "id": "share-seinfeld-bundle",
+      "description": "Share-Pipeline an schneller Firma: Recherche → index.html + report.md + rohdaten.zip → throway",
+      "agent": "firmenindex",
+      "timeout": 480,
+      "prompt": "Recherchiere die Seinfeld Professionals Infrastruktur GmbH & Co KG (Wien) kurz (FN der KG und der Komplementär-GmbH, Organe) und teile das fertige Bündel auf throway: index.html, report.md, rohdaten.zip.",
+      "expect": {
+        "settled": true,
+        "toolSubstr": [
+          "index.html",
+          "rohdaten.zip"
+        ],
+        "textContains": [
+          "throway",
+          "378576f"
+        ],
+        "textMin": 150,
+        "toolMax": 30,
+        "durationMax": 460
       }
     }
   ]
