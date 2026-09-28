@@ -27,7 +27,7 @@
       "id": "netzwerk-strabag",
       "description": "Tiefenrecherche Verflechtungen: STRABAG SE — netzwerk/gf-Geflecht, Struktur-Antwort",
       "agent": "firmenindex",
-      "timeout": 540,
+      "timeout": 600,
       "slow": true,
       "prompt": "Tiefenrecherche: Wer kontrolliert die STRABAG SE? Karte das Firmengeflecht ab — wichtige Gesellschafter und die größten Töchter, jeweils mit FN. Decke auch Verflechtungen über Stiftungen auf. Teile das fertige Bündel auf throway (index.html, report.md, rohdaten.zip).",
       "expect": {
@@ -35,7 +35,8 @@
         "toolSubstr": [
           "netzwerk",
           "index.html",
-          "rohdaten.zip"
+          "rohdaten.zip",
+          "hvd"
         ],
         "textContains": [
           "STRABAG",
@@ -44,7 +45,7 @@
         ],
         "textMin": 300,
         "toolMax": 55,
-        "durationMax": 520
+        "durationMax": 580
       }
     },
     {

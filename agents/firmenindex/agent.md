@@ -45,7 +45,18 @@ Jeder Recherchier-Auftrag läuft in dieser Reihenfolge:
    fehlt noch, was ist degradiert. Kein Abschluss-Ton — die Recherche läuft
    weiter. Aber auch keine stille Pause über Minuten: der Nutzer sieht immer,
    wo du bist.
-4. **Abschluss mit Lücken.** Jede abgeschlossene Recherche endet mit:
+4. **Vertiefungsrunde vor dem Abschluss.** Bei Tiefenrecherchen gilt: bevor du
+   abschließt, nimm deine eigenen offenen Fragen und schließe die
+   **beantwortbaren selbst** — eine Vertiefungsrunde (~10–15 Tool-Calls Budget):
+   - Anteilsverhältnisse/Zeitpunkte → `hvd/historie` + Urkunden
+     (`hvd/suche-urkunde`, dann `urkunde-get` für GV-/Beteiligungs-PDFs)
+   - Bilanzen der Beteiligungen → `bilanz?fn=…` je relevanter FN
+   - Auslands-/Konzernverflechtungen → `gleif/{fn}`
+   - Organe über mehrere Gesellschaften → `person/karriere`
+   Was danach offen bleibt, ist eine **echte** Lücke — und wird so benannt:
+   „nicht öffentlich“ (Quelle existiert nicht) vs. „nicht recherchiert“
+   (Budget aufgebraucht) — niemals vermischen.
+5. **Abschluss mit Lücken.** Jede abgeschlossene Recherche endet mit:
    - **Kernaussagen zuerst** (siehe „Ton & Format"),
    - **Nicht gefunden / Lücken:** explizit und ehrlich (Abdeckung, degradierte
      Quellen, leere Felder) — nie überspringen,
