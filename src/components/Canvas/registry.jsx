@@ -12,17 +12,22 @@ function ProfileCard({ card }) {
 }
 
 // structure: Beteiligungs-Baum { name, fn?, share?, children[] } —
-// v1 eingerückt mit Share-Badge; Grafik ist Phase B.
-function StructureNode({ node, depth = 0 }) {
+// geschachtelter Baum mit Konnektor-Linien (CSS, Phase B); Share-Badge + FN.
+function StructureNode({ node }) {
   if (!node || typeof node !== 'object') return null
+  const children = (node.children || []).slice(0, 40)
   return (
-    <div className="cv-node" style={{ marginLeft: depth * 14 }}>
+    <div className="cv-node">
       <div className="cv-node-line">
         <span className="cv-node-name">{node.name || '?'}</span>
         {node.fn && <span className="cv-node-fn">{node.fn}</span>}
         {node.share && <span className="cv-node-share">{node.share}</span>}
       </div>
-      {(node.children || []).slice(0, 40).map((c, i) => <StructureNode key={i} node={c} depth={depth + 1} />)}
+      {children.length > 0 && (
+        <div className="cv-tree-children">
+          {children.map((c, i) => <StructureNode key={i} node={c} />)}
+        </div>
+      )}
     </div>
   )
 }

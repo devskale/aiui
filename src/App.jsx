@@ -23,7 +23,7 @@ import { UserEntry, AssistantEntry, ErrorEntry } from './components/StreamEntry'
 import { ResearchCanvas } from './components/Canvas/ResearchCanvas.jsx'
 import { useCanvas } from './hooks/useCanvas'
 import { findImageMentions } from './lib/compose'
-import { Folder, Clock, Volume2, VolumeX } from 'lucide-react'
+import { Folder, Clock, Volume2, VolumeX, PanelRight } from 'lucide-react'
 
 // Format an elapsed duration (ms) as a single largest-unit token.
 // Ladder: <1m → m → h → d → w → mo  (only the largest unit is shown).
@@ -332,6 +332,15 @@ export default function App() {
               </span>
             )}
           </div>
+          {canvasState.canvas && (
+            <button
+              className={`tb-btn tb-canvas ${canvasOpen ? 'on' : ''}`}
+              onClick={() => { const n = !canvasOpen; setCanvasOpen(n); localStorage.setItem('aiui-canvas-open', n ? '1' : '0') }}
+              title={canvasOpen ? 'Recherche-Panel schließen' : 'Recherche-Panel öffnen'}
+            >
+              <PanelRight size={15} />
+            </button>
+          )}
           {me?.authRequired && me?.user && (
             <div className="tb-user">
               <span className="tb-user-name">{me.user}</span>

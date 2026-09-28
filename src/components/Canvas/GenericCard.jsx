@@ -30,8 +30,13 @@ const isHomogeneousObjects = (v) =>
 function Value({ v }) {
   if (v == null) return <span className="cv-muted">—</span>
   if (typeof v === 'boolean') return <span>{v ? 'ja' : 'nein'}</span>
-  if (typeof v === 'number') return <span>{v}</span>
-  if (typeof v === 'string') return <span>{v}</span>
+  if (typeof v === 'number') return <span className="cv-num">{v}</span>
+  if (typeof v === 'string') {
+    // Zahlen-/Geld-/Prozentwerte tabellarisch: sortierbarer Blick in kv-Tabellen
+    return /^[\s\d.,]+(?:\s?(?:%|EUR|Mrd\.|Mio\.|Mio|TS?D?\$?|[kKmM]?\$|€))?\s*$/.test(v) && /\d/.test(v)
+      ? <span className="cv-num">{v}</span>
+      : <span>{v}</span>
+  }
   if (Array.isArray(v)) {
     if (v.every((x) => typeof x !== 'object')) return <span>{v.join(', ')}</span>
     return <details className="cv-details"><summary>{v.length} Einträge</summary><KvTable data={Object.fromEntries(v.map((x, i) => [i + 1, x]))} /></details>

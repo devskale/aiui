@@ -10,6 +10,11 @@ The latest version is shown in the UI under `#/releases`.
 
 ### Added
 
+- **Canvas Phase B** — Topbar-Toggle für das Recherche-Panel (einmal
+   geschlossen blieb es unbezahlbar geschlossen); Struktur-Karten als
+   echter Baum mit Konnektor-Linien statt Einrück-Text; Zahlen-/Geldwerte
+   in Karten tabellarisch-monospace; Panel-Slide-in + Mobile-Overlay
+   (<1100px, mit Schatten).
 - **Canvas Phase A (ADR-0005)** — das Recherche-Panel materialisiert sich
    live während der Recherche und nach Replay/Session-Wechsel: Fortschritt
    (Teilaufgaben mit done/running/pending/degraded), Karten (`profile`,
