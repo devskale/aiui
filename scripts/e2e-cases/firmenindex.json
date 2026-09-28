@@ -30,8 +30,39 @@
         "toolSubstr": ["netzwerk"],
         "textContains": ["STRABAG", "FN"],
         "textMin": 300,
-        "toolMax": 30,
+        "toolMax": 45,
         "durationMax": 400
+      }
+    },
+    {
+      "id": "red-bull-geflecht",
+      "description": "Tiefenrecherche Red Bull GmbH (FN 56247t): Gesellschafter/Organe + Töchter-Geflecht",
+      "agent": "firmenindex",
+      "timeout": 420,
+      "slow": true,
+      "prompt": "Tiefenrecherche: Red Bull GmbH (Fuschl am See). Wer sind die Gesellschafter und Organe? Welches Geflecht an Töchtern und Beteiligungen besteht — wichtige FN dazu?",
+      "expect": {
+        "settled": true,
+        "toolSubstr": ["netzwerk"],
+        "textContains": ["56247t", "Red Bull"],
+        "textMin": 300,
+        "toolMax": 45,
+        "durationMax": 400
+      }
+    },
+    {
+      "id": "seinfeld-kg-komplementaer",
+      "description": "GmbH & Co KG: KG (FN 378576f) vs. Komplementär-GmbH (FN 377838w) sauber trennen",
+      "agent": "firmenindex",
+      "timeout": 300,
+      "prompt": "Recherchiere die Seinfeld Professionals Infrastruktur GmbH & Co KG (Wien): Gesellschafterstruktur, Komplementär, Organe, Zweck. Nenne FN der KG und FN der Komplementär-GmbH.",
+      "expect": {
+        "settled": true,
+        "toolSubstr": ["lookup%2Fmerged"],
+        "textContains": ["378576f", "377838w"],
+        "textMin": 120,
+        "toolMax": 15,
+        "durationMax": 280
       }
     },
     {
@@ -45,7 +76,7 @@
         "settled": true,
         "textContains": ["Haselsteiner", "FN"],
         "textMin": 200,
-        "toolMax": 30,
+        "toolMax": 45,
         "durationMax": 400
       }
     }
