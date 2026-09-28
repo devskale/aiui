@@ -1,0 +1,53 @@
+{
+  "agent": "firmenindex",
+  "note": "Agent-E2E gegen den echten firmenindex-Agenten (kostenloses Model via Pin). Slow-Cases laufen nur mit --slow.",
+  "cases": [
+    {
+      "id": "quick-lookup-brantner",
+      "description": "Klarer Quick-Lookup: GF der Brantner Österreich GmbH → lookup/merged, FN-zitierte Antwort",
+      "agent": "firmenindex",
+      "timeout": 180,
+      "prompt": "Quick-Recherche: Wer sind die Geschäftsführer der Brantner Österreich GmbH? Kurze Antwort.",
+      "expect": {
+        "settled": true,
+        "modelContains": "stepfun",
+        "toolSubstr": ["lookup%2Fmerged"],
+        "textContains": ["475207", "Geschäftsführer"],
+        "textMin": 80,
+        "toolMax": 8,
+        "durationMax": 150
+      }
+    },
+    {
+      "id": "netzwerk-strabag",
+      "description": "Tiefenrecherche Verflechtungen: STRABAG SE — netzwerk/gf-Geflecht, Struktur-Antwort",
+      "agent": "firmenindex",
+      "timeout": 420,
+      "slow": true,
+      "prompt": "Tiefenrecherche: Wer kontrolliert die STRABAG SE? Karte das Firmengeflecht ab — wichtige Gesellschafter und die größten Töchter, jeweils mit FN. Decke auch Verflechtungen über Stiftungen auf.",
+      "expect": {
+        "settled": true,
+        "toolSubstr": ["netzwerk"],
+        "textContains": ["STRABAG", "FN"],
+        "textMin": 300,
+        "toolMax": 30,
+        "durationMax": 400
+      }
+    },
+    {
+      "id": "personen-verflechtung",
+      "description": "Personen-Geflecht: Wer sitzt in mehreren Aufsichtsräten? (person/karriere + netzwerk-Kombi)",
+      "agent": "firmenindex",
+      "timeout": 420,
+      "slow": true,
+      "prompt": "Recherchiere die Verflechtungen von Hans Peter Haselsteiner: In welchen Firmen und Organen ist er heute vertreten? Liste mit FN und Rolle.",
+      "expect": {
+        "settled": true,
+        "textContains": ["Haselsteiner", "FN"],
+        "textMin": 200,
+        "toolMax": 30,
+        "durationMax": 400
+      }
+    }
+  ]
+}

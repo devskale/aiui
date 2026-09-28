@@ -15,7 +15,9 @@ pnpm dev            # server (:3107) + client (:5173, proxies /api → 3107)
 pnpm dev:server     # server only (--watch auto-restart)
 pnpm dev:client     # Vite dev server only
 pnpm build          # production build → dist/
-pnpm test           # node --test extensions/ server/ shared/ src/lib/ (auch im pre-commit)
+pnpm test           # node --test extensions/ server/ shared/ src/lib/ scripts/ (auch im pre-commit)
+pnpm e2e            # Agent-E2E-Suite (scripts/e2e-cases/, eigener Server auf freiem Port)
+pnpm e2e:slow       # … inkl. Slow-Cases (Tiefenrecherchen, echte Model-Calls)
 pnpm run check:sdk  # SDK-Imports gegen installierte Version prüfen (pre-commit)
 pnpm smoke          # Server booten + Models/Agents-Endpoints (kein Model-Call)
 pnpm smoke:full     # + Bild-only-Roundtrip (echter Model-Call)
