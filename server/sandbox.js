@@ -146,6 +146,11 @@ function bwrapSpawnHook(cwd) {
   const ro = (p) => { if (fs.existsSync(p)) args.push('--ro-bind', p, p) }
   const rw = (p) => { if (fs.existsSync(p)) args.push('--bind', p, p) }
   ro(path.join(home, '.local'))              // uv, credgoo, skill launchers
+  // Node des Servers (z. B. nvm) — der Service-PATH erbt es, aber der
+  // nvm-Baum war hinter der Sandbox unsichtbar: `node` → „Kommando nicht
+  // gefunden". process.execPath ist bump-robust (nvm-Version ≠ Hardcode).
+  const nodeBinDir = path.dirname(process.execPath)
+  if (nodeBinDir.startsWith(home + path.sep)) ro(nodeBinDir)
   if (fs.existsSync(path.join(home, '.config'))) {
     args.push('--dir', path.join(home, '.config'))
     ro(path.join(home, '.config', 'api_keys')) // credgoo key store (skills)
@@ -163,6 +168,9 @@ function bwrapSpawnHook(cwd) {
     cwd: workdir,
     env: {
       ...env,
+      // Gürtel + Hosenträger: node-bin auch im PATH des Tool-Bash falls
+      // der SDK-env ein Minimal-PATH übergeben wurde.
+      PATH: [nodeBinDir, env?.PATH || process.env.PATH].filter(Boolean).join(path.delimiter),
       // keep git from reading the user's global config under HOME (hidden)
       GIT_CONFIG_GLOBAL: '/dev/null',
       GIT_CONFIG_SYSTEM: '/dev/null',

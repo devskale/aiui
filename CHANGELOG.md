@@ -34,6 +34,17 @@ The latest version is shown in the UI under `#/releases`.
    („vertiefe selbst“, „in einem Durchgang bis zum Ende“); Aufträge, die
    Bündel + Share selbst verlangen, laufen weiter in einem Zug.
 
+### Fixed
+
+- **`node` fehlte im Sandbox-Bash (bwrap)** — der Service-PATH enthält
+   die nvm-bin-dir, aber `~/.nvm` war hinter der bubblewrap-Sandbox
+   unsichtbar: Agent-Bash-Calls mit `node …` starben mit 127. Fix: die
+   bin-dir des laufenden node (`process.execPath`, bump-robust) wird
+   ro-gebunden + in den Tool-PATH injiziert; auf lubu per Sandbox-Smoke
+   verifiziert (`node -v` → v24.13.0). Zusätzlich SKILL-Regel: mehrzeilige
+   Scripte als Datei (Heredoc), nie `python3 -c` — innere `"` brechen
+   sonst das Shell-Quoting.
+
 ## [0.4.0] — 2026-09-28
 
 ### Added

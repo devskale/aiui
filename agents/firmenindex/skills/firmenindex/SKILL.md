@@ -21,6 +21,22 @@ curl -s "https://skale.dev/firmenindex/api?e=<ENDPOINT>&<PARAMS>"
   `curl -s "https://skale.dev/firmenindex/api?e=openapi.json"` (OpenAPI 3, aus dem
   laufenden Code generiert — kann nicht veralten)
 
+### Scripte: Datei statt `-c` (Quoting-Falle)
+
+Mehrzeilige Python-/Node-Auswertungen (XML-Bilanzen parsen u. ä.) **als Datei
+schreiben und ausführen** — nie `python3 -c "…"` mit mehrzeiligem Code:
+innere `"` (z. B. f-Strings) brechen das Shell-Quoting, der Call failed mit
+Syntaxfehler. Muster:
+
+```bash
+cat << 'PYEOF' > /tmp/parse_bilanz.py
+import xml.etree.ElementTree as ET
+PYEOF
+python3 /tmp/parse_bilanz.py
+```
+
+(`node` und `python3` stehen im Sandbox-Bash zur Verfügung.)
+
 ## Die drei Kernflüsse
 
 ### ① Firmen & Personen finden
