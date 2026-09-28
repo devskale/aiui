@@ -6,6 +6,40 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 The latest version is shown in the UI under `#/releases`.
 
+## [0.4.0] — 2026-09-28
+
+### Added
+
+- **Firmenindex-Agent: Recherche-Flow** — Rückfragen bei Mehrdeutigkeit,
+  Rechercheplan zuerst, Zwischenstände bei langen Recherchen, Abschluss mit
+  Lücken + Folgefragen, und eine **Vertiefungsrunde vor dem Abschluss**:
+   beantwortbare offene Fragen werden selbst zugemacht (hvd/historie +
+   Urkunden, Bilanzen je Beteiligung, GLEIF, person/karriere); echte Lücken
+   werden als „nicht öffentlich“ vs. „nicht recherchiert“ klassifiziert.
+- **Anwalts-Report-Bundles** — `index.html` (visualize-Report-Modus) ist
+   Standard-Visitenkarte jedes Shares; Grafik-Sprache: Balken für
+   Zahlen-Reihen, Firmen-Tree für Strukturen (FN je Knoten); `rohdaten/` +
+   `dokumente/` als **eine rohdaten.zip** (throway-DIRs sind flach, Struktur
+   bleibt im Archiv); Share-Link zeigt direkt auf index.html.
+- **Agent-E2E-Suite** (`pnpm e2e` / `pnpm e2e:slow`) — wiederverwendbare
+   Cases als Daten (`scripts/e2e-cases/`), eigener Server auf freiem Port,
+   SSE-Folding + Erwartungen (settled, textContains, toolSubstr, toolMax,
+   durationMax, modelContains); Auto-Retry bei Free-Tier-Leerantworten;
+   reine Teile unit-getestet (100/100).
+- **Kostenloses Default-Model** für den Firmenindex-Agenten gepinnt
+   (`unii@kilo@stepfun/step-3.7-flash:free`, benchmarket: ~45s vs. ~10min
+   Nemotron-Ultra bei gleicher Antwortqualität).
+- **ADR-0005: Canvas** — erweiterbarer Recherche-Canvas-Kontrakt (Karten-
+   Registry, generische Fallbacks, Beleg-Links, agent-getriggert).
+
+### Changed
+
+- **Dev-Port 3001 → 3107** (3001 kollidiert auf zwei Maschinen mit
+  next-servern).
+- **Test-Skript auf Globs** — `node --test <dir>`-Args brechen auf Node
+  22.23.1 (Regression, in .2 gefixt); `extensions/pdf-tools.test.js` lief
+  bisher gar nicht mit — jetzt 100/100.
+
 ## [0.3.2] — 2026-09-13
 
 ### Added
