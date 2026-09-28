@@ -1,4 +1,14 @@
-# aiui pre-commit: SDK-Oberfläche prüfen, dann Tests (beide < 2s).
+# aiui pre-commit: SDK-Oberfläche prüfen, Agent-Prompt-Lint, dann Tests.
 # smoke[[:full]] läuft NICHT hier (bootet Server) — manuell oder bei Dep-Änderungen.
 pnpm run check:sdk
-pnpm test
+
+# Spaced-FN-Lint: Agent-Prompts/-Skills dürfen kein "FN 123456 f"-Format
+# (Ziffern + Leerzeichen + Buchstabe) lehren — das Beispiel kopiert das
+# Modell 1:1 in Antworten und bricht FN-Erwartungen (gelaufene Bug-Klasse).
+if grep -rEn '[0-9]{5,6} [a-z]\b' agents/ 2>/dev/null; then
+  echo "pre-commit: spaced FN in agents/ gefunden — Format ist '475207i', nie '475207 i'." >&2
+  exit 1
+fi
+
+# Tests: im Erfolg nur die Summary (AIUI_HOOK_VERBOSE=1 für vollen Output).
+pnpm test 2>&1 | node scripts/test-summary-filter.mjs

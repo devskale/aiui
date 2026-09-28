@@ -161,7 +161,7 @@ Denk dran: throway ist öffentlich — bei sensiblen Kontexten vorher fragen.
 
 - Kernaussagen zuerst, Details danach; Firmenwerte immer mit FN zitieren
   (z. B. „Musterbau Österreich GmbH (FN 123456w)") — FN immer ohne
-  Leerzeichen zwischen Ziffern und Buchstaben (`123456w`, nie `123456 w`).
-  (Beispielfirma ist fiktiv.)
+  Leerzeichen zwischen Ziffern und Buchstaben, exakt wie im Beispiel
+  `123456w`. (Beispielfirma ist fiktiv.)
 - Tabellen für Stammdaten, Personen/Organe und Bilanzzahlen.
 - Unsicherheiten und Lücken (z. B. nicht im Bestand) explizit sagen.

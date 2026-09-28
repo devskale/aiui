@@ -102,6 +102,9 @@ session per user, held in an in-memory `contexts` Map.
 `modelRuntime` (shared or BYOK), `settingsManager`, and a `resourceLoader`
 carrying the active Agent's system message (ADR-0003/0004), then passes all
 four to `createAgentSession`. See "Resource discovery" and "Agents" below.
+When debugging stored sessions, the JSONL record shapes live in
+[`docs/session-format.md`](./docs/session-format.md) — read it before
+extracting assistant messages or tool results by hand.
 
 ### Agents (ADR-0004)
 

@@ -10,6 +10,20 @@ The latest version is shown in the UI under `#/releases`.
 
 ### Added
 
+- **Retro-Guardrails** — Pre-Commit-Hook zeigt im Erfolg nur die
+   Test-Summary statt ~200 Zeilen Testnamen (`AIUI_HOOK_VERBOSE=1` für
+   vollen Output; FAIL druckt weiterhin alles); **Spaced-FN-Lint** für
+   `agents/` (Ziffern+Leerzeichen+Buchstabe = die Bug-Klasse „FN 123456 f",
+   vom Prompt-Beispiel in Antworten kopiert); **`scripts/sandbox-smoke.mjs`**
+   eingeccheckt — prüft node/python3/PATH durch den echten Sandbox-Hook
+   (Aufruf inkl. lubu-ssh im Header); **E2E**: bei FAIL druckt der Runner
+   jetzt die letzten ~300 Zeichen der Antwort (spaced-FN-Diagnosen ohne
+   Session-Graben), koppelt `parseFollowUps` an jeden Vertiefungs-Block
+   (angekündigt aber nicht parselfähig = FAIL) und pinnt
+   `textContains: "Mögliche Vertiefungen"` in allen Recherche-Cases;
+   **`docs/session-format.md`** — JSONL-Record-Shapes + Debug-Rezept,
+   pointer aus AGENTS.md.
+
 - **Klickbare „Mögliche Vertiefungen“** — der Firmenindex-Agent beendet
    Tiefenrecherchen mit Folgefragen; die Web-UI rendert sie jetzt als
    klickbare Zeilen: ein Klick schickt die Frage als nächsten Prompt und

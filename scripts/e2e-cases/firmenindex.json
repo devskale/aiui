@@ -60,7 +60,8 @@
         ],
         "textContains": [
           "56247t",
-          "Red Bull"
+          "Red Bull",
+          "Mögliche Vertiefungen"
         ],
         "textMin": 300,
         "toolMax": 45,
@@ -80,7 +81,8 @@
         ],
         "textContains": [
           "378576f",
-          "377838w"
+          "377838w",
+          "Mögliche Vertiefungen"
         ],
         "textMin": 120,
         "toolMax": 15,
@@ -98,7 +100,8 @@
         "settled": true,
         "textContains": [
           "Haselsteiner",
-          "FN"
+          "FN",
+          "Mögliche Vertiefungen"
         ],
         "textMin": 200,
         "toolMax": 45,
@@ -119,7 +122,8 @@
         ],
         "textContains": [
           "throway",
-          "378576f"
+          "378576f",
+          "Mögliche Vertiefungen"
         ],
         "textMin": 150,
         "toolMax": 30,

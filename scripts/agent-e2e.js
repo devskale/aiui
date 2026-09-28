@@ -20,6 +20,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { parseFollowUps } from '../src/lib/followUps.js'
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
 const CASES_DIR = path.join(ROOT, 'scripts', 'e2e-cases')
@@ -250,12 +251,24 @@ for (const c of cases) {
       r = await runCase(base, c)
     }
     const secs = (r.duration / 1000).toFixed(1)
+    // UI-Kopplung: kündigt die Antwort einen Vertiefungs-Block an, muss der
+    // echte Client-Parser (src/lib/followUps.js) ihn auch zerlegen können —
+    // verbindet E2E-Text und Chip-Rendering gegen Format-Drift.
+    if (/mögliche\s+vertiefung/i.test(r.fold.text) && !parseFollowUps(r.fold.text)) {
+      r.pass = false
+      r.failures.push('Vertiefungs-Block angekündigt, aber parseFollowUps liefert null (Format-Pin verletzt)')
+    }
     if (r.pass) {
       console.log(`✓ ${secs}s — ${r.fold.tools.length} Tools, ${r.fold.text.length} Zeichen Text${JSON_OUT ? '' : ''}`)
     } else {
       failed++
       console.log(`✗ ${secs}s`)
       for (const f of r.failures) console.log(`      – ${f}`)
+      // Diagnose-Ende: die letzten ~300 Zeichen der Antwort machen Failures
+      // wie „Text fehlt 378576f“ sofort erklärbar (hier: spaced FN), ohne
+      // erst die Session-JSONL graben zu müssen.
+      const tail = (r.fold.text || '').slice(-300).replace(/\s+/g, ' ').trim()
+      if (tail) console.log(`      Antwort-Ende: …${tail}`)
     }
     if (JSON_OUT) console.log(JSON.stringify({ id: c.id, ...r }, null, 2))
   } catch (err) {
