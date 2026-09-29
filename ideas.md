@@ -306,3 +306,29 @@ Defer / out of scope:
 - Worktrees per session (L, sandbox already isolates)
 - Web-based credential management (conflicts with default-deny entitlement)
 - Full i18n (pi-web has en/zh/ja/ru; only if multi-language is a goal)
+
+---
+
+## Eigene Feature-Ideen
+
+### Kopfzahl-Schätzung in die Webapp einbauen (geplant)
+
+**Idee:** Personalaufwand → Mitarbeiterzahl nicht nur als Agent-Skill-Regel,
+sondern als **Webapp-Feature** — der UGB-Anhang paart die Größen offiziell
+(VZÄ-Angabe explizit „um eine Verbindung mit dem Personalaufwand je
+Arbeitnehmer herstellen zu können"), Statistik Austria liefert die
+Divisoren branchenscharf und gratis.
+
+Research-Befunde + AKOE-2024-Gesamttabelle:
+[`docs/research-personalaufwand-kopfzahl.md`](./docs/research-personalaufwand-kopfzahl.md)
+
+Sketch (Reihenfolge ist der Kern):
+1. **Anhang zuerst** — Agent liest Mitarbeiterzahl aus hvd-Bericht → Fakt mit Zitat
+2. **Fallback als UI-Berechnung** — fehlt sie, rechnet die Webapp client-seitig:
+   `Personalaufwand ÷ AKOE-Divisor der eigenen ÖNACE (je VZÄ)` → als
+   „≈ N (geschätzt, Bandbreite ±25 %)" in Canvas-Profilkarte/Bericht;
+   Divisor-Tabelle als pure lib + Daten-Modul (Update jährlich, AKE-Zyklus)
+3. Agent nennt die Schätzung nie als Fakt — Label-Pflicht „geschätzt"
+
+Warum Webapp statt nur Skill: deterministisch, testbar (pure function +
+AKOE-Tabelle als Unit-Tests), überall konsistent (Canvas, Report, Chat).
