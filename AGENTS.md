@@ -8,6 +8,12 @@ isolated session.
 Review layer: `CODING_STANDARDS.md` — judgement rules a diff is reviewed
 against (isolation, shape ownership, SDK boundary).
 
+**Scope: this repo is aiui-only** (Nutzer-Entscheid 2026-09-30). Arbeiten in
+`www/aiui` = nur aiui. Recherchen zu anderen Projekten (Firmenbuch/
+firmenbuch_AT, EPO, Crawler, Deployments fremder Services) gehören in deren
+eigenes Repo (`~/code/firmenbuch_AT`, `~/code/configs`) — nicht hier. Commit-
+Messages, Doku und Code in diesem Repo behandeln ausschließlich aiui.
+
 ## Commands
 
 ```bash
@@ -365,3 +371,6 @@ These cost real debugging time. Read before touching the SDK integration.
 - ⚠️ **Ask first:** New npm deps; changing the SSE protocol.
 - 🚫 **Never:** Modify `node_modules/`; commit `uploads/` or `workspace/`;
   hardcode API keys; add a CSS framework.
+- 🚫 **Never:** Nicht-aiui-Themen hier bearbeiten (siehe Scope oben) — kein
+  Fremd-Repo-Checkout im aiui-Arbeitsverzeichnis, keine Firmenbuch-/
+  Crawler-/EPO-Arbeit in aiui-Commits oder -Docs.
