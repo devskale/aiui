@@ -10,7 +10,7 @@
       "prompt": "Quick-Recherche: Wer sind die Geschäftsführer der Brantner Österreich GmbH? Kurze Antwort.",
       "expect": {
         "settled": true,
-        "modelContains": "stepfun",
+        "modelContains": "qwen",
         "toolSubstr": [
           "lookup%2Fmerged"
         ],
@@ -107,6 +107,27 @@
         "textMin": 200,
         "toolMax": 45,
         "durationMax": 400
+      }
+    },
+    {
+      "id": "verbindung-brantner",
+      "description": "A↔B-Verbindung: Brantner Österreich GmbH (475207i) ↔ Brantner Abfallwirtschaft GmbH (257271s) — kontrolle beider + Kreuzbefund",
+      "agent": "firmenindex",
+      "timeout": 360,
+      "prompt": "Wie ist die Brantner Österreich GmbH mit der Brantner Abfallwirtschaft GmbH verbunden? Zeige den Verbindungsweg mit Belegen.",
+      "expect": {
+        "settled": true,
+        "toolSubstr": [
+          "kontrolle"
+        ],
+        "textContains": [
+          "475207",
+          "257271",
+          "Mögliche Vertiefungen"
+        ],
+        "textMin": 150,
+        "toolMax": 30,
+        "durationMax": 340
       }
     },
     {

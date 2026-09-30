@@ -77,10 +77,38 @@ https://skale.dev/firmenindex/agents-dokumente.html
 - **Vollzugs-Historie:** `hvd/historie?fnr=…&von=…&bis=…`
 - **Konzern-/Eigentümer-Graph (GLEIF):** `gleif/{fn}`
 - **Verflechtungs-Netzwerk** (2 Ebenen): `firmen/{fn}/netzwerk?max_items=12` → `{gesellschafter, beteiligungen}` mit `fn/person/role/since/status` je Knoten; Personen ohne FN nie verlinken; `anteil` ist ehrlich `null`
+- **UBO-Kontrolle:** `firmen/{fn}/kontrolle?max_tiefe=6` → `kontrollpfade[]` nach oben, jede Kante mit `quelle`+`since`; `ende` je Pfad (`person`/`firma_ohne_fn`/`zyklus`/`tiefe_erreicht`) — der Pfad IST die Aussage, Anteile werden nicht aggregiert
+- **Zeitmaschine:** `firmen/{fn}/zustand?stichtag=YYYY-MM-DD` → Name/Organe/Eigentümer exakt an diesem Tag (DB-replay; ohne Stichtag-Param kein Call!)
+- **EU-Vergaben (TED):** `firmen/{fn}/vergaben` → öffentliche Aufträge dieser Firma als Gewinner
+- **Ganze Eigentümer-Gruppe:** `crawl/group/{fn}?depth=3` → transitiver Verbund per BFS — `fn` darf auch ein Eigentümer-Name sein (z. B. `Stadt+Wien`, Körperschaften ohne FN); schließt die 2-Ebenen-Grenze von `netzwerk`
+- **Agenten-API v1:** `agent/v1/firmen/{fn}/finanzdaten` (Kennzahl-Registry), `…/unterlagen`, `…/bundle`, `agent/v1/unterlagen/{key}/manifest`, Discovery-Index: `agent/v1/index`
+- **Branchen-/Länder-Kontext:** `branchen/zahlen` (ÖNACE-Abschnitts-Statistik) · `investoren/laender` (Auslands-Eigentümer)
 - **ÖNACE:** Firmen je Branche `oenace/companies?code=5621` (edv-Code, ohne Punkte) · Baum `oenace/tree`
-- **Personen:** `person/search?q=…` · Werdegang `person/karriere?q=…&fn=…`
-- **Standorte:** `standorte?fn=…` · **UID-Check (VIES):** `uid-check?uid=…`
+- **Personen:** `person/search?q=…` · Werdegang `person/karriere?q=…&fn=…` · Anreicherung `person/enrich`
+- **Standorte:** `standorte?fn=…` · **UID-Check (VIES):** `uid-check?uid=…` · `uid/firma?fn=…`
 - **Quellen-Status/Abdeckung:** `status` (Feld `abdeckung`) — Soll-Lücken sind ehrlich offen, nie geraten
+
+## Verbindungs-Recherche: Firma A ↔ Firma B
+
+„Wie ist Firma A mit Firma B verbunden?" beantwortet kein einzelner Endpoint —
+diese Reihenfolge (jeweils cache-first, DB-first-Endpoints zuerst):
+
+1. **`kontrolle/{A}` + `kontrolle/{B}`** (`firmen/{fn}/kontrolle`) — gemeinsame
+   Knoten über den Kontrollpfaden? (z. B. dieselbe Stiftung, dieselbe
+   Holding) → stärkste Aussage: „gemeinsamer Kontrolleur"
+2. **`netzwerk/{A}` + `netzwerk/{B}`** — direkte Kreuzbeteiligung (B in As
+   Gesellschaftern/Beteiligungen oder umgekehrt)?
+3. **Personen-Overlap** — `person/search` + `person/karriere` für GF/AR-
+   Kandidaten aus beiden Netzen: sitzt dieselbe Person in beiden Organen?
+   (Rolle + Firma + FN je Nachweis)
+4. **Bei Treffer über Namen statt FN:** nie als Verbindung ausgeben, solange
+   kein `resolved_fn` (resolve='exact') vorliegt — Namensgleichheit ist
+   eine Hypothese, keine Kante.
+
+Ergebnis: gefundene Verbindungen als Kantenliste (A → X → B mit Quelle je
+Kante) + ehrliches „keine Verbindung im Datenbestand feststellbar" falls
+alle vier Schritte leer laufen. Visualisierung: Mermaid-Graph (siehe
+agent.md — bei Verbindungs-Recherchen Standard).
 
 ## Grafiken auf der Detailseite — Datenquelle + Link
 
