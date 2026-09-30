@@ -42,6 +42,13 @@ The latest version is shown in the UI under `#/releases`.
 
 ### Fixed
 
+- **Öffentlicher Eingang `skale.dev/aiui` wieder erreichbar** — der alte
+  307 auf `lubu.skale.dev/aiui/` war tot (kasserver-A-Record zeigt auf die
+  alte Relay-IP `138.2.179.13`, lubu lauscht nicht auf 443). amd2 nginx
+  proxyt jetzt same-origin auf lubu `:8001` (`pind.mooo.com`, DDNS-verfolgt,
+  `Host: lubu.skale.dev`) — gleiche Methode wie `/throway/`. Cookies sind
+  damit first-party auf `skale.dev`, Deep-Links bleiben dort. Deploy auf
+  lubu unverändert. Topologie: `docs/deployment.md`.
 - **`/api/file`: absolute Pfade** — `resolveWorkspacePath` schachtelte
    absolute sub-Pfade unter dem cwd ein (`…/_local/Users/…` → ENOENT,
    als „invalid path“ verschluckt). Absolute Pfade innerhalb des

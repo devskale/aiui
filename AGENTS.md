@@ -282,7 +282,7 @@ SDK integration.
 
 ## Deployment
 
-Full topology (skale.dev → neusiedl.duckdns.org → nginx → systemd):
+Full topology (skale.dev → amd2 nginx → lubu :8001 → systemd):
 see [`docs/deployment.md`](docs/deployment.md). Tested live via surf.
 
 ```bash
@@ -290,14 +290,21 @@ see [`docs/deployment.md`](docs/deployment.md). Tested live via surf.
 ```
 
 - **On lubu:** `/home/woodmastr/code/webuis/aiui/`
-- **URLs:** `https://lubu.skale.dev/aiui/` (primary; DNS 138.2.179.13 →
-  nginx :8001 ssl, cert `lubu.skale.dev`, includes `aiui.conf`),
-  `https://neusiedl.duckdns.org:8001/aiui/` (same nginx),
+- **URLs:** `https://skale.dev/aiui` (**primary** — same-origin reverse
+  proxy on amd2 nginx, cookies first-party),
+  `https://neusiedl.duckdns.org:8001/aiui/` (direct, valid cert),
+  `https://lubu.skale.dev/aiui/` (**dead**: kasserver A-record → stale
+  138.2.179.13; heal = CNAME auf `neusiedl.duckdns.org` im kasserver-Panel),
   `http://lubuntu.local/aiui/` (LAN).
 - **Service:** `~/.config/systemd/user/aiui.service` (port 8082,
   `NODE_ENV=production`, nvm node `~/.nvm/.../v24.13.0/bin/node`).
-- **Nginx:** `location /aiui/` → `127.0.0.1:8082` (needs `proxy_buffering off`
-  + `proxy_read_timeout 86400s` for SSE).
+- **Nginx:** zwei Hops. amd2 (`sites-enabled/skale.dev`, mirror im configs
+  repo `nginx/amd2/skale.dev`): `/aiui/` → `https://pind.mooo.com:8001`
+  mit `Host: lubu.skale.dev` + resolver `valid=300s` (folgt DDNS-IP-Wechseln;
+  gleiches Muster wie `/throway/`) — SSE-safe (`proxy_buffering off`,
+  86400s) + `client_max_body_size 64m`. lubu (`/etc/nginx/aiui.conf`, von
+  BEIDEN `:8001`-vhosts included): `/aiui/` → `127.0.0.1:8082` (SSE-Settings
+  wie amd2).
 - **STT (ADR-0004):** the dgxp gateway (`http://dgxp:3001`) is reachable
   from the Mac (dev) but NOT from lubu yet — the mic self-hides there until
   a route exists (reachability-probed, no config needed). When enabling:
@@ -315,12 +322,12 @@ see [`docs/deployment.md`](docs/deployment.md). Tested live via surf.
   Enforced in `/api/models`, `setModel`, and agent model pins
   (`server/model-filter.js`).
 - **rsync excludes** `workspace/`, `uploads/`, `.pi/` → user data survives deploys.
-- **skale.dev redirect (separate repo):** the `skale.dev/aiui` →
-  `neusiedl.duckdns.org:8001/aiui/` redirect lives in the **skalego** repo
-  (`~/code/www/skalego`, `vercel.json` → `redirects`). It deploys **differently
-  from aiui**: `git commit` + `git push origin main` triggers Vercel's GitHub
-  auto-deploy (no `deploy.sh`, no CLI). Both `/aiui` and `/aiui/` (trailing
-  slash) must have redirect rules or the nav link 404s.
+- **skale.dev entry (amd2, no Vercel):** skale.dev is served by amd2 nginx
+  (certbot) — the old skalego/vercel.json redirect is gone. `/aiui` and
+  `/aiui/` both work (internal 307). Change the entry in the configs repo
+  (`nginx/amd2/skale.dev`) + on amd2, then `nginx -t && reload`.
+  Incident + Fix-A rationale: memo `aiui-erreichbarkeit` (2026-09-30),
+  configs commit `fa420da`.
 - **Logs:** `journalctl --user -u aiui -f`.
 
 ## Code Style
