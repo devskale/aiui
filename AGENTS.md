@@ -292,9 +292,9 @@ see [`docs/deployment.md`](docs/deployment.md). Tested live via surf.
 - **On lubu:** `/home/woodmastr/code/webuis/aiui/`
 - **URLs:** `https://skale.dev/aiui` (**primary** — same-origin reverse
   proxy on amd2 nginx, cookies first-party),
+  `https://lubu.skale.dev/aiui/` (via amd1-TLS-Relay — nginx dort, seit
+  2026-09-30 gehärtet: Restart=on-failure, keine statischen DDNS-Upstreams),
   `https://neusiedl.duckdns.org:8001/aiui/` (direct, valid cert),
-  `https://lubu.skale.dev/aiui/` (**dead**: kasserver A-record → stale
-  138.2.179.13; heal = CNAME auf `neusiedl.duckdns.org` im kasserver-Panel),
   `http://lubuntu.local/aiui/` (LAN).
 - **Service:** `~/.config/systemd/user/aiui.service` (port 8082,
   `NODE_ENV=production`, nvm node `~/.nvm/.../v24.13.0/bin/node`).

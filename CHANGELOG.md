@@ -43,11 +43,15 @@ The latest version is shown in the UI under `#/releases`.
 ### Fixed
 
 - **Öffentlicher Eingang `skale.dev/aiui` wieder erreichbar** — der alte
-  307 auf `lubu.skale.dev/aiui/` war tot (kasserver-A-Record zeigt auf die
-  alte Relay-IP `138.2.179.13`, lubu lauscht nicht auf 443). amd2 nginx
-  proxyt jetzt same-origin auf lubu `:8001` (`pind.mooo.com`, DDNS-verfolgt,
-  `Host: lubu.skale.dev`) — gleiche Methode wie `/throway/`. Cookies sind
-  damit first-party auf `skale.dev`, Deep-Links bleiben dort. Deploy auf
+  307 auf `lubu.skale.dev/aiui/` war tot: amd1s nginx (138.2.179.13 = amd1,
+  das TLS-Relay für lubu.skale.dev — der DNS-Record war korrekt, das Memo
+  lag da falsch) war nach einem DNS-Blick beim Boot gecrasht und blieb tot.
+  amd2 nginx proxyt jetzt zusätzlich same-origin auf lubu `:8001`
+  (`pind.mooo.com`, DDNS-verfolgt, `Host: lubu.skale.dev`) — gleiche Methode
+  wie `/throway/`. Cookies sind damit first-party auf `skale.dev`,
+  Deep-Links bleiben dort. amd1-nginx wieder repariert + gehärtet
+  (legacy-vhost entfernt, Restart=on-failure — s. configs
+  `machines/amd1.md`), lubu.skale.dev lebt also auch wieder. Deploy auf
   lubu unverändert. Topologie: `docs/deployment.md`.
 - **`/api/file`: absolute Pfade** — `resolveWorkspacePath` schachtelte
    absolute sub-Pfade unter dem cwd ein (`…/_local/Users/…` → ENOENT,

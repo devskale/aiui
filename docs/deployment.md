@@ -60,24 +60,31 @@ The `/aiui/` path prefix (`VITE_BASE=/aiui/`) is stripped by lubu nginx's
 | `https://skale.dev/aiui` | **Canonical.** Internal 307 → `/aiui/`, same-origin (cookies first-party on skale.dev). |
 | `https://skale.dev/aiui/…` | Deep links stay on skale.dev (no cross-site hop). |
 | `https://neusiedl.duckdns.org:8001/aiui/` | Direct. Valid CA cert (Cloudflare DNS-01); bypasses amd2. |
-| `https://lubu.skale.dev/aiui/` | **Currently dead** — see DNS gotcha below. |
+| `https://lubu.skale.dev/aiui/` | Auch via amd1-Relay (vhost `/` → lubu :8001, inkl. aiui.conf). |
 | `http://lubuntu.local/aiui/` | LAN (mDNS). |
 
-## DNS gotcha — `lubu.skale.dev` is stale (as of 2026-09-30)
+## `lubu.skale.dev` — entry via amd1 TLS relay (not stale DNS!)
 
-The `lubu` A-record in the skale.dev zone (kasserver/domainfactory,
-ns5/ns6.kasserver.com — **no API access from any repo**) still points to
-`138.2.179.13`, a former relay that answers nothing. lubu's real IP is only
-tracked by DDNS (`pind.mooo.com` / `neusiedl.duckdns.org`). That's exactly why
-the amd2 proxy resolves `pind.mooo.com` **at request time** (resolver
-`valid=300s`) instead of pinning an IP.
+`lubu.skale.dev` → A `138.2.179.13` = **amd1** — intentional, the record was
+never stale (the outage memo suspected it wrongly). amd1 terminates TLS
+(Let's Encrypt, HTTP-01) and relays: `/` → `pind.mooo.com:8001` (`Host:
+lubu.skale.dev`, the start page + aiui + throway), `/searxng/` →
+`pind.mooo.com:8002`. So the public entry never touches the home router's
+443 (not forwarded — by design).
 
-Heal (needs kasserver panel, human task): `lubu.skale.dev CNAME
-neusiedl.duckdns.org` (TTL 300) — then `https://lubu.skale.dev:8001/aiui/`
-works too. True 443 on lubu additionally needs a router port-forward (open,
-Home-SPOF — deliberately not done). Incident write-up:
-`skale.dev/throway/d/aiui-erreichbarkeit-memo/memo-aiui-erreichbarkeit.md`;
-fix applied in configs repo `fa420da` (mirror: `~/configs/nginx/amd2/skale.dev`).
+**Outage 2026-09-30:** amd1's nginx died at 04:32 (`host not found in
+upstream "pind.mooo.com"` during restart) — a legacy `skale.dev` vhost on
+amd1 still had a **static** DDNS upstream (nginx resolves static upstreams
+at startup, not per request), so one DNS blip killed the boot and systemd
+didn't retry. Fixed on amd1: legacy vhost disabled, nginx
+`Restart=on-failure` drop-in added, live vhosts resolve at request time
+(resolver + `$upstream` variables). See configs repo `machines/amd1.md`
+(Incident 2026-09-30) + `nginx/amd1/`.
+
+The amd2 `/aiui/` proxy was unaffected (separate box, resolves at request
+time). Incident write-up:
+`skale.dev/throway/d/aiui-erreichbarkeit-memo/memo-aiui-erreichbarkeit.md`
+(amend: its "stale DNS" diagnosis was wrong); amd2 fix: configs `fa420da`.
 
 ## Deploy
 
