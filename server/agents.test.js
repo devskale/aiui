@@ -37,4 +37,12 @@ assert.equal(getAgent(null), DEFAULT_AGENT)
 assert.throws(() => requireAgent('does-not-exist'), /Unknown agent/)
 assert.equal(requireAgent('default'), DEFAULT_AGENT)
 
+// ── Examples (starter prompts from frontmatter; catalog-safe) ──
+const fi = getAgent('firmenindex')
+assert.ok(Array.isArray(fi.examples) && fi.examples.length >= 3, 'firmenindex carries example prompts')
+assert.ok(fi.examples.every((e) => typeof e === 'string' && e.length > 10), 'examples are non-trivial strings')
+const fiListed = listAgents().find(a => a.id === 'firmenindex')
+assert.deepEqual(fiListed.examples, fi.examples, 'examples travel through listAgents')
+assert.equal(DEFAULT_AGENT.examples, undefined, 'default agent has no examples key leak')
+
 console.log('agents.test.js ✓')

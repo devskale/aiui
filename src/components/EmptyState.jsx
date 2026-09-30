@@ -1,11 +1,16 @@
 // ════════════════════════════════════════════════════════════════════
 // EmptyState — welcome screen. With more than one Agent available it
-// doubles as the agent chooser (ADR-0004).
+// doubles as the agent chooser (ADR-0004). Agents may carry `examples`
+// (starter prompts from their frontmatter): the active agent's examples
+// render as clickable chips that prefill the input — quick onboarding,
+// one click from "what can this do?" to a running research.
 // ════════════════════════════════════════════════════════════════════
-import { Mic } from 'lucide-react'
+import { Mic, Sparkles } from 'lucide-react'
 
-export function EmptyState({ agents = [], activeAgent = 'default', onPickAgent }) {
+export function EmptyState({ agents = [], activeAgent = 'default', onPickAgent, onPickExample }) {
   const chooser = agents.length > 1 && onPickAgent
+  const current = agents.find(a => a.id === activeAgent) || agents[0]
+  const examples = (current?.examples || []).slice(0, 4)
   return (
     <div className="empty-state">
       <div className="empty-logo">π</div>
@@ -25,6 +30,20 @@ export function EmptyState({ agents = [], activeAgent = 'default', onPickAgent }
               {a.description && <span className="agent-card-desc">{a.description}</span>}
             </button>
           ))}
+        </div>
+      )}
+      {examples.length > 0 && onPickExample && (
+        <div className="empty-examples">
+          <div className="empty-examples-head">
+            <Sparkles size={12} /> Beispiele
+          </div>
+          <div className="empty-examples-list">
+            {examples.map((ex, i) => (
+              <button key={i} className="example-chip" onClick={() => onPickExample(ex)} title={ex}>
+                {ex.length > 72 ? ex.slice(0, 72) + '…' : ex}
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>

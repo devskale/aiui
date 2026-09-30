@@ -23,13 +23,26 @@ function splitByImageSupport(files, imageCapable) {
   return { accept, rejectedImages }
 }
 
-export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRemoveAttachment, onAddFiles, onCompact, onNewChat, onOpenModelPicker, imageCapable, inputRef, sttLanguage }) {
+export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRemoveAttachment, onAddFiles, onCompact, onNewChat, onOpenModelPicker, imageCapable, inputRef, sttLanguage, prefill }) {
   const [text, setText] = useState('')
   const ref = inputRef || useRef(null)
   const fileRef = useRef(null)
 
   // Transient inline notice (e.g. "model doesn't support images").
   const [imageNotice, setImageNotice] = useState('')
+
+  // Prefill seam (deep link + example chips): App owns { text, nonce } and
+  // bumps nonce per request — we apply once per bump and focus the field.
+  useEffect(() => {
+    if (!prefill?.nonce || !prefill.text) return
+    setText(prefill.text)
+    ref.current?.focus()
+    // Resize the textarea to the new content (auto-grow doesn't fire on
+    // programmatic state changes).
+    requestAnimationFrame(() => {
+      if (ref.current) ref.current.style.height = Math.min(ref.current.scrollHeight, 200) + 'px'
+    })
+  }, [prefill?.nonce])
   const flashNotice = (msg) => {
     setImageNotice(msg)
     setTimeout(() => setImageNotice(prev => (prev === msg ? '' : prev)), 3200)

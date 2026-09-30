@@ -70,10 +70,48 @@ function StructureCard({ card }) {
   )
 }
 
+// graph: Verbindungspfade Firma A ↔ B (Kontroll-/Beteiligungswege)
+// data: { paths: [{ nodes: [{ label, fn?, person?, mark? }], ende? }, …] }
+// mark: "a" | "b" hebt die Enden des gesuchten Wegs hervor.
+function GraphCard({ card }) {
+  const d = card.data && typeof card.data === 'object' ? card.data : {}
+  const paths = (Array.isArray(d.paths) ? d.paths : [])
+    .filter((p) => p && Array.isArray(p.nodes) && p.nodes.length > 1)
+    .slice(0, 6)
+  if (!paths.length) return <KvTable data={d} />
+  const endeLabel = { person: 'natürliche Person', firma_ohne_fn: 'nicht verfolgbar', zyklus: 'Zyklus', tiefe_erreicht: 'Tiefengrenze', keine_kante_erfasst: 'Ende der Kanten' }
+  return (
+    <div className="cv-graph">
+      {paths.map((p, i) => (
+        <div key={i} className="cv-graph-path">
+          {p.nodes.slice(0, 8).map((n, j) => (
+            <span key={j} className="cv-graph-seg">
+              {j > 0 && <span className="cv-graph-arrow" aria-hidden>→</span>}
+              <span
+                className={`cv-graph-node${n.person ? ' person' : ''}${n.mark ? ' mark-' + n.mark : ''}`}
+                title={n.fn ? 'FN ' + n.fn : undefined}
+              >
+                {String(n.label || '?').slice(0, 40)}
+                {n.fn && <span className="cv-graph-fn">{n.fn}</span>}
+              </span>
+            </span>
+          ))}
+          {p.ende && endeLabel[p.ende] && (
+            <span className={'cv-graph-ende' + (p.ende === 'firma_ohne_fn' || p.ende === 'zyklus' ? ' warn' : '')}>
+              · {endeLabel[p.ende]}
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // Typ-Aliasse: Modelle benennen denselben Typ gelegentlich anders
 // (beobachtet: "barchart" statt "chart" bei korrekter Datenstruktur).
 const CHART_ALIASES = ['chart', 'barchart', 'bar-chart', 'bars']
+const GRAPH_ALIASES = ['graph', 'verbindung', 'paths']
 
 export const CARD_REGISTRY = Object.fromEntries(
-  [...CHART_ALIASES.map((t) => [t, ChartCard]), ['profile', ProfileCard], ['structure', StructureCard]]
+  [...CHART_ALIASES.map((t) => [t, ChartCard]), ['profile', ProfileCard], ['structure', StructureCard], ...GRAPH_ALIASES.map((t) => [t, GraphCard])]
 )

@@ -231,6 +231,32 @@ export default function App() {
     setSessionRefresh(n => n + 1)
   }
 
+  // ── Prefill seam: example chips + deep link share one draft state. ──
+  // { text, nonce } — InputBar applies on nonce bump (one-shot per click).
+  const [draft, setDraft] = useState(null)
+  const pickExample = useCallback((text) => {
+    setDraft({ text, nonce: Date.now() })
+  }, [])
+
+  // ── Deep link: #/?agent=<id>&q=<prompt> (e.g. from skale.dev/firmenindex).
+  // Picks the agent, starts a fresh chat, prefills the prompt — the user
+  // presses Enter (no auto-send: deep links never burn quota unseen).
+  // Consumed once after agents load, then the hash is cleaned to `#`.
+  const deepLinkDone = useRef(false)
+  useEffect(() => {
+    if (deepLinkDone.current || !authed || agents.length <= 1) return
+    const h = window.location.hash.replace(/^#\/?/, '')
+    if (!h.includes('?')) return
+    const params = new URLSearchParams(h.split('?')[1] || '')
+    const agentId = params.get('agent')
+    const q = params.get('q') || ''
+    window.history.replaceState(null, '', window.location.pathname + window.location.search + '#')
+    deepLinkDone.current = true
+    if (!agentId || !agents.some(a => a.id === agentId)) return
+    if (agentId !== sessionAgent) startNewChat(agentId)
+    if (q) setTimeout(() => setDraft({ text: q, nonce: Date.now() }), 50)
+  }, [authed, agents, sessionAgent, startNewChat])
+
   // Keyboard shortcuts — must sit BELOW the handler definitions: the object
   // literal reads handleNewChat's binding at call time, and a const read
   // before its declaration is a TDZ crash (the minifier only sometimes
@@ -375,7 +401,7 @@ export default function App() {
               <div ref={endRef} />
             </div>
           ) : (
-            <EmptyState agents={agents} activeAgent={sessionAgent} onPickAgent={handlePickAgent} />
+            <EmptyState agents={agents} activeAgent={sessionAgent} onPickAgent={handlePickAgent} onPickExample={pickExample} />
           )}
         </div>
 
@@ -394,6 +420,7 @@ export default function App() {
           imageCapable={imageCapable}
           inputRef={inputRef}
           sttLanguage={agents.find(a => a.id === sessionAgent)?.sttLanguage || 'auto'}
+          prefill={draft}
         />
       </main>
 

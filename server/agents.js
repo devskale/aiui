@@ -10,7 +10,8 @@
 // (default-deny stays for user-level resources; ADR-0001 is untouched).
 //
 //   agents/<id>/agent.md     frontmatter: name, description, model?,
-//                            stt?, sttLanguage? — body = system prompt
+//                            stt?, sttLanguage?, examples? (list of
+//                            starter prompts) — body = system prompt
 //   agents/<id>/skills/      skill dirs (SKILL.md each), loaded additively
 //   agents/<id>/extensions/  *.js extension modules, loaded additively
 //
@@ -71,6 +72,9 @@ function loadOneAgent(id) {
     systemPrompt: content,
     model: frontmatter.model ? String(frontmatter.model) : null,
     canvas: frontmatter.canvas ? String(frontmatter.canvas) : null,
+    examples: Array.isArray(frontmatter.examples)
+      ? frontmatter.examples.map((e) => String(e)).filter(Boolean).slice(0, 6)
+      : [],
     stt: frontmatter.stt === true,
     sttLanguage: frontmatter.sttLanguage ? String(frontmatter.sttLanguage) : 'auto',
     tts: frontmatter.tts === true,
@@ -119,8 +123,8 @@ function allAgents() {
 
 /** Catalog for the UI: metadata only, no prompt bodies. */
 export function listAgents() {
-  return allAgents().map(({ id, name, description, model, canvas, stt, sttLanguage, tts }) =>
-    ({ id, name, description, model, canvas, stt, sttLanguage, tts }))
+  return allAgents().map(({ id, name, description, model, canvas, examples, stt, sttLanguage, tts }) =>
+    ({ id, name, description, model, canvas, examples, stt, sttLanguage, tts }))
 }
 
 /** Full Agent def by id. Unknown/absent ids fall back to the default. */
