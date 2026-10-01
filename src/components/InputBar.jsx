@@ -115,7 +115,11 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
       return
     }
     if (!text.trim() && attachments.length === 0) return
-    const textToSend = rewriteSkillCommand(text, slash.skills)
+    // Normalize line endings so pasted text keeps its breaks: Chrome renders
+    // a lone \r as a space even under white-space: pre-wrap, which would merge
+    // pasted lines into one paragraph (pi-web #1015).
+    const normalized = text.replace(/\r\n?/g, '\n')
+    const textToSend = rewriteSkillCommand(normalized, slash.skills)
     if (streaming) {
       onSteer(textToSend)
     } else {
