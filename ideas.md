@@ -84,6 +84,50 @@ from the menu. New/risen candidates from the re-pulled repos:
 
 ---
 
+## Delta-Review 2026-10-01 (re-pulled after SDK 0.99.2 upgrade)
+
+Re-pulled pi-web / pi-gui / dsh / chatbot-template after the aiui SDK bump
+0.87.1 → 0.99.2. Two findings were **already covered** by aiui (no action), two
+were real gaps and got fixed in this pass.
+
+### Already covered — no action
+
+- **Change thinking level while streaming** (pi-web #851) — pi-web disabled the
+  reasoning control for the whole run, assuming the level can't change mid-turn.
+  aiui's `ThinkingPicker` is gated only on `sessionAlive` (true while a session
+  exists), never on `streaming`, and the SDK re-reads `agent.state.thinkingLevel`
+  before each request (agent-session.ts:771/779/895). So aiui already lets you
+  change the level mid-run; the POST `/api/thinking-level` path has no streaming
+  guard. Nothing to do.
+- **Configurable send key** (pi-web #1001, Enter vs Ctrl+Enter) — aiui
+  hardcodes Enter-to-send with Shift+Enter for newline. Nice-to-have polish,
+  not a bug; left open.
+- **Enable all/Disable all for Skills** (pi-web #1020) — conflicts with aiui's
+  default-deny + admin-curated entitlement (ADR-0001). Intentionally not a fit.
+
+### Fixed this pass (real gaps)
+
+- **Keep typed line breaks in user messages** (pi-web #1015) — Chrome renders a
+  lone `\r` as a space even under `white-space: pre-wrap`, merging pasted text
+  into one paragraph. aiui's `.entry-user-bubble` uses `pre-wrap` but never
+  normalized line endings. **Fix:** normalize `\r\n`/`\r` → `\n` in InputBar
+  `handleSend`. (Committed 3c77c6b.)
+- **Mobile composer above the iOS keyboard** (pi-web #992) — `.app` used
+  `height: 100vh`, which ignores the on-screen keyboard. **Fix:** `100svh`
+  fallback + `100dvh`. (Committed 3c77c6b.)
+
+### Noted, not adopted
+
+- **pi-gui extension cards/views** (#220/224/212/214) — extension-display UI;
+  maps to aiui's extension surface, low priority.
+- **pi-gui "Add to Chat" transcript annotation** (#209) — select transcript text
+  and send it as notes with the next message. Niche, not urgent.
+- **dsh 0.2.0-rc.2** — plugin manager + task-manager rows; already noted as
+  strategic/L in the ledger. No new action.
+- **chatbot-template** — only dep bumps + `cn` alias. Nothing new.
+
+---
+
 ## 1. Chat UX / streaming
 
 - **Chat minimap** (pi-web `ChatMinimap.tsx`) — a thin right-edge scrollbar
@@ -332,3 +376,89 @@ Sketch (Reihenfolge ist der Kern):
 
 Warum Webapp statt nur Skill: deterministisch, testbar (pure function +
 AKOE-Tabelle als Unit-Tests), überall konsistent (Canvas, Report, Chat).
+
+---
+
+### aiui als embeddable Komponente für fremde Web-Apps (geplant)
+
+**Idee:** aiui nicht nur als eigene App, sondern als **einbaubares Widget** in
+beliebige Web-Anwendungen — ein `<ai-chat key="…">`-Custom-Element (oder
+iframe/script-tag), das einen vollwertigen πui-Chat in die Host-Seite bringt.
+Der Host übergibt einen **Key** (scoped, revocable), aiui liefert Modal/Launcher,
+Streaming, Tool-Calls, Session-Persistenz — alles gekapselt, ohne dass der Host
+πui-Code oder SDK-Kenntnis braucht.
+
+**SOTA-Quickcheck (2026-09, web-search):**
+
+- **Drei Embed-Muster** dominieren: (1) **script-tag** (eine Zeile rendert das
+  Widget in die Seite), (2) **iframe** (isoliert & sicher, aber kein
+  CSS-Overriding / DOM-Zugriff), (3) **Custom Element / Web Component**
+  (`<ai-chat …>`), isoliert via **shadow DOM** — der moderne Sweet Spot: eine
+  Zeile im Host, volle Kapselung, trotzdem programmatisch steuerbar.
+- **Key-Sicherheit ist das Kernproblem** (hodgen.ai „API Key Security Done
+  Right"): nie den echten Secret ins Browser-Bundle. Best Practice = **scoped,
+  revocable Keys** + **ephemeral Session-Tokens** (kurzlebig, pro Session vom
+  Token-Broker geholt). Genau das Muster, das Google CX Agent Studio mit
+  seinem „token broker" und Agentkit mit seinem Embed-SDK fahren.
+- **Auth-Modell**: entweder **anonymer Visitor-Chat** (keine Login-Pflicht,
+  Session nur per Key) oder **Token-Broker**, der frische Tokens ausstellt.
+  Bei aiui heißt das: ein Key identifiziert einen **externen Mandanten**, der
+  auf einen bestehenden User-`agentDir`/Workspace gemappt wird.
+- **Config über Attribute/Props**: `key`, Modell, Theme, Position
+  (floating vs. inline), Launcher-Icon, „öffne als Modal"-Verhalten.
+- **Referenz-Produkte**: Free.ai Widget, Orckai, TeamWeb AI, OpenAssistantGPT
+  (iframe), Agentkit Embed-SDK, `@agent-native/embedding`, ai-chat-toolkit.
+
+**Sketch (Reihenfolge ist der Kern):**
+
+1. **Embed-Form wählen** — Custom Element `<ai-chat>` mit shadow DOM als
+   Primärweg; iframe als Fallback für maximale Isolation. Ein `src/embed/`
+   Bundle, das als eigenes Skript gebaut wird (`vite` lib mode), getrennt von
+   der Haupt-App.
+2. **Key-Modell** — Server-seitig `keys` in der Auth-Config (`~/.aiui-auth.json`
+   erweitert): `{ "widgetKeys": { "<key>": { "user": "alice", "scope": "…", "revoked": false } } }`.
+   Ein Key mappt auf einen User + optional einen eingeschränkten Scope
+   (bestimmter Agent, bestimmtes Workspace-Fenster). **Key löst Session-Key aus,**
+   nicht den echten Credentials.
+3. **Ephemeral Session-Token** — `POST /api/widget/session { key }` → prüft
+   Key (nicht revoked, Quota), erzeugt ein **kurzlebiges Token** (z. B. 1h,
+   signed) und gibt es zurück. Das Widget nutzt nur das Token für SSE + prompt;
+   der Key selbst bleibt beim Host, nie im Bundle. Das ist die
+   „API-Key-Security-Done-Right"-Linie.
+4. **Modal/Launcher** — Host legt einen Launcher-Button oder ruft
+   `el.open()`/`el.close()` auf; das Modal rendert den bestehenden Chat
+   (StreamEntry, Tool-Calls, Attachments) in isoliertem shadow DOM. Theme via
+   CSS-Custom-Properties, damit es zur Host-Seite passt.
+5. **Session-Persistenz pro Host-Key** — Session an `widget:<key>` binden, damit
+   der Visitor seine Historie über Reloads behält, ohne Login.
+
+**Offene Fragen:**
+
+- **Ein Key = ein User?** Ein externer Mandant bekommt einen eigenen
+  `agentDir`/Workspace (ADR-0001) oder teilt er die Entitlement eines
+  bestehenden Users? (Vermutlich eigener, damit Quota + Sandbox sauber
+  getrennt bleiben.)
+- **Scope-Granularität** — Key nur für einen bestimmten Agent (z. B. nur
+  Deutsch-Assistent) oder volle Session?
+- **Sandbox-Boundary** — was darf ein Widget-Visitor im Workspace? Gleiche
+  Sandbox wie der User, oder ein engeres, read-only Fenster?
+- **Quota** — zählt ein Widget-Key gegen den User-Tages-Cap oder einen eigenen
+  `limits.widget`-Eintrag?
+- **iframe vs. Custom Element** — iframe ist einfacher + sicherer, aber
+  Canvas/Datei-Dialoge und Theme-Anpassung werden schwerer. Custom Element
+  ist flexibler, braucht aber schärfere CSS-Isolation.
+
+**Referenzen:**
+
+- hodgen.ai „Embeddable AI Widget: API Key Security Done Right" (scoped keys +
+  ephemeral session tokens)
+- Google CX Agent Studio „Web widget" (token broker)
+- Agentkit „Widget Embed SDK" (script-embed vs. iframe-embed)
+- OpenAssistantGPT „Embed" (iframe), Free.ai / Orckai / TeamWeb AI (script-tag)
+- `@agent-native/embedding`, ai-chat-toolkit (Open-Source-Beispiele)
+
+**Warum Widget statt nur eigener App:** aiui hat bereits alles Nötige —
+per-User Workspaces, Event bus für Live-Sync, Session-Lifecycle, Sandbox,
+Quota. Ein Embed-Widget macht daraus ein **Produkt für Dritte** statt nur ein
+internes Tool; der Key-Mechanismus ist die einzige echte neue Server-Fläche,
+und die ist klein + testbar (pure key/scope-Validierung, Token-Signierung).
