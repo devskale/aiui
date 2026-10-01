@@ -121,7 +121,44 @@ src/embed/
   Tool-Calls, Metrics-Bar). Kein File-Browser, keine Settings, keine
   Session-Liste — die Widget-Fläche wird nicht zur zweiten App.
 
-## Decision 5: Abrechnung (offene Frage 4)
+## Decision 5: SOTA-Anspruch — Context & Agency, nicht Chat-in-einer-Box
+
+Chat-Widget-Einbettung als Kategorie ist Commodity (Dutzend SaaS-Produkte,
+Open-Source-Starter, dokumentierte Best Practice). Was aiuis Widget vom
+Markt abhebt — und damit den SOTA-Anspruch konkret einlöst — sind drei
+Dinge, die ab Tag 1 architektonisch vorbereitet sind:
+
+1. **Page-Context ab Tag 1 (Phase 1):** Der Transport schickt mit jedem
+   Prompt einen `pageContext`-Block `{ url, title, referrer, selection?,
+   locale }`. Der Agent antwortet kontextbezogen („was steht auf dieser
+   Seite über X?“) statt kontextlos. — **Injection-Grenze:** Page-Content
+   ist **Daten, nie Instruktion**: als eigener, klar abgegrenzter Block im
+   Prompt gelabelt; Agent-Scope ist ohnehin sandbox + quota-gebunden.
+2. **Host-Bridge ab Tag 1 (Phase 1):** `<ai-chat>` ist nicht nur ein Chat
+   im Kasten, sondern steuerbar: `el.send(text)`, `el.open()/close()`,
+   Events (`ai-chat:reply`, `ai-chat:settled`) — der Host kann den Agenten
+   in seine eigene UX einbauen. Genau die Naht dafür ist der
+   **ChatTransport** (Deshalb Interface, kein direktes fetch im UI).
+3. **Host-Actions (Phase 2):** Der Key kann **vom Host freigegebene
+   Aktionen** deklarieren (`hostActions: [{ name, description }]`), die der
+   Agent aufrufen darf — Agent wirkt auf der Host-Seite, nicht nur im
+   Panel. **Security-Story zwingend** (Muster: RiskConfirmation aus
+   ideas.md §13): pro Key allowlistet, jede Ausführung **sichtbar
+   bestätigt** im Widget, Host-JS bekommt nie blanket trust.
+
+Dazu: **Embed-Endpoints als dokumentiertes Mini-Protokoll.**
+`/api/widget/session|stream|prompt` + Token-Kette werden als versioniertes,
+   protokollartiges Interface dokumentiert („Embed-Protocol v1“) — ein Host
+   (oder ein anderes Frontend) kann sie konsumieren, ohne unser Bundle.
+   UHP-ähnlich im Geist, ohne früh auf einen externen Standard festzulegen;
+   wenn UHP/MCP-Embedding Reife gewinnt, ist der Schritt dorthin kein Umbau,
+   sondern ein Mapping.
+
+Bewusst **kein** SOTA-Jagdsprung: Voice und Analytics bleiben Phase 3;
+Multi-Runtime bleibt Non-goal. Die drei Punkte oben sind die
+Kosten-Nutzen-Spitze.
+
+## Decision 6: Abrechnung (offene Frage 4)
 
 Analytics (Tokens/Costs pro Key für den Host-Owner) bleibt **Phase 3**. Ab
 Tag 1 schreibt der Mint-/Prompt-Pfad aber eine **strukturierte Log-Line mit
@@ -134,9 +171,9 @@ Datenbasis existiert dann, ohne dass man sie nachrüsten muss.
 |---|---|---|
 | 1 | `embed-keys-session-endpoint` | `widgetKeys` in auth.json, Provision-Skript, `POST /api/widget/session` (Domain-Check, Rate-Limit, HMAC-Token) — pure, unit-getestete Funktionen wie `auth.js` |
 | 1 | `embed-visitor-runtime` | `ctxFor`-Scope (instance), Bus-Key, Workspace-Subdir, Instanz-Cap + TTL, `/api/widget/stream` + `/api/widget/prompt` (Token-Middleware) |
-| 1 | `embed-widget-client` | `src/embed/` (Vite-lib-Build), Custom Element, `corner`-Variante, Demo-Host-Seite `dev/embed-demo.html` |
-| 2 | `embed-variants-persistenz` | `modal` + `inline` (Focus-Trap/Esc/aria), Theme-/Launcher-Config, Session-Persistenz pro Besucher (localStorage-visitorId), `/embed`-iframe-Fallback, `readonly`-Flag |
-| 3 | (bei Bedarf) | Analytics pro Key, Voice, mehrere Agents pro Key |
+| 1 | `embed-widget-client` | `src/embed/` (Vite-lib-Build), Custom Element, `corner`-Variante, **Page-Context + Host-Bridge (el.send, Events)**, Demo-Host-Seite |
+| 2 | `embed-variants-persistenz` | `modal` + `inline` (Focus-Trap/Esc/aria), Theme-/Launcher-Config, Session-Persistenz pro Besucher (localStorage-visitorId), `/embed`-iframe-Fallback, `readonly`-Flag, **Host-Actions (allowlist + Confirm)** |
+| 3 | (bei Bedarf) | Analytics pro Key, Voice, mehrere Agents pro Key, Protokoll-Mapping (UHP/MCP) |
 
 ## Non-goals (bewusst nicht)
 
