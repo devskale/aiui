@@ -8,6 +8,7 @@ import { useSlashMenu } from '../hooks/useSlashMenu'
 import { useMention } from '../hooks/useMention'
 import { useStt } from '../hooks/useStt'
 import { rewriteSkillCommand } from '../lib/compose'
+import { draftKey, saveDraft, loadDraft, clearDraft } from '../lib/draft-store'
 
 // Splits a file list into accepted + image-rejected. When the current model
 // can't take images, image files are stripped so they never reach the server.
@@ -23,10 +24,39 @@ function splitByImageSupport(files, imageCapable) {
   return { accept, rejectedImages }
 }
 
-export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRemoveAttachment, onAddFiles, onCompact, onNewChat, onOpenModelPicker, imageCapable, inputRef, sttLanguage, prefill }) {
+export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRemoveAttachment, onAddFiles, onCompact, onNewChat, onOpenModelPicker, imageCapable, inputRef, sttLanguage, prefill, sessionId, user }) {
   const [text, setText] = useState('')
   const ref = inputRef || useRef(null)
   const fileRef = useRef(null)
+
+  // Draft persistence: the un-sent text survives reloads / session switches.
+  // Keyed per user + session; the draft is loaded on session change and
+  // cleared on send. A ref guards the load so it doesn't immediately re-save.
+  const draftKeyRef = useRef(null)
+  const skipSaveRef = useRef(false)
+  const draftKeyCur = draftKey(user, sessionId)
+
+  // Load the draft for the current session whenever the session key changes.
+  useEffect(() => {
+    if (draftKeyCur === draftKeyRef.current) return
+    draftKeyRef.current = draftKeyCur
+    skipSaveRef.current = true
+    const loaded = loadDraft(draftKeyCur)
+    if (loaded) {
+      setText(loaded)
+      requestAnimationFrame(() => {
+        if (ref.current) ref.current.style.height = Math.min(ref.current.scrollHeight, 200) + 'px'
+      })
+    }
+  }, [draftKeyCur])
+
+  // Persist the draft on text change (debounced), skipping the load cycle.
+  useEffect(() => {
+    if (skipSaveRef.current) { skipSaveRef.current = false; return }
+    if (!draftKeyRef.current) return
+    const t = setTimeout(() => saveDraft(draftKeyRef.current, text), 300)
+    return () => clearTimeout(t)
+  }, [text])
 
   // Transient inline notice (e.g. "model doesn't support images").
   const [imageNotice, setImageNotice] = useState('')
@@ -127,6 +157,8 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
     }
     setText('')
     if (ref.current) ref.current.style.height = 'auto'
+    // Sent → the draft is consumed; clear it so a reload doesn't resurrect it.
+    if (draftKeyRef.current) clearDraft(draftKeyRef.current)
   }
 
   const handlePaste = (e) => {

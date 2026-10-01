@@ -421,6 +421,8 @@ export default function App() {
           inputRef={inputRef}
           sttLanguage={agents.find(a => a.id === sessionAgent)?.sttLanguage || 'auto'}
           prefill={draft}
+          sessionId={sessionId}
+          user={me?.user}
         />
       </main>
 
