@@ -7,6 +7,8 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { apiUrl } from '../lib/api'
 import { parseFollowUps } from '../lib/followUps'
+import { extractTurnWrittenFiles } from '../lib/turn-written-files'
+import { TurnWrittenFiles } from './TurnWrittenFiles'
 import { File as FileIcon, Terminal, Pen, Sparkles, Copy, Download, ChevronDown, ChevronRight, CornerDownRight } from 'lucide-react'
 
 // ── Tool helpers (ported from pi-gui timeline-item.tsx patterns) ──
@@ -333,6 +335,13 @@ export function AssistantEntry({ entry, isStreaming, onCopy, interactive, onAsk 
     : hasThinkingText
   const thinkingDone = isStreaming ? entry.thinkingDone : true
   const hasTools = entry.toolCalls && entry.toolCalls.length > 0
+  // Changes card: only on the settled entry (a live turn still has running
+  // calls; extractTurnWrittenFiles ignores non-'done' ones, so it's safe, but
+  // showing the card only once the turn settles avoids a flickering list).
+  const writtenFiles = useMemo(
+    () => (!isStreaming ? extractTurnWrittenFiles(entry.toolCalls) : []),
+    [isStreaming, entry.toolCalls]
+  )
   // Clickable follow-ups: only the settled chat tail (never the live entry).
   const followUps = useMemo(
     () => (interactive && !isStreaming ? parseFollowUps(entry.text) : null),
@@ -347,6 +356,7 @@ export function AssistantEntry({ entry, isStreaming, onCopy, interactive, onAsk 
         <ThinkingBlock thinking={entry.thinking} thinkingDone={thinkingDone} thinkingText={thinkingText} />
       )}
       {hasTools && <ToolGroup toolCalls={entry.toolCalls} />}
+      {writtenFiles.length > 0 && <TurnWrittenFiles files={writtenFiles} />}
       {hasText && (
         <div className="entry-text">
           <Markdown remarkPlugins={[remarkGfm]} components={mdComponents}>{mdText}</Markdown>
