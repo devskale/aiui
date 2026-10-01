@@ -4,6 +4,7 @@
 // ════════════════════════════════════════════════════════════════════
 import { useState, useCallback } from 'react'
 import { apiUrl } from '../lib/api'
+import { enforceAttachmentLimit } from '../lib/attachment-limit'
 
 // Downscale big images BEFORE upload: vision models cap around ~1568px on
 // the long edge, so anything larger only costs upload time — and a 10-page
@@ -39,8 +40,14 @@ export function useAttachments() {
   const [attachments, setAttachments] = useState([])
 
   const addFiles = useCallback(async (fileList) => {
+    // Cap attachment count so the prompt body doesn't explode with base64
+    // dataUrls (each image is several MB). Rejects the overflow and lets the
+    // caller show feedback via the returned count.
+    const list = Array.from(fileList || [])
+    const { accepted, rejected } = enforceAttachmentLimit(attachments.length, list.length)
+    const toAdd = list.slice(0, accepted)
     const newAtts = []
-    for (const original of fileList) {
+    for (const original of toAdd) {
       const file = await downscaleImage(original)
       const id = Date.now().toString(36) + Math.random().toString(36).slice(2)
       const fd = new FormData()
@@ -65,7 +72,8 @@ export function useAttachments() {
       } catch {}
     }
     setAttachments(prev => [...prev, ...newAtts])
-  }, [])
+    return rejected
+  }, [attachments.length])
 
   const remove = useCallback((id) => {
     setAttachments(prev => prev.filter(a => a.id !== id))

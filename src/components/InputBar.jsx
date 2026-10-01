@@ -9,6 +9,7 @@ import { useMention } from '../hooks/useMention'
 import { useStt } from '../hooks/useStt'
 import { rewriteSkillCommand } from '../lib/compose'
 import { draftKey, saveDraft, loadDraft, clearDraft } from '../lib/draft-store'
+import { MAX_ATTACHMENTS } from '../lib/attachment-limit'
 
 // Splits a file list into accepted + image-rejected. When the current model
 // can't take images, image files are stripped so they never reach the server.
@@ -76,6 +77,13 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
   const flashNotice = (msg) => {
     setImageNotice(msg)
     setTimeout(() => setImageNotice(prev => (prev === msg ? '' : prev)), 3200)
+  }
+
+  // Add files and report the count the attachment cap rejected (addFiles
+  // returns the number of files it could not accept).
+  const addFilesCapped = async (files) => {
+    const rejected = await onAddFiles(files)
+    if (rejected) flashNotice(`${rejected} attachment${rejected > 1 ? 's' : ''} not added — max ${MAX_ATTACHMENTS} per prompt.`)
   }
 
   // Voice input (ADR-0004): OS/browser recognizer when available, else the
@@ -172,14 +180,14 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
     e.preventDefault()
     const { accept, rejectedImages } = splitByImageSupport(files, imageCapable)
     if (rejectedImages) flashNotice(`${rejectedImages} image${rejectedImages > 1 ? 's' : ''} not attached — this model doesn't support images.`)
-    if (accept.length) onAddFiles(accept)
+    if (accept.length) addFilesCapped(accept)
   }
 
   const handleDrop = (e) => {
     e.preventDefault()
     const { accept, rejectedImages } = splitByImageSupport(e.dataTransfer?.files || [], imageCapable)
     if (rejectedImages) flashNotice(`${rejectedImages} image${rejectedImages > 1 ? 's' : ''} not attached — this model doesn't support images.`)
-    if (accept.length) onAddFiles(accept)
+    if (accept.length) addFilesCapped(accept)
   }
 
   const shortenPath = (p) => {
@@ -275,7 +283,7 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
           onChange={e => {
             const { accept, rejectedImages } = splitByImageSupport(e.target.files || [], imageCapable)
             if (rejectedImages) flashNotice(`${rejectedImages} image${rejectedImages > 1 ? 's' : ''} not attached — this model doesn't support images.`)
-            if (accept.length) onAddFiles(accept)
+            if (accept.length) addFilesCapped(accept)
             e.target.value = ''
           }} />
         {streaming ? (
