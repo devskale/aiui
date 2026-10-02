@@ -8,7 +8,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   normalizeWidgetKeys, originAllowed, noteMintAttempt,
-  mintWidgetToken, verifyWidgetToken,
+  mintWidgetToken, verifyWidgetToken, frameAncestorsFor,
 } from './widget-auth.js'
 
 // ── normalizeWidgetKeys ──
@@ -100,4 +100,30 @@ test('widget token: malformed input rejected', () => {
   assert.equal(verifyWidgetToken('abc', 'x'.repeat(32)), null)                  // kein Punkt
   assert.equal(verifyWidgetToken('a.b.c.d', 'x'.repeat(32)), null)
   assert.equal(verifyWidgetToken(null, 'x'.repeat(32)), null)
+})
+
+// ── frameAncestorsFor (iframe-Fallback /embed) ──
+
+test('frameAncestorsFor: schemaloser Eintrag → https, Loopback zusätzlich http', () => {
+  assert.deepEqual(frameAncestorsFor(['kunde.at']), ["'self'", 'https://kunde.at'])
+  // localhost-Dev/Demo ist http → ohne http-Variante blockiert der Browser
+  assert.deepEqual(frameAncestorsFor(['localhost:5199']),
+    ["'self'", 'https://localhost:5199', 'http://localhost:5199'])
+  assert.deepEqual(frameAncestorsFor(['127.0.0.1:8080']),
+    ["'self'", 'https://127.0.0.1:8080', 'http://127.0.0.1:8080'])
+})
+
+test('frameAncestorsFor: explizites Scheme im Eintrag gewinnt, Duplate fallen weg', () => {
+  assert.deepEqual(frameAncestorsFor(['http://kunde.at']),
+    ["'self'", 'http://kunde.at'])                    // kein https erzwungen
+  assert.deepEqual(frameAncestorsFor(['https://kunde.at', 'kunde.at']),
+    ["'self'", 'https://kunde.at'])                    // kein Doppel-Eintrag
+  assert.deepEqual(frameAncestorsFor([]), ["'self'"])  // fail-closed, nie leer
+  assert.deepEqual(frameAncestorsFor(null), ["'self'"])
+})
+
+test('frameAncestorsFor: Produktionsdomain mit Subdomains bleibt https-only', () => {
+  const out = frameAncestorsFor(['shop.kunde.at'])
+  assert.ok(out.includes('https://shop.kunde.at'))
+  assert.ok(!out.some(u => u.startsWith('http://')))
 })

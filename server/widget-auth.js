@@ -74,6 +74,31 @@ export function originAllowed(entry, origin) {
   })
 }
 
+// ── frame-ancestors für /embed (pure) ──
+// Domains sind im Key schemalos gespeichert (Host[:port]); frame-ancestors
+// braucht aber URIs. Default https:// — ABER: http-Hosts (lokale Dev/Demo auf
+// localhost, http-only-Kunden ohne TLS) wären damit blockiert, ohne jede
+// Schutzwirkung (frame-ancestors ist Allowlist, nicht Auth). Deshalb:
+// explizites Scheme im Eintrag gewinnt, Loopback-Hosts bekommen zusätzlich
+// http://, alle anderen bleiben https-only.
+export function frameAncestorsFor(domains = []) {
+  const out = new Set(["'self'"])
+  for (const raw of Array.isArray(domains) ? domains : []) {
+    const d = String(raw).toLowerCase().trim()
+    if (!d) continue
+    if (d.startsWith('http://') || d.startsWith('https://')) {
+      out.add(d)
+      continue
+    }
+    out.add(`https://${d}`)
+    const host = d.split(':')[0]
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]' || d.endsWith('.localhost')) {
+      out.add(`http://${d}`)
+    }
+  }
+  return [...out]
+}
+
 // ── Mint-Rate-Limit (pro Key pro Minute — Map wie Login-Throttle) ──
 // Sonst verschiebt ein Key-Leak das Problem nur eine Ebene tiefer: der
 // Angreifer mint dann eben Tokens im Sekundentakt (hodgen.ai-Kernpunkt).

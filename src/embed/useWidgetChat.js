@@ -64,6 +64,10 @@ export function useWidgetChat({ transport, onTheme, onSettled }) {
   const send = useCallback(async (text) => {
     const t = text?.trim()
     if (!t) return
+    // User-Eintrag CLIENTSEITIG, vor dem POST — genau wie die Haupt-App
+    // (useAgentEvents.sendPrompt). Der Server sendet user_prompt nicht
+    // zurück; ohne das hier erscheint die eigene Nachricht im Widget nie.
+    dispatch({ type: 'user_prompt', text: t, attachments: [] })
     try {
       await transport.sendPrompt(t, collectPageContext())
     } catch (e) {

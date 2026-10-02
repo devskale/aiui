@@ -55,11 +55,19 @@ class AiChatElement extends HTMLElement {
 
     // Host-Bridge-Handle: das Panel befüllt open/close/send/onSettled.
     this._controller = {
+      el: this, // Panel beobachtet variant-Attributänderungen daran
       onSettled: (lastReplyText) => {
         this.dispatchEvent(new CustomEvent('ai-chat:settled', { bubbles: true, detail: {} }))
         if (lastReplyText) this.dispatchEvent(new CustomEvent('ai-chat:reply', { bubbles: true, detail: { text: lastReplyText } }))
       },
     }
+
+    // Theme-Callback FEST am Element. Ein Inline-Arrow hier würde pro Render
+    // eine neue Identität haben und damit den Connect-Effekt im Widget
+    // triggern — der SSE-Stream fliegt dann bei JEDEM Render weg und neu auf
+    // (Connect-Flap, verlorene Events). closed-Shadow: shadowRoot ist null,
+    // darum die mountPoint-Referenz statt this.shadowRoot.
+    this._applyTheme = (theme) => applyTheme(mountPoint, theme)
 
     this._root = createRoot(mountPoint)
     this._root.render(
@@ -67,7 +75,7 @@ class AiChatElement extends HTMLElement {
         transport={transport}
         launcherLabel={safeText(this.getAttribute('label'), 'Chat')}
         controller={this._controller}
-        onTheme={(theme) => applyTheme(mountPoint, theme)}
+        onTheme={this._applyTheme}
         variantAttr={this.getAttribute('variant')}
       />,
     )

@@ -9,7 +9,15 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   base: '/',
-  define: { __APP_VERSION__: JSON.stringify(process.env.npm_package_version || '0.0.0') },
+  // Das Bundle läuft in fremden Browser-Kontexten: dort gibt es KEIN `process`.
+  // Ohne dieses Define bleibt process.env.NODE_ENV aus React/CJS-Interop im
+  // Bundle und das IIFE wirft "process is not defined" BEVOR es sich
+  // überhaupt registriert — das Widget mountet dann gar nicht. Production ist
+  // hier korrekt: Prod-Hosts laden embed.js ohne Dev-Devtools-Zeug.
+  define: {
+    'process.env.NODE_ENV': JSON.stringify('production'),
+    __APP_VERSION__: JSON.stringify(process.env.npm_package_version || '0.0.0'),
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: false,

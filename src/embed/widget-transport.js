@@ -87,6 +87,7 @@ export class WidgetTransport {
     const url = `${this.apiBase}/api/widget/stream?visitor=${encodeURIComponent(this.visitor)}&token=${encodeURIComponent(this.token)}`
     const es = new EventSourceImpl(url)
     const kinds = [
+      'agent_start', 'agent_end', 'agent_settled',
       'user_prompt', 'user_steer', 'message_update', 'message_start', 'message_end',
       'tool_execution_start', 'tool_execution_update', 'tool_execution_end',
       'queue_update', 'session_status', 'session_stats', 'session_history',

@@ -10,7 +10,7 @@
 // Wiederverwendet, nicht geforkt (ADR-0006 D4): UserEntry/AssistantEntry/
 // ErrorEntry unverändert aus ../components/StreamEntry.jsx.
 // ════════════════════════════════════════════════════════════════════
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { MessageCircle, X, SendHorizontal } from 'lucide-react'
 import { UserEntry, AssistantEntry, ErrorEntry } from '../components/StreamEntry.jsx'
 import { useWidgetChat } from './useWidgetChat.js'
@@ -18,9 +18,25 @@ import { resolveVariant } from './variant.js'
 import { createFocusTrap } from './focus-trap.js'
 
 export function AiChatPanel({ transport, launcherLabel = 'Chat', controller, onTheme, variantAttr }) {
+  // Das Element kann sein variant-Attribut zur Laufzeit wechseln (Demo/
+  // Host-UX: el.setAttribute('variant','modal')). React-Props sind bei
+  // Custom Elements immutable — daher in State spiegeln und bei
+  // Attributänderungen nachziehen, sonst bleibt die Variante eingefroren.
+  const [attrVariant, setAttrVariant] = useState(variantAttr)
+  useEffect(() => {
+    const el = controller?.el
+    if (!el || typeof MutationObserver === 'undefined') return
+    const obs = new MutationObserver(() => setAttrVariant(el.getAttribute('variant')))
+    obs.observe(el, { attributes: true, attributeFilter: ['variant'] })
+    return () => obs.disconnect()
+  }, [controller])
+  // onTheme kommt von embed.jsx als Inline-Arrow — ohne useCallback wäre die
+  // Effect-Dep im Connect-Effekt pro Render neu und würde den SSE-Stream bei
+  // JEDEM Render schließen und neu öffnen (Connect-Flap).
+  const stableOnTheme = useCallback((t) => onTheme?.(t), [onTheme])
   const chat = useWidgetChat({
     transport,
-    onTheme,
+    onTheme: stableOnTheme,
     onSettled: (text) => controller?.onSettled?.(text),
   })
   const [text, setText] = useState('')
@@ -29,7 +45,7 @@ export function AiChatPanel({ transport, launcherLabel = 'Chat', controller, onT
   const dialogRef = useRef(null)
   const releaseTrapRef = useRef(null)
 
-  const variant = resolveVariant(variantAttr, chat.config?.variant)
+  const variant = resolveVariant(attrVariant, chat.config?.variant)
   const dismissOnBackdrop = chat.config?.dismissOnBackdrop !== false
   const open = variant === 'inline' ? true : chat.open
 
@@ -47,6 +63,24 @@ export function AiChatPanel({ transport, launcherLabel = 'Chat', controller, onT
     if (dialogRef.current) releaseTrapRef.current = createFocusTrap(dialogRef.current)
     return () => { releaseTrapRef.current?.(); releaseTrapRef.current = null }
   }, [variant, open])
+
+  // Esc schließt den Dialog unabhaengig vom Fokus. Haengt weder am
+  // Textarea-KeyDown noch am Dialog im Shadow: der Fokus sitzt nach dem
+  // Start-Fokus im Close-Button, und Light-DOM-KeyEvents dringen gar nicht in
+  // den closed ShadowRoot. Haengen am HOST-Element (dort laufen sie an) plus
+  // document als Fallback fuer Tastendruecke, die am Host vorbeikommen —
+  // composedPath() filtert auf genau DIES Widget, sonst schliesst Esc alle.
+  useEffect(() => {
+    if (variant === 'inline' || !open) return
+    const host = controller?.el
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return
+      if (e.composedPath?.().includes?.(host)) { chat.setOpen(false); return }
+    }
+    host?.addEventListener('keydown', onKey)
+    document.addEventListener('keydown', onKey)
+    return () => { host?.removeEventListener('keydown', onKey); document.removeEventListener('keydown', onKey) }
+  }, [variant, open, controller])
 
   // Smart autoscroll wie die Haupt-App: bei offenem Panel unten kleben.
   useEffect(() => {

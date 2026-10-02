@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { getBus } from './event-bus.js'
 import * as Mime from './mime.js'
 import { authEnabled, verifyCredentials, issueSession, revokeSession, userLimit, setSessionCookie, clearSessionCookie, clearStaleSessionCookies, readSessionCookies, currentSession, requireAuth, noteLoginAttempt } from './auth.js'
-import { widgetKeyEntry, originAllowed, noteMintAttempt, mintWidgetToken, getWidgetSecret, widgetQuotaAvailable, verifyWidgetToken } from './widget-auth.js'
+import { widgetKeyEntry, originAllowed, noteMintAttempt, mintWidgetToken, getWidgetSecret, widgetQuotaAvailable, verifyWidgetToken, frameAncestorsFor } from './widget-auth.js'
 import { consumeQuota, peekQuota } from './quota.js'
 import { getOrCreateSession, disposeSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, listSessions, switchToSession, getAvailableModels, getCommands, getSessionInfo, getSessionStats, getSessionHistory, newSession, workspaceCwd, getForkTargets, forkSession, scopedUser, widgetVisitorStatus, prepareWidgetContext, composeWidgetPrompt, VISITOR_RE } from './pi-session.js'
 import { listAgents } from './agents.js'
@@ -314,7 +314,7 @@ app.get('/embed', (req, res) => {
   if (!/^[\w-]{1,128}$/.test(key)) return res.status(400).type('html').send('invalid key')
   const entry = widgetKeyEntry(key)
   if (!entry || entry.revoked) return res.status(403).type('html').send('invalid key')
-  const ancestors = ["'self'", ...entry.domains.map(d => `https://${d}`)]
+  const ancestors = frameAncestorsFor(entry.domains)
   res.setHeader('Content-Security-Policy', `frame-ancestors ${ancestors.join(' ')}`)
   const base = process.env.VITE_BASE || '/'
   res.type('html').send(`<!DOCTYPE html>
