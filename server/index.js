@@ -8,9 +8,9 @@ import { fileURLToPath } from 'node:url'
 import { getBus } from './event-bus.js'
 import * as Mime from './mime.js'
 import { authEnabled, verifyCredentials, issueSession, revokeSession, userLimit, setSessionCookie, clearSessionCookie, clearStaleSessionCookies, readSessionCookies, currentSession, requireAuth, noteLoginAttempt } from './auth.js'
-import { widgetKeyEntry, originAllowed, noteMintAttempt, mintWidgetToken, getWidgetSecret, widgetQuotaAvailable } from './widget-auth.js'
+import { widgetKeyEntry, originAllowed, noteMintAttempt, mintWidgetToken, getWidgetSecret, widgetQuotaAvailable, verifyWidgetToken } from './widget-auth.js'
 import { consumeQuota, peekQuota } from './quota.js'
-import { getOrCreateSession, disposeSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, listSessions, switchToSession, getAvailableModels, getCommands, getSessionInfo, getSessionStats, getSessionHistory, newSession, workspaceCwd, getForkTargets, forkSession } from './pi-session.js'
+import { getOrCreateSession, disposeSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, listSessions, switchToSession, getAvailableModels, getCommands, getSessionInfo, getSessionStats, getSessionHistory, newSession, workspaceCwd, getForkTargets, forkSession, scopedUser, widgetVisitorStatus, ensureWidgetAgent, composeWidgetPrompt, VISITOR_RE } from './pi-session.js'
 import { listAgents } from './agents.js'
 import { sttConfigured, sttReachable, sttModel, transcribe } from './stt.js'
 import { resolveBashOutputPath, readBashOutput } from './bash-output.js'
@@ -179,6 +179,72 @@ app.post('/api/widget/session', (req, res) => {
   console.log(JSON.stringify({ t: 'widget-mint', key, user: entry.user, origin: origin || null }))
   res.set('Access-Control-Allow-Origin', '*')
   res.json({ token, expiresAt, config: entry.config })
+})
+
+// Token-Middleware: User NUR aus dem signed Claim (ADR-0006 D1-Schicht 3).
+// Revocation ist sofortwirksam — der Key wird bei JEDER Request neu geprüft,
+// nicht nur beim Mint. CORS-Wildcard ist ok: Auth trägt das Token, nie Cookies.
+function widgetAuth(req, res, next) {
+  res.set('Access-Control-Allow-Origin', '*')
+  const h = req.headers.authorization || ''
+  const token = h.startsWith('Bearer ') ? h.slice(7) : null
+  const claim = token && verifyWidgetToken(token, getWidgetSecret())
+  if (!claim) return res.status(401).json({ error: 'invalid or expired token' })
+  const entry = widgetKeyEntry(claim.key)
+  if (!entry || entry.revoked || entry.user !== claim.user) return res.status(403).json({ error: 'key no longer valid' })
+  req.widget = { user: claim.user, key: claim.key, entry }
+  next()
+}
+
+// ── Widget stream + prompt (visitor-scoped; ADR-0006 D2) ──
+// visitor = client-generierte stabile ID (localStorage des Host-Ursprungs,
+// charset-beschränkt) → eigene Runtime-Instanz, eigener Bus-Key, eigener
+// Workspace-Subdir. Geteilt: agentDir + Quota-Budget des Widget-Users.
+app.get('/api/widget/stream', widgetAuth, (req, res) => {
+  const visitor = String(req.query.visitor || '')
+  if (!VISITOR_RE.test(visitor)) return res.status(400).json({ error: 'invalid visitor id' })
+  const scope = scopedUser(req.widget.user, visitor)
+  // Cap gilt auch hier: ein Stream mit beliebig vielen frischen Visitor-IDs
+  // würde contexts (Sandbox-Profile, Dirs) aufblähen. Bestehende Besucher
+  // sind immer admitted (probe-Semantik).
+  if (!widgetVisitorStatus(req.widget.user, { probeInstance: visitor }).admitted) {
+    return res.status(429).json({ error: 'widget busy — too many concurrent visitors' })
+  }
+  const bus = getBus(scope)
+  bus.attach(res)
+  // Replay wie beim normalen /api/events: Status + (falls vorhanden) History.
+  bus.send(res, 'session_status', getSessionInfo(scope))
+  const history = getSessionHistory(scope)
+  if (history.length) bus.send(res, 'session_history', { entries: history })
+})
+
+app.post('/api/widget/prompt', widgetAuth, async (req, res) => {
+  const { text, pageContext } = req.body || {}
+  const visitor = String(req.query.visitor || req.body?.visitor || '')
+  if (!VISITOR_RE.test(visitor)) return res.status(400).json({ error: 'invalid visitor id' })
+  if (!text?.trim()) return res.status(400).json({ error: 'empty prompt' })
+  // Quota: Budget liegt auf dem Widget-User; der Prompt ist die abrechenbare
+  // Aktion (Mint verbrennt nichts — ADR-0006 D3).
+  const limit = userLimit(req.widget.user)
+  if (limit !== null && !consumeQuota(req.widget.user, limit).allowed) {
+    return res.status(429).json({ error: 'daily limit reached' })
+  }
+  const scope = scopedUser(req.widget.user, visitor)
+  if (!widgetVisitorStatus(req.widget.user, { probeInstance: visitor }).admitted) {
+    return res.status(429).json({ error: 'widget busy — too many concurrent visitors' })
+  }
+  // Key-Agent binden, bevor die erste Session gebaut wird (ADR-0004).
+  ensureWidgetAgent(scope, req.widget.entry.agent)
+  res.json({ ok: true })
+  try {
+    await prompt(scope, composeWidgetPrompt(text, pageContext))
+    const bus = getBus(scope)
+    bus.push('session_status', getSessionInfo(scope))
+    bus.push('session_stats', getSessionStats(scope))
+    console.log(JSON.stringify({ t: 'widget-prompt', key: req.widget.key, user: req.widget.user, visitor }))
+  } catch (err) {
+    getBus(scope).push('error', { message: err.message })
+  }
 })
 
 // Everything else under /api requires a session when auth is configured.
