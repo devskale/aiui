@@ -10,6 +10,47 @@ The latest version is shown in the UI under `#/releases`.
 
 ### Added
 
+- **Embed-Widget (ADR-0006, Phase 1+2)** — aiui als Chat-Widget für fremde
+  Seiten: eine Zeile `<script src="…/embed.js" data-key="wk_…">` oder
+  `<ai-chat key variant>` (corner/modal/inline), Besucher chatten ohne
+  Login mit einem scoped Agent. 3-Schichten-Kette: public Embed-Key
+  (scoped/revocable/domain-gebunden, `widgetKeys` in ~/.aiui-auth.json) →
+  rate-limited Mint (`POST /api/widget/session`, 1h-HMAC-Token) →
+  token-authentifizierte Widget-Endpoints. Visitor-scoped Runtimes: Agent/
+  Budget geteilt, Stream/Session/Workspace pro Besucher isoliert (Cap +
+  TTL). Page-Context als DATEN-Block, Host-Bridge (`el.open/close/send` +
+  `ai-chat:reply/settled`), `/embed` iframe-Fallback mit per-Key
+  frame-ancestors, `readonly`-Key-Flag (write/edit/bash verweigern),
+  Provision-Skript + Demo-Host-Seite (`dev/embed-demo.html`) +
+  Regressionsschutz `scripts/widget-e2e.js` (15 Checks, kein Model-Call).
+
+- **Changes card pro Turn** — klickbare Chips der Dateien, die ein Turn
+  tatsächlich geschrieben hat (Quelle: erfolgreiche write/edit-Tool-Calls,
+  nie Antworttext); Klick öffnet `/api/file/raw`.
+
+- **Draft-Persistenz pro Session** — der ungesendete Prompt-Text überlebt
+  Reloads und Session-Wechsel (localStorage, gekeyt pro User+Session,
+  Debounce 300 ms, löscht beim Senden).
+
+- **Attachment-Cap** — max 10 Dateien pro Prompt; jede weitere wird mit
+  klarer Meldung abgelehnt (Prompt-Body explodiert nicht mit Base64-Bildern).
+
+### Changed
+
+- **SDK 0.87.1 → 0.99.2** (`@earendil-works/pi-coding-agent`) + alle
+  Dependencies aktuell: multer 2, react-markdown 10, concurrently 10,
+  vite 8 + plugin-react 6 (Build ~5× schneller), react 19.3, uuid entfernt
+  (unbenutzt). check-sdk-exports 10/10, Tests, Build, Smoke, frozen
+  Lockfile grün.
+
+### Fixed
+
+- **Zeilenumbrüche beim Einfügen** — lone `\r` kollabierte unter pre-wrap
+  zu einem Leerzeichen (pi-web #1015); InputBar normalisiert jetzt
+  `\r\n`/`\r` → `\n`.
+- **Mobile: Composer über der iOS-Tastatur** — `.app` nutzt 100svh/100dvh
+  statt 100vh (pi-web #992).
+
 - **Persistente Session-Tokens** — Logins überleben Service-Restarts
    (Deploys) statt bei jedem Neustart zu sterben: Sessions liegen gehasht
    (sha256) in `~/.aiui-sessions.json` — neben der Auth-Config, außerhalb
