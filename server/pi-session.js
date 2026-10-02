@@ -14,6 +14,7 @@ import { getBus } from './event-bus.js'
 import { resolveWorkspacePath } from './workspace-files.js'
 import * as Entry from '../shared/entry.js'
 import * as Sandbox from './sandbox.js'
+import { createReadonlyTools } from './sandbox.js'
 import { sharedRetrySettings } from './shared-settings.js'
 import { getAgent, requireAgent } from './agents.js'
 import { modelFilterFor } from './auth.js'
@@ -218,6 +219,13 @@ function ctxFor(user) {
     const agentDir = path.join(AGENT_ROOT, slug) // OUTSIDE cwd (ADR-0001)
     fs.mkdirSync(sessionDir, { recursive: true })
     fs.mkdirSync(agentDir, { recursive: true })
+    // Readonly-Key (ADR-0006 D3): Visitor-Kontext baut verweigernde Tools.
+    // (Erst NACH den mkdirs — createTools schreibt das Seatbelt-Profil in cwd.)
+    const pending = instance ? pendingWidgetConfig.get(u) : null
+    const widgetAgent = pending?.agent || 'default'
+    const tools = instance && pending?.readonly
+      ? createReadonlyTools(cwd)
+      : Sandbox.createTools(cwd)
     // Seed behavioral defaults on first creation (ADR-0001). Entitlement stays
     // empty (default-deny); the admin curates it per-User.
     const settingsPath = path.join(agentDir, 'settings.json')
@@ -228,7 +236,7 @@ function ctxFor(user) {
       // to already-seeded agentDirs (retry is behavioral, not entitlement).
       ensureSharedRetry(settingsPath)
     }
-    ctx = { cwd, sessionDir, agentDir, base, customTools: Sandbox.createTools(cwd), runtime: null, startedAt: null, agent: 'default' }
+    ctx = { cwd, sessionDir, agentDir, base, customTools: tools, runtime: null, startedAt: null, agent: widgetAgent }
     contexts.set(u, ctx)
   }
   ctx.lastUsed = Date.now()
@@ -736,6 +744,21 @@ export async function getCommands(user) {
 }
 
 // ── Embed-Widget-Helfer (ADR-0006) ──
+
+// Key-Config (Agent, readonly) muss VOR der ctx-Erzeugung bekannt sein —
+// customTools werden in ctxFor gebaut. Die Widget-Routes rufen deshalb
+// prepareWidgetContext(scope, entry), BEVOR sie den Kontext zum ersten Mal
+// berühren (stream wie prompt). Idempotent: nach der ersten Runtime gilt
+// der einmal gebundene Zustand (Agent-Wechsel wäre Session-Wechsel, readonly
+// bleibt — Sicherheitseigenschaften lockern sich nicht durch Reloads).
+const pendingWidgetConfig = new Map() // scopeKey → { agent, readonly }
+export function prepareWidgetContext(user, { agent, readonly } = {}) {
+  const k = scopeKey(user)
+  if (!k.includes('/')) return // kein Visitor-Scope → nichts zu konfigurieren
+  if (contexts.has(k) && contexts.get(k).runtime) return contexts.get(k)
+  pendingWidgetConfig.set(k, { agent, readonly: readonly === true })
+  return null
+}
 
 // Cap-Entscheidung für die Widget-Routes: kapselt die echte contexts-Map.
 // probeInstance = der anfragende Besucher: existiert seine Instanz noch

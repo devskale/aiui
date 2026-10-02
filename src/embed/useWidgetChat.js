@@ -29,6 +29,7 @@ export function useWidgetChat({ transport, onTheme, onSettled }) {
   const [state, dispatch] = useReducer(widgetReducer, initialState)
   const [open, setOpen] = useState(false)
   const [notice, setNotice] = useState('') // Mint-/Verbindungsfehler (UI-Fläche)
+  const [config, setConfig] = useState(null) // Key-Config (variant, greeting…)
   const wasStreaming = useRef(false)
 
   // Verbindung + Stream, sobald das Panel das erste Mal geöffnet wird.
@@ -40,6 +41,7 @@ export function useWidgetChat({ transport, onTheme, onSettled }) {
       try {
         await transport.connect()
         if (closed) return
+        setConfig(transport.config || {})
         if (transport.config?.greeting) dispatch({ type: 'config', greeting: transport.config.greeting })
         onTheme?.(transport.config?.theme)
         es = transport.openStream((type, data) => dispatch({ type, ...data }))
@@ -69,5 +71,5 @@ export function useWidgetChat({ transport, onTheme, onSettled }) {
     }
   }, [transport])
 
-  return { ...state, open, setOpen, send, notice }
+  return { ...state, open, setOpen, send, notice, config }
 }

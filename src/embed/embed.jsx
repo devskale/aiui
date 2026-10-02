@@ -68,6 +68,7 @@ class AiChatElement extends HTMLElement {
         launcherLabel={safeText(this.getAttribute('label'), 'Chat')}
         controller={this._controller}
         onTheme={(theme) => applyTheme(mountPoint, theme)}
+        variantAttr={this.getAttribute('variant')}
       />,
     )
   }
@@ -91,5 +92,6 @@ if (s?.dataset?.key && !document.querySelector('ai-chat')) {
   const el = document.createElement('ai-chat')
   el.setAttribute('key', s.dataset.key)
   if (s.dataset.label) el.setAttribute('label', s.dataset.label)
+  if (s.dataset.variant) el.setAttribute('variant', s.dataset.variant)
   document.body.append(el)
 }

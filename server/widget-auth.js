@@ -36,6 +36,7 @@ export function normalizeWidgetKeys(raw) {
       domains: Array.isArray(e.domains) ? e.domains.map(d => String(d).toLowerCase().trim()).filter(Boolean) : [],
       agent: typeof e.agent === 'string' ? e.agent : '',
       revoked: e.revoked === true,
+    readonly: e.readonly === true,
       config: {
         variant: e.config?.variant === 'modal' || e.config?.variant === 'inline' ? e.config.variant : 'corner',
         theme: e.config?.theme && typeof e.config.theme === 'object' ? e.config.theme : {},

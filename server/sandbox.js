@@ -222,6 +222,24 @@ function guardedFileTools(cwd) {
   ]
 }
 
+// ── Readonly-Widget-Tools (ADR-0006 D3: readonly-Key-Flag) ──
+// Für Visitor-Sessions unter einem readonly-Key: read bleibt (geguardt,
+// Visitors lesen ihren Workspace), write/edit/bash verweigern JEDEN Aufruf
+// mit einem isError-Ergebnis. Wir umhüllen die echten Tools (Schema +
+// Beschreibung bleiben — das Modell ruft sie normal auf und bekommt die
+// klare Absage), execute schlägt deterministisch fehl. Kein Backend-Tanz:
+// auch ohne Seatbelt/bwrap ist das Wasserleck-zu (write/edit/bash sind die
+// schreibenden Tools; read ist harmlos).
+const REFUSE = async () => ({
+  isError: true,
+  content: [{ type: 'text', text: 'This widget is read-only — file changes and shell commands are disabled.' }],
+})
+export function createReadonlyTools(cwd) {
+  const [read, write, edit] = guardedFileTools(cwd)
+  const bash = createBashTool(cwd)
+  return [read, { ...write, execute: REFUSE }, { ...edit, execute: REFUSE }, { ...bash, execute: REFUSE }]
+}
+
 export function createTools(cwd) {
   if (process.env.AIUI_SANDBOX === '0') {
     logStatus(false, 'disabled by AIUI_SANDBOX=0')

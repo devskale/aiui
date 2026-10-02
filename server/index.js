@@ -10,7 +10,7 @@ import * as Mime from './mime.js'
 import { authEnabled, verifyCredentials, issueSession, revokeSession, userLimit, setSessionCookie, clearSessionCookie, clearStaleSessionCookies, readSessionCookies, currentSession, requireAuth, noteLoginAttempt } from './auth.js'
 import { widgetKeyEntry, originAllowed, noteMintAttempt, mintWidgetToken, getWidgetSecret, widgetQuotaAvailable, verifyWidgetToken } from './widget-auth.js'
 import { consumeQuota, peekQuota } from './quota.js'
-import { getOrCreateSession, disposeSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, listSessions, switchToSession, getAvailableModels, getCommands, getSessionInfo, getSessionStats, getSessionHistory, newSession, workspaceCwd, getForkTargets, forkSession, scopedUser, widgetVisitorStatus, ensureWidgetAgent, composeWidgetPrompt, VISITOR_RE } from './pi-session.js'
+import { getOrCreateSession, disposeSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, listSessions, switchToSession, getAvailableModels, getCommands, getSessionInfo, getSessionStats, getSessionHistory, newSession, workspaceCwd, getForkTargets, forkSession, scopedUser, widgetVisitorStatus, prepareWidgetContext, composeWidgetPrompt, VISITOR_RE } from './pi-session.js'
 import { listAgents } from './agents.js'
 import { sttConfigured, sttReachable, sttModel, transcribe } from './stt.js'
 import { resolveBashOutputPath, readBashOutput } from './bash-output.js'
@@ -171,7 +171,13 @@ app.post('/api/widget/session', (req, res) => {
   const entry = widgetKeyEntry(key)
   // Unbekannt und revoked antworten identisch (kein Existenz-Orakel).
   if (!entry || entry.revoked) return res.status(403).json({ error: 'invalid key' })
-  if (!originAllowed(entry, origin)) return res.status(403).json({ error: 'origin not allowed' })
+  // Iframe-Modus (/embed?key=… läuft SAME-ORIGIN zur aiui-Instanz): Origin
+  // gleich dem eigenen Host → erlaubt; die Key-Domains bleiben trotzdem die
+  // Regel für cross-origin script-Embeds.
+  const sameOrigin = (() => {
+    try { return new URL(origin).host === req.headers.host } catch { return false }
+  })()
+  if (!sameOrigin && !originAllowed(entry, origin)) return res.status(403).json({ error: 'origin not allowed' })
   if (!widgetQuotaAvailable(entry.user)) return res.status(429).json({ error: 'quota exhausted' })
   const { token, expiresAt } = mintWidgetToken({ user: entry.user, key }, getWidgetSecret())
   // Strukturierte Mint-Log-Line (Key-attribuiert) — Datenbasis für spätere
@@ -213,6 +219,9 @@ app.get('/api/widget/stream', widgetAuth, (req, res) => {
   if (!widgetVisitorStatus(req.widget.user, { probeInstance: visitor }).admitted) {
     return res.status(429).json({ error: 'widget busy — too many concurrent visitors' })
   }
+  // Key-Config (Agent + readonly) VOR der ersten ctx-Berührung setzen —
+  // customTools/Agent binden bei der ctx/Runtime-Erzeugung.
+  prepareWidgetContext(scope, { agent: req.widget.entry.agent, readonly: req.widget.entry.readonly })
   const bus = getBus(scope)
   bus.attach(res)
   // Replay wie beim normalen /api/events: Status + (falls vorhanden) History.
@@ -236,8 +245,9 @@ app.post('/api/widget/prompt', widgetAuth, async (req, res) => {
   if (!widgetVisitorStatus(req.widget.user, { probeInstance: visitor }).admitted) {
     return res.status(429).json({ error: 'widget busy — too many concurrent visitors' })
   }
-  // Key-Agent binden, bevor die erste Session gebaut wird (ADR-0004).
-  ensureWidgetAgent(scope, req.widget.entry.agent)
+  // Key-Config binden (Agent + readonly), bevor die erste Session gebaut
+  // wird (ADR-0004 + D3).
+  prepareWidgetContext(scope, { agent: req.widget.entry.agent, readonly: req.widget.entry.readonly })
   res.json({ ok: true })
   try {
     await prompt(scope, composeWidgetPrompt(text, pageContext))
@@ -292,6 +302,25 @@ app.post('/api/prompt', async (req, res) => {
   } catch (err) {
     getBus(req.user).push('error', { message: err.message })
   }
+})
+
+// ── /embed — iframe-Fallback für Hosts mit strikter CSP (ADR-0006 Phase 2) ──
+// Gleiche Server-Fläche, anderes Mounting: der Host iframet diese Seite
+// (same-origin zur aiui-Instanz → Mint erlaubt, s.o.), sie lädt das normale
+// embed.js. frame-ancestors wird pro Key aus dessen domains gesetzt — die
+// // globale CSP (nur skale.dev) wird dafür gezielt überschrieben.
+app.get('/embed', (req, res) => {
+  const key = String(req.query.key || '')
+  if (!/^[\w-]{1,128}$/.test(key)) return res.status(400).type('html').send('invalid key')
+  const entry = widgetKeyEntry(key)
+  if (!entry || entry.revoked) return res.status(403).type('html').send('invalid key')
+  const ancestors = ["'self'", ...entry.domains.map(d => `https://${d}`)]
+  res.setHeader('Content-Security-Policy', `frame-ancestors ${ancestors.join(' ')}`)
+  const base = process.env.VITE_BASE || '/'
+  res.type('html').send(`<!DOCTYPE html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chat</title><style>html,body{margin:0;height:100%;background:transparent}</style></head>
+<body><script src="${base}embed.js" data-key="${key}" defer></script></body></html>`)
 })
 
 // ── Abort ──

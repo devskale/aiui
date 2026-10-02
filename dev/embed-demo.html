@@ -57,6 +57,20 @@
     <mark>Selection</mark> wandert mit in den Page-Context.
   </div>
 
+  <div class="card">
+    <strong>Varianten</strong> (config-getrieben — Attribut am Element gewinnt):
+    <button onclick="setVariant('corner')">corner</button>
+    <button onclick="setVariant('modal')">modal</button>
+    <button onclick="setVariant('inline')">inline</button>
+    <span id="variant-now" style="color:#888"></span>
+  </div>
+
+  <div class="card">
+    <strong>iframe-Fallback</strong> (strikte CSP beim Host — gleiche Server-
+    Fläche, anderes Mounting; frame-ancestors kommt pro Key aus dessen domains):
+    <iframe id="embed-frame" style="width:100%;height:420px;border:1px solid #ccc;border-radius:10px" title="aiui iframe-Fallback"></iframe>
+  </div>
+
   <!-- ═══ DIE EINE ZEILE EMBEDDING (key via URL für die Demo) ═══ -->
   <script>
     // Demo-Behelf: Key aus ?key= in data-key schreiben, bevor embed.js lädt.
@@ -73,6 +87,19 @@
     const note = (line) => { log.textContent = line + '\n' + log.textContent }
     addEventListener('ai-chat:reply', e => note(`ai-chat:reply → ${String(e.detail.text).slice(0, 120)}…`))
     addEventListener('ai-chat:settled', () => note('ai-chat:settled'))
+
+    // Variante am Element umschalten (Attribut schlägt Key-Config)
+    const variantNow = document.getElementById('variant-now')
+    window.setVariant = (v) => {
+      const el = document.querySelector('ai-chat')
+      if (!el) return
+      el.setAttribute('variant', v)
+      variantNow.textContent = ` → ${v}`
+    }
+
+    // iframe-Fallback befüllen (gleicher Key)
+    document.getElementById('embed-frame').src =
+      `http://localhost:3107/embed?key=${encodeURIComponent(key)}`
   </script>
 </body>
 </html>
