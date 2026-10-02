@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<!-- ═══════════════════════════════════════════════════════════════════
+  dev/embed-demo.html — Demo-Host-Seite für das Embed-Widget (ADR-0006).
+
+  Simuliert eine FREMDE Website (eigener Origin), die aiui einbettet.
+  Der Key wird per ?key=… übergeben (Fallback: der localhost-Dev-Key).
+
+  So laufen (3 Terminals):
+    1. pnpm build && pnpm build:embed && ./start.sh prod        # aiui :3107
+    2. node scripts/provision-widget-user.js demo --domain localhost:5173
+       → den gedruckten Key an die URL hängen: …/embed-demo.html?key=wk_…
+    3. python3 -m http.server 5173 --directory dev               # Host :5173
+    dann http://localhost:5173/embed-demo.html?key=<key> öffnen.
+
+  Zeigt zusätzlich die Host-Bridge (SOTA, ADR-0006 D5):
+  el.open()/el.close()/el.send(text) + Events ai-chat:reply/settled.
+═══════════════════════════════════════════════════════════════════ -->
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kunde.at — Demoseite (fremder Host)</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; color: #222; }
+    h1 { font-size: 22px; }
+    .card { background: #f5f6f8; border-radius: 10px; padding: 14px 18px; margin: 14px 0; }
+    button { margin: 4px 6px 4px 0; padding: 8px 14px; border: 1px solid #ccc; border-radius: 8px; background: #fff; cursor: pointer; }
+    button:hover { background: #efefef; }
+    pre { background: #1e1e1e; color: #cfe3c8; padding: 12px; border-radius: 8px; font-size: 12px; min-height: 60px; white-space: pre-wrap; }
+    mark { background: #fff3c4; }
+  </style>
+</head>
+<body>
+  <h1>Willkommen auf kunde.at <small>(Demo-Host fürs aiui Embed-Widget)</small></h1>
+
+  <div class="card">
+    Diese Seite spielt eine <strong>fremde Website</strong>: eigener Origin
+    (<code>localhost:5173</code>), eigener CSS-Kontext — das Widget läuft
+    isoliert im Shadow-DOM. Der Agent sieht unten per <em>Page-Context</em>
+    (Daten, nie Instruktionen), welche Seite du gerade liest.
+  </div>
+
+  <div class="card">
+    <strong>Host-Bridge</strong> (SOTA): steuere den Agenten aus der Host-UX —
+    <button onclick="document.querySelector('ai-chat').open()">chat.open()</button>
+    <button onclick="document.querySelector('ai-chat').close()">chat.close()</button>
+    <button onclick="document.querySelector('ai-chat').send('Was steht auf dieser Seite?')">chat.send('Was steht auf dieser Seite?')</button>
+  </div>
+
+  <div class="card">
+    <strong>Events</strong> (ai-chat:reply / ai-chat:settled):
+    <pre id="log">— warte auf Events —</pre>
+  </div>
+
+  <div class="card">
+    Markiere etwas Text auf dieser Seite und frage den Chat danach — die
+    <mark>Selection</mark> wandert mit in den Page-Context.
+  </div>
+
+  <!-- ═══ DIE EINE ZEILE EMBEDDING (key via URL für die Demo) ═══ -->
+  <script>
+    // Demo-Behelf: Key aus ?key= in data-key schreiben, bevor embed.js lädt.
+    const key = new URLSearchParams(location.search).get('key') || 'wk_demo_localhost'
+    const s = document.createElement('script')
+    s.src = 'http://localhost:3107/embed.js'
+    s.dataset.key = key
+    s.dataset.label = 'Frag unseren Agenten'
+    document.body.append(s)
+  </script>
+
+  <script>
+    const log = document.getElementById('log')
+    const note = (line) => { log.textContent = line + '\n' + log.textContent }
+    addEventListener('ai-chat:reply', e => note(`ai-chat:reply → ${String(e.detail.text).slice(0, 120)}…`))
+    addEventListener('ai-chat:settled', () => note('ai-chat:settled'))
+  </script>
+</body>
+</html>

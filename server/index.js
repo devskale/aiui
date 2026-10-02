@@ -187,7 +187,10 @@ app.post('/api/widget/session', (req, res) => {
 function widgetAuth(req, res, next) {
   res.set('Access-Control-Allow-Origin', '*')
   const h = req.headers.authorization || ''
-  const token = h.startsWith('Bearer ') ? h.slice(7) : null
+  // Bearer-Header primär; Query-Fallback nur für den SSE-Stream (EventSource
+  // kann keine Header setzen). Acceptabel: das Token ist ephemeral (1h) und
+  // der Mint ist rate-limited — URLs landen höchstens in eigenen Logs.
+  const token = h.startsWith('Bearer ') ? h.slice(7) : (typeof req.query.token === 'string' ? req.query.token : null)
   const claim = token && verifyWidgetToken(token, getWidgetSecret())
   if (!claim) return res.status(401).json({ error: 'invalid or expired token' })
   const entry = widgetKeyEntry(claim.key)
