@@ -133,6 +133,12 @@ export function userLimit(username) {
   return Number.isFinite(n) && n >= 0 ? n : null
 }
 
+// ── widget-auth-Zugriff (ADR-0006) ──
+// Derselbe mtime-gecachte Stand — widget-auth liest widgetKeys/limits daraus,
+// ohne einen zweiten Config-Cache auf dieselbe Datei zu legen.
+export function authConfigSnapshot() { return loadConfig() }
+export const AUTH_FILE_PATH = AUTH_FILE
+
 /** The model filter for a User: `userModels[username]` when present
  *  (replaces the deployment-wide `models` block), else `models`. Always
  *  normalized to { include: [prefix...], notInclude: [prefix...] }; empty

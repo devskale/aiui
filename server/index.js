@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { getBus } from './event-bus.js'
 import * as Mime from './mime.js'
 import { authEnabled, verifyCredentials, issueSession, revokeSession, userLimit, setSessionCookie, clearSessionCookie, clearStaleSessionCookies, readSessionCookies, currentSession, requireAuth, noteLoginAttempt } from './auth.js'
+import { widgetKeyEntry, originAllowed, noteMintAttempt, mintWidgetToken, getWidgetSecret, widgetQuotaAvailable } from './widget-auth.js'
 import { consumeQuota, peekQuota } from './quota.js'
 import { getOrCreateSession, disposeSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, listSessions, switchToSession, getAvailableModels, getCommands, getSessionInfo, getSessionStats, getSessionHistory, newSession, workspaceCwd, getForkTargets, forkSession } from './pi-session.js'
 import { listAgents } from './agents.js'
@@ -148,6 +149,36 @@ app.get('/api/me', (req, res) => {
   const s = currentSession(req)
   if (!s) return res.json({ authed: false, authRequired: true })
   res.json({ authed: true, authRequired: true, user: s.user, quota: peekQuota(s.user, userLimit(s.user)) })
+})
+
+// ── Widget embed (public — key-authentifiziert, KEINE Cookie-Session; ADR-0006 D1) ──
+// CORS: Embed-Hosts sind cross-origin. Preflight bekommt Wildcard (Auth
+// trägt das Token, nie Cookies); die eigentliche Domain-Erzwingung passiert
+// im POST selbst — gegen die Allowlist des Keys, fail closed.
+app.options('/api/widget/*splat', (_req, res) => {
+  res.set({
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Max-Age': '86400',
+  })
+  res.status(204).end()
+})
+app.post('/api/widget/session', (req, res) => {
+  const key = req.body?.key
+  const origin = req.headers.origin || req.headers.referer || ''
+  if (!noteMintAttempt(key)) return res.status(429).json({ error: 'too many session requests, slow down' })
+  const entry = widgetKeyEntry(key)
+  // Unbekannt und revoked antworten identisch (kein Existenz-Orakel).
+  if (!entry || entry.revoked) return res.status(403).json({ error: 'invalid key' })
+  if (!originAllowed(entry, origin)) return res.status(403).json({ error: 'origin not allowed' })
+  if (!widgetQuotaAvailable(entry.user)) return res.status(429).json({ error: 'quota exhausted' })
+  const { token, expiresAt } = mintWidgetToken({ user: entry.user, key }, getWidgetSecret())
+  // Strukturierte Mint-Log-Line (Key-attribuiert) — Datenbasis für spätere
+  // Analytics, ab Tag 1 (ADR-0006 D5).
+  console.log(JSON.stringify({ t: 'widget-mint', key, user: entry.user, origin: origin || null }))
+  res.set('Access-Control-Allow-Origin', '*')
+  res.json({ token, expiresAt, config: entry.config })
 })
 
 // Everything else under /api requires a session when auth is configured.
