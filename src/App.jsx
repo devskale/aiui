@@ -5,6 +5,7 @@ import { useHashRoute } from './hooks/useHashRoute'
 import { useModels } from './hooks/useModels'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { apiUrl } from './lib/api'
+import { visibleWindow, growWindow, captureScrollDistance, restoreScrollTop, isAtTail, PAGE_SIZE } from './lib/chat-window'
 import { Sidebar } from './components/Sidebar'
 import { ModelPicker } from './components/ModelPicker'
 import { AgentPicker } from './components/AgentPicker'
@@ -77,6 +78,11 @@ export default function App() {
   const { visible, imageModels, favModels } = useModels(authed, me?.user)
   const endRef = useRef(null)
   const inputRef = useRef(null)
+  // Lazy-Render-Fenster (ideas.md „Lazy render"): nur das Ende der Historie
+  // im DOM, älteres wird beim Hochscrollen on demand eingeblendet. Bei
+  // Session-Wechsel/Neu auf Ausgangsfenster zurücksetzen.
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const revealPendingRef = useRef(null) // { distance } für Scroll-Restore
 
   // ── Canvas (ADR-0005): Panel nur für Agents mit Canvas-Deklaration ──
   const canvasGlob = agents.find(a => a.id === sessionAgent)?.canvas || null
@@ -151,9 +157,43 @@ export default function App() {
     }
   }, [entries, current])
 
+  // Lazy-Render: Fenster berechnen. hasMoreRef hält den Scroll-Handler ohne
+  // Dependency-Zyklus auf dem neuesten Stand. Auto-Grow nur bei NEUEN Entries
+  // unter dem laufenden Chat (prevLen > 0) — ein Session-Load (0 → N) füllt
+  // das Fenster nicht auf, sonst wäre Lazy-Render beim Öffnen langer
+  // Sessions wirkungslos.
+  const win = visibleWindow(entries.length, visibleCount)
+  const hasMoreRef = useRef(false)
+  hasMoreRef.current = win.hasMore
+  const prevEntriesLenRef = useRef(0)
+  useEffect(() => {
+    const grew = prevEntriesLenRef.current > 0 && entries.length > prevEntriesLenRef.current
+    prevEntriesLenRef.current = entries.length
+    if (!grew || !stickToBottomRef.current) return
+    setVisibleCount(c => Math.max(c, entries.length))
+  }, [entries.length])
+  // Scroll-Position nach dem Einmontieren älterer Entries wiederherstellen.
+  useEffect(() => {
+    const p = revealPendingRef.current
+    if (!p) return
+    const el = scrollContainerRef.current
+    if (!el) return
+    revealPendingRef.current = null
+    el.scrollTop = restoreScrollTop(el.scrollHeight, p.distance)
+  }, [visibleCount])
+
   const handleScroll = useCallback(() => {
     const el = scrollContainerRef.current
     if (!el) return
+    // Lazy-Render: oben an den Fensterrand gescrollt → ältere Entries
+    // einmontieren. Distanz-vom-Ende merken, damit der Viewport nicht springt.
+    if (revealPendingRef.current === null) {
+      const nearTop = el.scrollTop <= 24
+      if (nearTop && hasMoreRef.current) {
+        revealPendingRef.current = { distance: captureScrollDistance(el.scrollHeight, el.scrollTop) }
+        setVisibleCount(c => growWindow(c))
+      }
+    }
     const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
     stickToBottomRef.current = distFromBottom < 80  // resume only when near bottom
   }, [])
@@ -202,11 +242,13 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path }),
     })
+    setVisibleCount(PAGE_SIZE) // Lazy-Render: Fenster zurücksetzen
     setSessionRefresh(n => n + 1)
   }
 
   const handleNewChat = async () => {
     await startNewChat()
+    setVisibleCount(PAGE_SIZE) // Lazy-Render: Fenster zurücksetzen
     setSessionRefresh(n => n + 1)
   }
 
@@ -382,12 +424,21 @@ export default function App() {
         <div className="content" ref={scrollContainerRef} onScroll={handleScroll}>
           {hasContent ? (
             <div className="entries">
-              {entries.map((entry, i) => {
+              {win.hasMore && (
+                <button className="reveal-older" onClick={() => {
+                  const el = scrollContainerRef.current
+                  revealPendingRef.current = { distance: el ? captureScrollDistance(el.scrollHeight, el.scrollTop) : 0 }
+                  setVisibleCount(c => growWindow(c))
+                }}>
+                  ⟨ {Math.min(win.startIndex, PAGE_SIZE)} ältere anzeigen{win.startIndex > PAGE_SIZE ? '' : ' (alles)'} ⟩
+                </button>
+              )}
+              {entries.slice(win.startIndex).map((entry, i) => {
                 if (entry.role === 'user') return <UserEntry key={i} text={entry.text} images={entry.images} onCopy={copyEntry} />
                 if (entry.role === 'error') return <ErrorEntry key={i} text={entry.text} onCopy={copyEntry} />
                 // Follow-ups are clickable only on the settled chat tail —
                 // a new turn (current/streaming) unmounts them naturally.
-                const interactive = i === entries.length - 1 && !current && !streaming
+                const interactive = i === entries.length - win.startIndex - 1 && !current && !streaming
                 return <AssistantEntry key={i} entry={entry} isStreaming={false} onCopy={copyEntry} interactive={interactive} onAsk={handleSend} />
               })}
               {current && <AssistantEntry entry={current} isStreaming={true} onCopy={copyEntry} />}

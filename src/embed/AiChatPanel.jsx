@@ -16,6 +16,7 @@ import { UserEntry, AssistantEntry, ErrorEntry } from '../components/StreamEntry
 import { useWidgetChat } from './useWidgetChat.js'
 import { resolveVariant } from './variant.js'
 import { createFocusTrap } from './focus-trap.js'
+import { visibleWindow, captureScrollDistance, restoreScrollTop } from '../lib/chat-window.js'
 
 export function AiChatPanel({ transport, launcherLabel = 'Chat', controller, onTheme, variantAttr }) {
   // Das Element kann sein variant-Attribut zur Laufzeit wechseln (Demo/
@@ -44,6 +45,11 @@ export function AiChatPanel({ transport, launcherLabel = 'Chat', controller, onT
   const scrollRef = useRef(null)
   const dialogRef = useRef(null)
   const releaseTrapRef = useRef(null)
+  // Lazy-Render wie die Haupt-App, aber kleinere Page: das Panel ist schmal,
+  // 20 Entries füllen den Viewport bereits (ideas.md „Lazy render").
+  const WIDGET_PAGE = 20
+  const [visibleCount, setVisibleCount] = useState(WIDGET_PAGE)
+  const revealPendingRef = useRef(null)
 
   const variant = resolveVariant(attrVariant, chat.config?.variant)
   const dismissOnBackdrop = chat.config?.dismissOnBackdrop !== false
@@ -88,6 +94,17 @@ export function AiChatPanel({ transport, launcherLabel = 'Chat', controller, onT
     if (el) el.scrollTop = el.scrollHeight
   }, [chat.entries, chat.current, open])
 
+  // Lazy-Render: Fenster aufs Ende, „ältere anzeigen" blendet nach.
+  const win = visibleWindow(chat.entries.length, visibleCount)
+  useEffect(() => {
+    const p = revealPendingRef.current
+    if (!p) return
+    const el = scrollRef.current
+    if (!el) return
+    revealPendingRef.current = null
+    el.scrollTop = restoreScrollTop(el.scrollHeight, p.distance)
+  }, [visibleCount])
+
   const submit = () => {
     const t = text.trim()
     if (!t) return
@@ -110,7 +127,16 @@ export function AiChatPanel({ transport, launcherLabel = 'Chat', controller, onT
       <div className="aiw-body" ref={scrollRef}>
         {chat.greeting && <div className="aiw-greeting">{chat.greeting}</div>}
         {chat.notice && <div className="aiw-notice">{chat.notice}</div>}
-        {chat.entries.map((e, i) =>
+        {win.hasMore && (
+          <button className="aiw-reveal" onClick={() => {
+            const el = scrollRef.current
+            revealPendingRef.current = { distance: el ? captureScrollDistance(el.scrollHeight, el.scrollTop) : 0 }
+            setVisibleCount(c => c + WIDGET_PAGE)
+          }}>
+            ⟨ ältere anzeigen ⟩
+          </button>
+        )}
+        {chat.entries.slice(win.startIndex).map((e, i) =>
           e.role === 'user' ? <UserEntry key={i} text={e.text} images={e.images} />
           : e.role === 'error' ? <ErrorEntry key={i} text={e.text} />
           : <AssistantEntry key={i} entry={e} isStreaming={false} />

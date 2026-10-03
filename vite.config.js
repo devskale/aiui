@@ -7,6 +7,12 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(process.env.npm_package_version || '0.0.0'),
   },
   base: process.env.VITE_BASE || '/',
+  build: {
+    // dist/ wird MIT dem embed.js des lib-mode-Builds geteilt — der App-Build
+    // darf das Verzeichnis nicht leeren, sonst verschwindet embed.js je nach
+    // Build-Reihenfolge (build:embed hat emptyOutDir:false, build nicht).
+    emptyOutDir: false,
+  },
   server: {
     host: true,
     port: 5173,
