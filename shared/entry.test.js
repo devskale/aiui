@@ -176,3 +176,22 @@ test('parity: a folded live turn and a replayed message produce the same value',
   assert.equal(withResult.toolCalls[0].status, 'done')
   assert.equal(withResult.toolCalls[0].output, '/tmp')
 })
+
+// ── Provider-Fehler-Turns sichtbar (stopReason 'error') ──
+
+test('fromMessage: assistant mit errorMessage und leerem Content → Error-Row (nicht null)', () => {
+  // So sah der gpt-6.1-sol-Fehler aus dem visuellen Check aus: Content leer,
+  // errorMessage gesetzt. Vorher: fromMessage → null → Turn im Replay
+  // unsichtbar (keine Antwort, kein Grund).
+  const msg = { role: 'assistant', content: [], stopReason: 'error', errorMessage: 'Codex error: model not supported' }
+  const e = fromMessage(msg)
+  assert.equal(e.role, 'error')
+  assert.equal(e.text, 'Codex error: model not supported')
+})
+
+test('fromMessage: assistant MIT Text gewinnt, errorMessage wird ignoriert', () => {
+  const msg = { role: 'assistant', content: [{ type: 'text', text: 'Teilantwort…' }], stopReason: 'error', errorMessage: 'x' }
+  const e = fromMessage(msg)
+  assert.equal(e.role, 'assistant')
+  assert.equal(e.text, 'Teilantwort…')
+})

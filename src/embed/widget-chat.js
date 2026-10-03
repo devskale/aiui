@@ -56,7 +56,22 @@ export function widgetReducer(state = initialState, action = {}) {
       const folded = Entry.fold(state.current, action)
       return { ...state, current: { ...folded, ...phase } }
     }
+    case 'message_end': {
+      // Provider-Fehler live sichtbar machen (SDK: Content leer,
+      // errorMessage am Message-Objekt — s. shared/entry.js fromMessage).
+      // Stash am current; agent_settled committed es als Error-Row, sonst
+      // bliebe der Turn unsichtbar: User sieht seine Nachricht, aber weder
+      // Antwort noch Grund.
+      const em = action.message?.errorMessage
+      if (em && state.current && !state.current.text && !state.current.toolCalls.length) {
+        return { ...state, current: { ...state.current, errorMessage: em } }
+      }
+      return state
+    }
     case 'agent_settled': {
+      if (state.current?.errorMessage && !state.current.text && !state.current.toolCalls.length) {
+        return { ...state, entries: [...state.entries, Entry.error(state.current.errorMessage)], current: null, streaming: false }
+      }
       const entries = state.current && (state.current.text.trim() || state.current.toolCalls.length)
         ? [...state.entries, state.current]
         : state.entries

@@ -10,7 +10,7 @@ import * as Mime from './mime.js'
 import { authEnabled, verifyCredentials, issueSession, revokeSession, userLimit, setSessionCookie, clearSessionCookie, clearStaleSessionCookies, readSessionCookies, currentSession, requireAuth, noteLoginAttempt } from './auth.js'
 import { widgetKeyEntry, originAllowed, noteMintAttempt, mintWidgetToken, getWidgetSecret, widgetQuotaAvailable, verifyWidgetToken, frameAncestorsFor } from './widget-auth.js'
 import { consumeQuota, peekQuota } from './quota.js'
-import { getOrCreateSession, disposeSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, listSessions, switchToSession, getAvailableModels, getCommands, getSessionInfo, getSessionStats, getSessionHistory, newSession, workspaceCwd, getForkTargets, forkSession, scopedUser, widgetVisitorStatus, prepareWidgetContext, composeWidgetPrompt, VISITOR_RE } from './pi-session.js'
+import { getOrCreateSession, disposeSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, listSessions, switchToSession, resumeWidgetVisitor, getAvailableModels, getCommands, getSessionInfo, getSessionStats, getSessionHistory, newSession, workspaceCwd, getForkTargets, forkSession, scopedUser, widgetVisitorStatus, prepareWidgetContext, composeWidgetPrompt, VISITOR_RE } from './pi-session.js'
 import { listAgents } from './agents.js'
 import { sttConfigured, sttReachable, sttModel, transcribe } from './stt.js'
 import { resolveBashOutputPath, readBashOutput } from './bash-output.js'
@@ -209,7 +209,7 @@ function widgetAuth(req, res, next) {
 // visitor = client-generierte stabile ID (localStorage des Host-Ursprungs,
 // charset-beschränkt) → eigene Runtime-Instanz, eigener Bus-Key, eigener
 // Workspace-Subdir. Geteilt: agentDir + Quota-Budget des Widget-Users.
-app.get('/api/widget/stream', widgetAuth, (req, res) => {
+app.get('/api/widget/stream', widgetAuth, async (req, res) => {
   const visitor = String(req.query.visitor || '')
   if (!VISITOR_RE.test(visitor)) return res.status(400).json({ error: 'invalid visitor id' })
   const scope = scopedUser(req.widget.user, visitor)
@@ -222,6 +222,10 @@ app.get('/api/widget/stream', widgetAuth, (req, res) => {
   // Key-Config (Agent + readonly) VOR der ersten ctx-Berührung setzen —
   // customTools/Agent binden bei der ctx/Runtime-Erzeugung.
   prepareWidgetContext(scope, { agent: req.widget.entry.agent, readonly: req.widget.entry.readonly })
+  // Persistenz (ADR-0006 Phase 2): nach einem Server-Restart die neueste
+  // Visitor-Session resumen, bevor Status/History gereplayt werden — sonst
+  // startet jedes Restart eine neue, leere Konversation.
+  try { await resumeWidgetVisitor(scope) } catch {}
   const bus = getBus(scope)
   bus.attach(res)
   // Replay wie beim normalen /api/events: Status + (falls vorhanden) History.
@@ -250,6 +254,9 @@ app.post('/api/widget/prompt', widgetAuth, async (req, res) => {
   prepareWidgetContext(scope, { agent: req.widget.entry.agent, readonly: req.widget.entry.readonly })
   res.json({ ok: true })
   try {
+    // Persistenz: bestehende Visitor-Konversation fortsetzen, kein neues
+    // Session-File pro Restart (sonst fragmentiert die Historie).
+    try { await resumeWidgetVisitor(scope) } catch {}
     await prompt(scope, composeWidgetPrompt(text, pageContext))
     const bus = getBus(scope)
     bus.push('session_status', getSessionInfo(scope))

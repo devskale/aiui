@@ -648,6 +648,27 @@ export function setAutoCompaction(user, enabled) {
 
 // ── Session list + switching ──
 
+// ── Visitor-Session-Resume (ADR-0006 Phase 2: Persistenz) ──
+// createAgentSessionRuntime startet eine NEUE Session — Resume ist explizit
+// (switchSession). Ohne diesen Resume würde nach einem Server-Restart die
+// Besucher-Historie nicht mehr gereplayt und ein neuer Turn eine ZWEITE
+// Session-Datei öffnen statt die Konversation fortzusetzen. Aufgerufen von
+// den Widget-Routen VOR Replay/Prompt; nach einmaligem Resume no-op.
+export async function resumeWidgetVisitor(user) {
+  const ctx = ctxFor(user)
+  if (ctx.runtime?.session?.messages?.length) return ctx.runtime.session
+  const s = await getOrCreateSession(user) // kann werfen (z.B. Garbage-BYOK)
+  if (s.messages?.length) return s
+  const list = await listSessions(user)
+  const latest = list?.[0]
+  if (!latest?.path) return s
+  try {
+    return await switchToSession(user, latest.path)
+  } catch {
+    return s // korrupte/neueste Datei: mit der frischen Session weiter
+  }
+}
+
 export async function listSessions(user) {
   const ctx = ctxFor(user)
   await initShared()

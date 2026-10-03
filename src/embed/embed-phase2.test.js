@@ -89,3 +89,28 @@ test('stripPageContext: Reducer zeigt User-Einträge ohne Kontextblock', () => {
   s = widgetReducer(initialState, { type: 'session_history', entries: [{ role: 'user', text: withCtx, toolCalls: [] }] })
   assert.equal(s.entries[0].text, 'Hallo')
 })
+
+// ── Provider-Fehler live sichtbar (message_end.errorMessage) ──
+
+test('widget: fehlgeschlagener Turn wird als Error-Row committed', () => {
+  // SDK-Fehlerlage: keine text_delta, nur message_end mit errorMessage
+  let s = widgetReducer(initialState, { type: 'user_prompt', text: 'hi', attachments: [] })
+  s = widgetReducer(s, { type: 'message_start' })
+  s = widgetReducer(s, { type: 'message_end', message: { role: 'assistant', content: [], stopReason: 'error', errorMessage: 'Codex error: not supported' } })
+  s = widgetReducer(s, { type: 'agent_settled' })
+  assert.equal(s.streaming, false)
+  const last = s.entries[s.entries.length - 1]
+  assert.equal(last.role, 'error')
+  assert.equal(last.text, 'Codex error: not supported')
+})
+
+test('widget: erfolgreicher Turn bleibt unverändert (keine Error-Row)', () => {
+  let s = widgetReducer(initialState, { type: 'user_prompt', text: 'hi', attachments: [] })
+  s = widgetReducer(s, { type: 'message_start' })
+  s = widgetReducer(s, { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'Antwort' } })
+  s = widgetReducer(s, { type: 'message_end', message: { role: 'assistant', content: [] } })
+  s = widgetReducer(s, { type: 'agent_settled' })
+  const last = s.entries[s.entries.length - 1]
+  assert.equal(last.role, 'assistant')
+  assert.equal(last.text, 'Antwort')
+})

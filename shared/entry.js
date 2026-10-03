@@ -82,7 +82,13 @@ export function fromMessage(msg) {
       thinkingText: extractThinking(msg.content),
       toolCalls,
     }
-    return (entry.text || entry.toolCalls.length) ? entry : null
+    if (entry.text || entry.toolCalls.length) return entry
+    // Provider-Fehler (stopReason 'error'): Content leer, errorMessage am
+    // Message-Objekt. Ohne diesen Zweig wäre der Turn im Replay UNSICHTBAR
+    // (fromMessage → null) — der User sähe seine Nachricht, aber nie eine
+    // Antwort und keinen Grund.
+    if (msg.errorMessage) return error(msg.errorMessage)
+    return null
   }
   return null
 }

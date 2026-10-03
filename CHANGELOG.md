@@ -10,6 +10,25 @@ The latest version is shown in the UI under `#/releases`.
 
 ### Added
 
+- **Fehler-Turns sichtbar (Widget + Haupt-App)** — Provider-Fehler
+  (z.B. „Modell mit ChatGPT-Account nicht unterstützt") waren UNSICHTBAR:
+  Content leer, errorMessage am Message-Objekt — fromMessage lieferte null,
+  der User sah seine Nachricht, aber nie eine Antwort und keinen Grund.
+  Jetzt: Error-Row im Replay (shared/entry.js) UND live (message_end-Stash →
+  Commit als Error-Row in beiden Reducern).
+
+- **Visitor-Session-Resume nach Server-Restart (ADR-0006 Phase 2, jetzt echt)**
+  — createAgentSessionRuntime startet eine NEUE Session; der frühere
+  „Restart-Persistenz"-Smoke war Scheinbeweis (pkill -f traf die Env-Var-
+  Cmdline nicht — der alte Server lief weiter). Neuer Resume
+  (resumeWidgetVisitor, neueste Session vor Replay/Prompt) + ECHTER
+  Restart-Test mit kill -9: Historie vollständig zurück, EIN Session-File
+  (keine Fragmentierung pro Restart).
+
+- **Pure Reducer-Module** — agent-events-reducer.js aus dem Hook extrahiert
+  (node-testbar, kein import.meta.env im Test-Graf); 202 Tests (Start der
+  Session: 135).
+
 - **Embed-Widget (ADR-0006, Phase 1+2)** — aiui als Chat-Widget für fremde
   Seiten: eine Zeile `<script src="…/embed.js" data-key="wk_…">` oder
   `<ai-chat key variant>` (corner/modal/inline), Besucher chatten ohne
