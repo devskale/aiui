@@ -14,6 +14,9 @@ REMOTE_DIR="${DEPLOY_DIR:-/home/woodmastr/code/webuis/aiui}"
 
 echo "🔨 Building..."
 VITE_BASE=/aiui/ pnpm build
+# Embed-Widget-Bundle explizit (liegt sonst nur zufällig in dist/, wenn lokal
+# zuletzt gebaut wurde — der Deploy soll deterministisch sein).
+pnpm build:embed
 
 echo "📦 Syncing to $HOST:$REMOTE_DIR ..."
 rsync -avz --delete \
