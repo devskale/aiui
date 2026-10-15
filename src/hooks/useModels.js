@@ -73,7 +73,7 @@ function getSnapshot() {
 }
 
 /**
- * @returns {{ all: string[], visible: string[], imageModels: string[], loading: boolean, refresh: () => void }}
+ * @returns {{ all: string[], visible: string[], imageModels: string[], loading: boolean, refresh: () => void, reload: () => void }}
  * Fetch runs once per user (deduped); switching users seeds from that user's
  * localStorage cache (instant) then refreshes in the background. Gated on
  * `enabled` (= authed) so the login screen doesn't fire /api/models pre-auth.
@@ -105,5 +105,9 @@ export function useModels(enabled = true, user) {
     }
   }, [enabled, user])
   const refresh = useCallback(() => recompute(), [])
-  return { ...snapshot, refresh }
+  // Harte Refetch (pi-web #938): refresh() rechnet nur die Views neu
+  // (Allow-List-Wechsel, kein Netz), reload() holt den Katalog erneut vom
+  // Server (neue Modelle nach models.json-Änderung, ohne Page-Reload).
+  const reload = useCallback(() => { inFlight = null; if (loadedUser !== undefined) load(loadedUser) }, [])
+  return { ...snapshot, refresh, reload }
 }

@@ -10,6 +10,18 @@ The latest version is shown in the UI under `#/releases`.
 
 ### Added
 
+- **Model-Panel: Refresh + Minimal-Edit-Switches (Issue models-panel,
+  pi-web #938/#930)** — `useModels` bekommt `reload()` (harte Netz-
+  Refetch: neue Modelle nach models.json-Änderung erscheinen ohne Page-
+  Reload; `refresh()` bleibt die reine View-Neuberechnung für Allow-List-
+  Wechsel). Refresh-Buttons im ModelPicker (Spinner im Ladezustand) und im
+  Settings-Allowed-Models-Kopf. Minimal-edit: versteckte Treffer erscheinen
+  bei aktiver Suche DIREKT im Picker — dimmed, „+" schaltet frei (kein
+  Settings-Umweg; auf 10 kappbar, nur mit Suchbegriff).
+  **Bugfix daneben:** `isModelAllowed` behandelte `[]` als „alle erlaubt" —
+  der Settings-Button „None" war ein No-Op (zeigte alles). Jetzt: null =
+  alle, [] = nichts (Test auf neue Semantik gepinnt).
+
 - **File-Preview-Pane (Issue file-preview-pane)** — dsh
   ui-sidebar-documentpreview-Muster, aiui-Schnitt: der FileExplorer zeigt
   markdown (.md) und html (.html/.htm/.svg) jetzt als Preview/Source-

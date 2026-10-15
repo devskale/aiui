@@ -54,9 +54,13 @@ export function toggleFav(modelId, favs) {
   return list.includes(modelId) ? list.filter(m => m !== modelId) : [...list, modelId]
 }
 
-/** Returns true if a given "provider@id" model should be visible. */
+/** Returns true if a given "provider@id" model should be visible.
+ *  null/undefined = all allowed (never configured). Eine LEERE Liste heißt
+ *  jetzt „nichts erlaubt" (Settings → None) — vorher war [] ein unbeabsichtigtes
+ *  All-Pass-Loch (gefunden beim file-preview…-nein: models-panel-Verifikation
+ *  2026-10-15): None setzte [] und zeigte dadurch ALLES. */
 export function isModelAllowed(modelId, allowed) {
-  if (!allowed || allowed.length === 0) return true // null/empty = all
+  if (allowed === null || allowed === undefined) return true
   return allowed.includes(modelId)
 }
 

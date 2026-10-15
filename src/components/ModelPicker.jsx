@@ -5,10 +5,12 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { apiUrl } from '../lib/api'
 import { useModal } from '../hooks/useModal'
 import { useModels } from '../hooks/useModels'
-import { MODEL_RENDER_CAP, withFavsFirst } from '../lib/models'
+import { MODEL_RENDER_CAP, withFavsFirst, isModelAllowed, setAllowedModels, getAllowedModels } from '../lib/models'
+import { RefreshCw, Plus } from 'lucide-react'
 
 export function ModelPicker({ activeModel, onSelect, onClose, onOpenSettings }) {
-  const { visible: models, all, loading, favModels } = useModels()
+  const { visible: models, all, loading, favModels, refresh, reload } = useModels()
+  const [allowed, setAllowedState] = useState(() => getAllowedModels())
   const [search, setSearch] = useState('')
   const [error, setError] = useState(null)
   const inputRef = useRef(null)
@@ -25,6 +27,16 @@ export function ModelPicker({ activeModel, onSelect, onClose, onOpenSettings }) 
   // Settings allow-list? If so, the empty state points there instead of
   // claiming "no such model".
   const hiddenByAllowlist = q && filtered.length === 0 && all.some(m => m.toLowerCase().includes(q))
+
+  // Minimal-edit enable (pi-web #930): versteckte Treffer bei aktiver Suche
+  // direkt im Picker anbieten — dimmed, + schaltet frei. Kein Settings-Umweg.
+  const hiddenMatches = q
+    ? all.filter(m => !isModelAllowed(m, allowed) && m.toLowerCase().includes(q)).slice(0, 10)
+    : []
+  const enableModel = (m) => {
+    const next = allowed ? [...allowed, m] : [m]
+    setAllowedModels(next); setAllowedState(next); refresh()
+  }
 
   const handleSelect = (model) => {
     fetch(apiUrl('/api/model'), {
@@ -47,13 +59,18 @@ export function ModelPicker({ activeModel, onSelect, onClose, onOpenSettings }) 
     <div className="model-picker-overlay" onClick={onClose}>
       <div className="model-picker" ref={panelRef} role="dialog" aria-modal="true" aria-label="Choose model" onClick={e => e.stopPropagation()}>
         <div className="mp-search">
-          <input
-            ref={inputRef}
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            aria-label="Search models"
-          placeholder="Search models…"
-          />
+          <div className="mp-search-row">
+            <input
+              ref={inputRef}
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              aria-label="Search models"
+              placeholder="Search models…"
+            />
+            <button className="mp-refresh" onClick={reload} disabled={loading} title="Refresh model catalog" aria-label="Refresh model catalog">
+              <RefreshCw size={13} className={loading ? 'spin' : ''} />
+            </button>
+          </div>
         </div>
         <div className="mp-list">
           {error && <div className="mp-error">{error}</div>}
@@ -81,6 +98,17 @@ export function ModelPicker({ activeModel, onSelect, onClose, onOpenSettings }) 
           ))}
           {!loading && filtered.length > capped.length && (
             <div className="mp-hint">Showing {capped.length} of {filtered.length} — type to narrow.</div>
+          )}
+          {hiddenMatches.length > 0 && (
+            <>
+              <div className="mp-hidden-head">Hidden by your allow-list — + enables</div>
+              {hiddenMatches.map(m => (
+                <div key={m} className="mp-model mp-model--hidden" title={`${m} (hidden) — enable to pick it`}>
+                  <span className="mp-hidden-name">{m}</span>
+                  <button className="mp-enable" onClick={() => enableModel(m)} title={`Enable ${m}`} aria-label={`Enable ${m}`}><Plus size={12} /></button>
+                </div>
+              ))}
+            </>
           )}
         </div>
       </div>

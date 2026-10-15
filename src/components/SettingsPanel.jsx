@@ -23,7 +23,7 @@ import {
 export function SettingsPanel({ onClose, workDetails = 'standard', onWorkDetailsChange }) {
   const panelRef = useRef(null)
   useModal(panelRef, { onClose })
-  const { all: allFlat, loading, refresh, favModels } = useModels()
+  const { all: allFlat, loading, refresh, reload, favModels } = useModels()
   const [allowed, setAllowed] = useState(null)      // null = all allowed
   const [search, setSearch] = useState('')
   const [favSearch, setFavSearch] = useState('')
@@ -145,6 +145,7 @@ export function SettingsPanel({ onClose, workDetails = 'standard', onWorkDetails
             <div className="sp-section-head">
               <h3>Allowed Models</h3>
               <span className="sp-hint">{allowedCount} of {allFlat.length} shown in picker</span>
+              <button className="mp-refresh sp-refresh" onClick={reload} disabled={loading} title="Refresh model catalog" aria-label="Refresh model catalog">↻</button>
             </div>
             <p className="sp-help">
               Controls which models appear in the picker. Image support is

@@ -64,10 +64,11 @@ test('selectModels: all flattens providers, visible filters by allow-list, image
   assert.deepEqual(r.imageModels, ['amd@a', 'openai@gpt'])
 })
 
-test('selectModels: null/empty allow-list → visible = all', () => {
+test('selectModels: null allow-list → visible = all; [] → nichts (Settings-None)', () => {
   const data = { providers: { amd: ['a', 'b'] }, imageModels: [] }
   assert.deepEqual(selectModels(data, null).visible, ['amd@a', 'amd@b'])
-  assert.deepEqual(selectModels(data, []).visible, ['amd@a', 'amd@b'])
+  // [] ist explizit „nichts erlaubt" — vorher ein All-Pass-Loch (None zeigte alles)
+  assert.deepEqual(selectModels(data, []).visible, [])
 })
 
 test('selectModels: tolerates missing / malformed input', () => {
