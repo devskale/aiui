@@ -3,7 +3,7 @@
 // ════════════════════════════════════════════════════════════════════
 import { useState, useEffect, useMemo } from 'react'
 import { apiUrl } from '../lib/api'
-import { Settings, SquarePen, GitFork, Folder, ChevronDown, ChevronRight, CornerDownRight, Search, PanelLeftClose } from 'lucide-react'
+import { Settings, SquarePen, GitFork, Folder, ChevronDown, ChevronRight, CornerDownRight, Search, PanelLeftClose, Keyboard } from 'lucide-react'
 
 function timeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime()
@@ -37,7 +37,7 @@ function buildSessionTree(sessions) {
   return roots.map(attach)
 }
 
-export function Sidebar({ open, onToggle, connected, sessionAlive, sessionId, onNewChat, onSwitchSession, onShowReleaseNotes, onShowSettings, onShowFork, onShowFiles, onShowSkills, refreshTrigger }) {
+export function Sidebar({ open, onToggle, connected, sessionAlive, sessionId, onNewChat, onSwitchSession, onShowReleaseNotes, onShowSettings, onShowShortcuts, onShowFork, onShowFiles, onShowSkills, refreshTrigger }) {
   const [commands, setCommands] = useState(null)
   const [sessions, setSessions] = useState([])
   const [search, setSearch] = useState('')
@@ -142,6 +142,11 @@ export function Sidebar({ open, onToggle, connected, sessionAlive, sessionId, on
       </div>
 
       <div className="sb-footer">
+        {onShowShortcuts && (
+          <button className="sb-settings-btn" onClick={onShowShortcuts} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">
+            <Keyboard size={15} />
+          </button>
+        )}
         {onShowSettings && (
           <button className="sb-settings-btn" onClick={onShowSettings} title="Settings" aria-label="Settings">
             <Settings size={16} />

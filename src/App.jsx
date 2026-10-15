@@ -26,6 +26,7 @@ import { ReleaseNotes } from './components/ReleaseNotes'
 import { SettingsPanel } from './components/SettingsPanel'
 import { LoginModal } from './components/LoginModal'
 import { ToastProvider } from './components/Toasts'
+import { ShortcutHelp } from './components/ShortcutHelp'
 import { UserEntry, AssistantEntry, ErrorEntry } from './components/StreamEntry'
 import { ResearchCanvas } from './components/Canvas/ResearchCanvas.jsx'
 import { useCanvas } from './hooks/useCanvas'
@@ -80,6 +81,7 @@ export default function App() {
   const [showModelPicker, setShowModelPicker] = useState(false)
   const [showAgentPicker, setShowAgentPicker] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showShortcuts, setShowShortcuts] = useState(false)
   const [sessionRefresh, setSessionRefresh] = useState(0)
   const [showFork, setShowFork] = useState(false)
   const [showFiles, setShowFiles] = useState(false)
@@ -460,6 +462,24 @@ export default function App() {
     if (q) setTimeout(() => setDraft({ text: q, nonce: Date.now() }), 50)
   }, [authed, agents, sessionAgent, startNewChat])
 
+  // Shortcut-Hilfe öffnen: Ctrl/Cmd + "/" überall (der Composer
+  // autofokusiert — ein nacktes "?" wäre fast nie erreichbar und müsste
+  // beim Tippen von Fragen ja auch das Zeichen durchlassen), plus "?"
+  // wenn der Fokus gerade NICHT in einem Eingabefeld sitzt.
+  useEffect(() => {
+    const onKey = (e) => {
+      const tag = document.activeElement?.tagName
+      const inField = tag === 'TEXTAREA' || tag === 'INPUT' || document.activeElement?.isContentEditable
+      const mod = e.metaKey || e.ctrlKey
+      const hit = (mod && e.key === '/') || (e.key === '?' && !inField)
+      if (!hit) return
+      if (document.querySelector('[role="dialog"]')) return
+      e.preventDefault()
+      setShowShortcuts(v => !v)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
   // Keyboard shortcuts — must sit BELOW the handler definitions: the object
   // literal reads handleNewChat's binding at call time, and a const read
   // before its declaration is a TDZ crash (the minifier only sometimes
@@ -518,6 +538,7 @@ export default function App() {
         onSwitchSession={handleSwitchSession}
         onShowReleaseNotes={() => navigate('releases')}
         onShowSettings={() => setShowSettings(true)}
+        onShowShortcuts={() => setShowShortcuts(true)}
         onShowFork={() => setShowFork(true)}
         onShowFiles={() => setShowFiles(true)}
         onShowSkills={() => setShowSkills(true)}
@@ -690,6 +711,9 @@ export default function App() {
       )}
       {route === 'releases' && (
         <ReleaseNotes onClose={() => navigate('')} />
+      )}
+      {showShortcuts && (
+        <ShortcutHelp onClose={() => setShowShortcuts(false)} />
       )}
       {showSettings && (
         <SettingsPanel onClose={() => setShowSettings(false)} workDetails={workDetails} onWorkDetailsChange={changeWorkDetails} />

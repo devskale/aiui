@@ -10,6 +10,14 @@ The latest version is shown in the UI under `#/releases`.
 
 ### Added
 
+- **Shortcut-Hilfe (Ledger-Item 8)** — `Ctrl/Cmd + /` (überall, auch bei
+  fokussiertem Composer) oder `?` (wenn der Fokus nicht in einem Eingabe-
+  feld sitzt) öffnet die Tastatur-Übersicht: Global/Composer/Chat-Dialog-
+  Sektionen mit Keycap-Chips (dsh ShortcutKeys-Optik), Standard-Modal-Pfad
+  (useModal: Trap, Esc, Fokus-Rückkehr). Zusätzlich Keyboard-Button in der
+  Sidebar-Fußleiste. Bewusst kein nacktes `?` im Composer — dort muss das
+  Fragezeichen beim Stellen von Fragen einfach tippen.
+
 - **Work-Details-Modi (Issue work-details-folding)** — dsh § „Turn Process
   Folding", auf aiui übersetzt: Settings → Work Details schaltet die
   Prozess-Sichtbarkeit ABGESCHLOSSENER Turns — `standard` (Status quo:
