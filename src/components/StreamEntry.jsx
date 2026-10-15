@@ -266,7 +266,7 @@ function extractCodeText(node) {
   return ''
 }
 
-const mdComponents = {
+export const mdComponents = {
   img: ({ src, alt, ...props }) => {
     const full = (src && !src.startsWith('http') && !src.startsWith('data:'))
       ? `${BASE_URL}${src.startsWith('/') ? '' : '/'}${src}`

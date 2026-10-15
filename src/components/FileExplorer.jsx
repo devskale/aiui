@@ -9,6 +9,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { apiUrl } from '../lib/api'
 import { useModal } from '../hooks/useModal'
+import { previewKind, isToggleable } from '../lib/preview-kind'
+import { mdComponents } from './StreamEntry.jsx'
+import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { UploadCloud, Folder, File as FileIcon } from 'lucide-react'
 
 export function FileExplorer({ onClose }) {
@@ -22,6 +26,7 @@ export function FileExplorer({ onClose }) {
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef(null)
+  const [mode, setMode] = useState('preview') // preview | source (Issue file-preview-pane)
 
   const loadDir = useCallback(async (d) => {
     setFile(null); setContent(null); setError(null)
@@ -64,8 +69,18 @@ export function FileExplorer({ onClose }) {
     const p = dir ? `${dir}/${entry.name}` : entry.name
     setFile({ path: p, name: entry.name, isImage: !!entry.isImage, contentType: entry.contentType || null })
     setContent(null); setError(null)
-    if (entry.isImage || entry.contentType === 'application/pdf') return // render straight from /api/file/raw
+    const kind = previewKind({ name: entry.name, contentType: entry.contentType, isImage: entry.isImage })
+    setMode(kind === 'text' ? 'source' : 'preview') // Text hat nur Quelle
+    if (kind === 'image' || kind === 'pdf') return // render straight from /api/file/raw
+    if (kind === 'html') return // iframe-Preview von /api/file/raw — Quelle lädt on demand
     loadText(p)
+  }
+
+  // Quelle nachladen, wenn erstmals auf Source geschaltet wird (html lädt
+  // seinen Text erst dann — die Preview selbst streamt vom raw-Endpoint).
+  const showSource = () => {
+    setMode('source')
+    if (content === null && file) loadText(file.path)
   }
 
   const loadText = async (p) => {
@@ -103,6 +118,12 @@ export function FileExplorer({ onClose }) {
             <div className="fe-viewer">
               <div className="fe-viewer-bar">
                 <button className="fe-back" onClick={() => loadDir(dir)}>← back</button>
+                {isToggleable(previewKind(file)) && (
+                  <span className="fe-toggle" role="group" aria-label="View mode">
+                    <button className={`fe-toggle-btn ${mode === 'preview' ? 'on' : ''}`} onClick={() => setMode('preview')}>Preview</button>
+                    <button className={`fe-toggle-btn ${mode === 'source' ? 'on' : ''}`} onClick={showSource}>Source</button>
+                  </span>
+                )}
                 <span className="fe-viewer-path">{file.path}</span>
                 <a className="fe-back" href={apiUrl(`/api/file/raw?path=${encodeURIComponent(file.path)}`)} download={file.name} title="Download file">⬇ open</a>
               </div>
@@ -111,14 +132,21 @@ export function FileExplorer({ onClose }) {
                 <img className="fe-img" src={apiUrl(`/api/file/raw?path=${encodeURIComponent(file.path)}`)} alt={file.name} onError={() => setError('image could not be loaded')} />
               ) : !error && file.contentType === 'application/pdf' ? (
                 <iframe className="fe-pdf" src={apiUrl(`/api/file/raw?path=${encodeURIComponent(file.path)}`)} title={file.name} onError={() => setError('pdf could not be loaded')} />
+              ) : !error && previewKind(file) === 'html' && mode === 'preview' ? (
+                /* vor dem Loading-Zweig: die iframe-Preview streamt vom raw-Endpoint und braucht keinen Text-Load */
+                <iframe className="fe-html" src={apiUrl(`/api/file/raw?path=${encodeURIComponent(file.path)}`)} title={file.name} sandbox="allow-scripts" />
               ) : !error && content === null ? (
                 <div className="fe-empty">Loading…</div>
               ) : !error && content.tooLarge ? (
                 <div className="fe-empty">File is {Math.round(content.size / 1024)}KB — too large to preview (1MB limit).</div>
               ) : !error && content.error ? (
                 <div className="fe-empty">{content.error}</div>
+              ) : !error && previewKind(file) === 'markdown' && mode === 'preview' && content?.content != null ? (
+                <div className="fe-md"><div className="entry-text">
+                  <Markdown remarkPlugins={[remarkGfm]} components={mdComponents}>{content.content}</Markdown>
+                </div></div>
               ) : !error && (
-                <pre className="fe-content">{content.content}</pre>
+                <pre className="fe-content">{content?.content ?? ''}</pre>
               )}
             </div>
           ) : entries === null ? (

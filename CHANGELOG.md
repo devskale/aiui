@@ -10,6 +10,18 @@ The latest version is shown in the UI under `#/releases`.
 
 ### Added
 
+- **File-Preview-Pane (Issue file-preview-pane)** — dsh
+  ui-sidebar-documentpreview-Muster, aiui-Schnitt: der FileExplorer zeigt
+  markdown (.md) und html (.html/.htm/.svg) jetzt als Preview/Source-
+  Umschaltung. Markdown rendert durch dieselbe Pipeline wie der Chat
+  (mdComponents aus StreamEntry exportiert — eine Pipeline, zwei Flächen);
+  HTML läuft als sandboxed iframe vom raw-Endpoint (allow-scripts für Charts,
+  ohne same-origin — Agent-Inhalte bleiben origin-isoliert), Source lädt
+  on demand nach. Art-Erkennung pure in `src/lib/preview-kind.js` (8 Tests).
+  Bilder/PDF unverändert direkt. Live verifiziert am STRABAG-Report-Bündel:
+  report.md (H1/Paragraphen gerendert ↔ Quelle `# STRABAG SE…`),
+  index.html (iframe-Preview mit sandbox=allow-scripts ↔ Quelle).
+
 - **Shortcut-Hilfe (Ledger-Item 8)** — `Ctrl/Cmd + /` (überall, auch bei
   fokussiertem Composer) oder `?` (wenn der Fokus nicht in einem Eingabe-
   feld sitzt) öffnet die Tastatur-Übersicht: Global/Composer/Chat-Dialog-
