@@ -10,6 +10,19 @@ The latest version is shown in the UI under `#/releases`.
 
 ### Added
 
+- **Streaming-Robustheits-Pins (Issue streaming-robustness)** — die zwei
+  realexistierenden Bruchkanten sind jetzt gepinnt statt nur gelebt:
+  (1) Replay-Duplikate: 4 Reducer-Tests — text_delta vor message_start ist
+  No-Op; message_start resettet current (kein First-Chunk-Konkatenat);
+  session_history ERSETZT (optimistisches user_prompt dupliziert nicht);
+  doppeltes session_history-Replay ist idempotent. (2) StrictMode-Doppel-
+  Open (App läuft unter React.StrictMode): smoke prüft den Server-Vertrag
+  „jede frische Verbindung bekommt session_status gepusht" ×2 parallele
+  Connects; smoke:full re-connectet nach echtem Turn und verlangt das
+  History-Replay. Nebenfunde: SSE-Data der Lifecycle-Pushes trägt kein
+  .type (nur die event:-Zeile) — der smoke-Parser merged jetzt beides wie
+  der Browser-Hook.
+
 - **Model-Panel: Refresh + Minimal-Edit-Switches (Issue models-panel,
   pi-web #938/#930)** — `useModels` bekommt `reload()` (harte Netz-
   Refetch: neue Modelle nach models.json-Änderung erscheinen ohne Page-

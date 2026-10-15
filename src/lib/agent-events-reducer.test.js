@@ -58,3 +58,59 @@ test('message_end ohne usage behält vorhandenen Stash (defensiv)', () => {
   s = reducer(s, { type: 'message_end', message: {} })
   assert.equal(s.current.usage, usage)
 })
+
+// ── Streaming-Robustheit (Ledger streaming-robustness-e2e-pins) ──
+// Pins für die zwei realexistierenden Bruchkanten:
+//   1. First-Chunk/Replay-Duplikate (Reconnect pushed History zurück)
+//   2. StrictMode-Doppel-Open (zwei EventSources liefern interleaved Events)
+
+test('text_delta vor message_start ist No-Op — kein verwaistes current', () => {
+  // Out-of-order erster Chunk (Replay-Fenster): ohne current wird das Delta
+  // verworfen, nicht in ein Pseudo-Entry gelogen.
+  const s = reducer(S0, { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'früh' } })
+  assert.equal(s.current, null)
+  assert.deepEqual(s.entries, [])
+})
+
+test('message_start resettet current — zwei Nachrichten konkatenieren nicht', () => {
+  let s = reducer(S0, { type: 'agent_start' })
+  s = reducer(s, { type: 'turn_start' })
+  s = reducer(s, { type: 'message_start' })
+  s = reducer(s, { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'erste' } })
+  s = reducer(s, { type: 'message_end', message: {} })
+  s = reducer(s, { type: 'message_start' }) // zweite Message im selben Turn
+  assert.equal(s.current.text, '') // NICHT 'erste' + weiter — First-Chunk beginnt leer
+  s = reducer(s, { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'zweite' } })
+  assert.equal(s.current.text, 'zweite')
+})
+
+test('session_history ERSETZT — optimistisches user_prompt wird nicht dupliziert', () => {
+  // Reconnect-Mitten-im-Turn: Client hat user_prompt optimistisch eingefügt,
+  // der Server-Replay enthält dieselbe Nachricht erneut. Replace-Semantik
+  // muss genau EIN Exemplar hinterlassen.
+  let s = reducer(S0, { type: 'user_prompt', text: 'hi' })
+  s = reducer(s, { type: 'agent_start' })
+  s = reducer(s, { type: 'turn_start' })
+  s = reducer(s, { type: 'message_start' })
+  s = reducer(s, { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'teil' } })
+  // Reconnect: Server pushed Status + History (User-Turn committed, Assistant-Teil im Replay)
+  const history = [{ role: 'user', text: 'hi' }]
+  s = reducer(s, { type: 'session_history', entries: history })
+  const his = s.entries.filter(e => e.role === 'user' && e.text === 'hi')
+  assert.equal(his.length, 1, `genau ein 'hi', bekam ${his.length}`)
+  assert.equal(s.current, null, 'current wird durch den Replay zurückgesetzt')
+})
+
+test('doppeltes session_history-Replay ist idempotent (StrictMode-Doppel-Open)', () => {
+  // Zwei EventSources (Remount-Rennen) pushen dieselbe History zweimal —
+  // der Zustand muss identisch bleiben, kein Append.
+  const history = [
+    { role: 'user', text: 'q' },
+    { role: 'assistant', text: 'a' },
+  ]
+  const once = reducer(S0, { type: 'session_history', entries: history })
+  const twice = reducer(once, { type: 'session_history', entries: history })
+  assert.deepEqual(twice.entries, history)
+  assert.equal(twice.entries.length, 2)
+  assert.deepEqual(once.entries, twice.entries)
+})

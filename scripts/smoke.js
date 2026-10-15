@@ -50,6 +50,34 @@ function getJson(port, p) {
   })
 }
 
+// SSE-Connect öffnen, data-Events (JSON mit .type) sammeln. Resolve beim
+// ersten Event (Verbindung steht), req zurück zum Aufräumen.
+function openSse(port, events) {
+  return new Promise((resolve, reject) => {
+    const req = http.get({ host: '127.0.0.1', port, path: '/api/events' }, res => {
+      res.setEncoding('utf8')
+      let buf = ''
+      let pendingEvent = null
+      res.on('data', c => {
+        buf += c
+        for (const line of buf.split('\n')) {
+          if (line.startsWith('event:')) { pendingEvent = line.slice(6).trim(); continue }
+          if (!line.startsWith('data:')) continue
+          try {
+            // SDK-Events tragen .type im Payload; Lifecycle-Pushes (session_*)
+            // nur in der event:-Zeile — beides zusammenführen wie der Browser-Hook.
+            const data = JSON.parse(line.slice(5))
+            events.push(data && data.type ? data : { type: pendingEvent, ...data })
+          } catch { /* Teilzeile */ }
+        }
+        buf = buf.slice(buf.lastIndexOf('\n') + 1)
+      })
+      resolve(req)
+    })
+    req.on('error', reject)
+  })
+}
+
 function postJson(port, p, data) {
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify(data)
@@ -93,6 +121,24 @@ try {
   if (agents.status !== 200 || agentCount === 0) throw new Error('/api/agents: kein Agent-Katalog')
   console.log(`smoke: /api/agents OK (${agentCount} Agents)`)
 
+  // ── SSE-Resync-Vertrag (Ledger streaming-robustness): jede FRISCHE
+  // Verbindung bekommt das Status-Bundle gepusht — die Grundlage, auf der
+  // der Client nach Reconnect (Deploy-Fenster, StrictMode-Remount) ohne
+  // Duplikate resynct. Zwei parallele Connects = StrictMode-Doppel-Open.
+  {
+    const ev1 = [], ev2 = []
+    const s1 = await openSse(port, ev1)
+    await new Promise(r => setTimeout(r, 300))
+    const s2 = await openSse(port, ev2) // zweiter Connect während erster offen ist
+    await new Promise(r => setTimeout(r, 700))
+    s1.destroy(); s2.destroy()
+    const gotStatus = (ev) => ev.some(e => e.type === 'session_status')
+    if (!gotStatus(ev1) || !gotStatus(ev2)) {
+      throw new Error(`SSE-Resync-Vertrag verletzt: session_status fehlt (connect1: ${gotStatus(ev1)}, connect2: ${gotStatus(ev2)})`)
+    }
+    console.log('smoke: SSE-Resync OK (session_status auf jedem frischen Connect ×2)')
+  }
+
   if (FULL) {
     // SSE mitlauschen, dann Bild-only-Prompt (leerer Text) feuern.
     const events = []
@@ -130,6 +176,19 @@ try {
     if (!turnEnd) throw new Error(`kein turn_end/error nach ${TURN_TIMEOUT / 1000}s`)
     if (turnEnd.type === 'error') throw new Error(`Agent-Fehler: ${turnEnd.message || JSON.stringify(turnEnd).slice(0, 200)}`)
     console.log('smoke: Bild-only-Roundtrip OK (turn_end erreicht, kein error)')
+
+    // Reconnect nach beendetem Turn: die neue Verbindung muss die History
+    // REPLAYEN (session_history mit Entries) — Replace- statt Append-Semantik
+    // im Client-Reducer macht das resync idempotent (kein First-Chunk-Duplikat).
+    const evRe = []
+    const sre = await openSse(port, evRe)
+    await new Promise(r => setTimeout(r, 700))
+    sre.destroy()
+    const replay = evRe.find(e => e.type === 'session_history')
+    if (!replay || !Array.isArray(replay.entries) || replay.entries.length === 0) {
+      throw new Error('Reconnect-Replay fehlt: kein session_history mit Entries nach abgeschlossenem Turn')
+    }
+    console.log(`smoke: Reconnect-Replay OK (session_history mit ${replay.entries.length} Entries)`)
   }
 
   console.log('OK')
