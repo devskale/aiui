@@ -158,13 +158,17 @@ function CollapsibleGroup({ label, items, onBrowse }) {
   const [open, setOpen] = useState(false)
 
   return (
-    <div className="sb-cmd-group">
-      <button className="sb-cmd-toggle" onClick={() => setOpen(!open)}>
+    <div className="sb-cmd-row">
+      <button className="sb-cmd-toggle" onClick={() => setOpen(!open)} aria-expanded={open}>
         <span className="sb-cmd-arrow">{open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
         <span className="sb-cmd-label">{label}</span>
         <span className="sb-cmd-count">{items.length}</span>
-        {onBrowse && <span className="sb-cmd-browse" onClick={(e) => { e.stopPropagation(); onBrowse() }} title="Browse the skills catalog"><Search size={12} /></span>}
       </button>
+      {onBrowse && (
+        <button className="sb-cmd-browse" onClick={onBrowse} title="Browse the skills catalog" aria-label="Browse the skills catalog">
+          <Search size={12} />
+        </button>
+      )}
       {open && (
         <div className="sb-cmd-list">
           {items.map(item => (
@@ -184,7 +188,6 @@ function CollapsibleGroup({ label, items, onBrowse }) {
     </div>
   )
 }
-
 // One node in the session tree. Forks render indented under their parent
 // with a branch glyph so the conversation tree (G2) is visible at a glance.
 function SessionNode({ node, sessionId, onSwitchSession, depth }) {

@@ -133,10 +133,30 @@ export default function App() {
   const stickToBottomRef = useRef(true)  // stick to bottom unless the user scrolled up
   const pendingJumpRef = useRef(null)    // { index } — Turn-Rail-Sprung nach Fenster-Wachstum
 
+  // ── Screenreader-Live-Region (letzter a11y-Rest, pi-web/dsh-Muster):
+  // Turn-Start/Ende und Fehler angemeldet — sonst ist ein laufender Agent
+  // für SR-Nutzer stumm. Dedupe per Ref, damit Re-Renders nichts
+  // erneut ansagen. Widget: eigenes Surface, bewusst außen vor.
+  const [liveMsg, setLiveMsg] = useState('')
+  const prevStreamingRef = useRef(false)
+  const lastErrAnnouncedRef = useRef(null)
+  useEffect(() => {
+    if (streaming && !prevStreamingRef.current) setLiveMsg('Agent is working')
+    if (!streaming && prevStreamingRef.current) {
+      const lastErr = [...entries].reverse().find(e => e.role === 'error')
+      if (lastErr && lastErr.text !== lastErrAnnouncedRef.current) {
+        lastErrAnnouncedRef.current = lastErr.text
+        setLiveMsg('Error: ' + lastErr.text.slice(0, 120))
+      } else {
+        setLiveMsg('Turn finished')
+      }
+    }
+    prevStreamingRef.current = streaming
+  }, [streaming, entries])
   // ── Browser-Notification bei Turn-Ende (pi-web-Muster; Ledger-S-Item:
-  // E2E-Recherchen laufen 375s+ — im Hintergrund-Tab wird Ende hörbar/
-  // sichtbar). Nur wenn: Permission granted UND Tab versteckt. Permission
-  // wird beim ersten Prompt-Send geholt (User-Geste → Browser erlaubt sie).
+  // E2E-Recherchen laufen 375s+ — im Hintergrund-Tab wird Ende sichtbar.
+  // Nur wenn: Permission granted UND Tab versteckt; Permission-Frage beim
+  // ersten Prompt-Send (User-Geste).
   const turnRanRef = useRef(false)
   useEffect(() => { if (streaming) turnRanRef.current = true }, [streaming])
   useEffect(() => {
@@ -674,6 +694,10 @@ export default function App() {
       {showSettings && (
         <SettingsPanel onClose={() => setShowSettings(false)} workDetails={workDetails} onWorkDetailsChange={changeWorkDetails} />
       )}
+
+      {/* SR-Live-Region: Turn-Start/Ende/Fehler — visuell unsichtbar,
+          für Screenreader angemeldet (letzter a11y-Rest). */}
+      <div className="sr-only" role="status" aria-live="polite">{liveMsg}</div>
     </div>
     </ToastProvider>
   )
