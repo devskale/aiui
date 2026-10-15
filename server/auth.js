@@ -117,12 +117,20 @@ function asList(v) { return Array.isArray(v) ? v : [v] }
 
 /** username known AND passphrase matches their credentials: the per-User
  *  `credentials[username]` entries when present (replacement semantics),
- *  otherwise the shared `passphrases` list. */
+ *  otherwise the shared `passphrases` list.
+ *
+ *  Timing: unbekannte User werfen NICHT früh — sie laufen gegen einen
+ *  Dummy-Scrypt (fester Salt/Hash), damit die Antwortzeit bekannte
+ *  Usernamen nicht verrät (Username-Enumeration über /api/login-Latenz,
+ *  pi-web-Härtungs-Checkliste 2026-10-15). */
+const DUMMY_ENTRY = 'a3f1c2e4b9d84760513a2b4c5d6e7f80:' + '0'.repeat(64)
 export function verifyCredentials(username, passphrase) {
   const c = loadConfig()
-  if (!c || !Array.isArray(c.users) || !c.users.includes(username)) return false
-  const own = c.credentials?.[username]
-  const candidates = own ? asList(own) : (Array.isArray(c.passphrases) ? c.passphrases : [])
+  const known = !!(c && Array.isArray(c.users) && c.users.includes(username))
+  const own = known ? c.credentials?.[username] : null
+  const candidates = own ? asList(own)
+    : known ? (Array.isArray(c.passphrases) ? c.passphrases : [])
+    : [DUMMY_ENTRY]
   return candidates.some(p => verifyHash(passphrase, p))
 }
 

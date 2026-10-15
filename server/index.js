@@ -77,7 +77,7 @@ async function listWorkspaceFiles(dir, query) {
 }
 
 const app = express()
-app.set('trust proxy', true) // behind nginx in prod → real client IP for the login throttle
+app.set('trust proxy', 2) // Genau die reale Topologie: max 2 Proxy-Hops (skale.dev: amd2→lubu; direkt: lubu). trust=true wäre links-trusting — ein Client könnte X-Forwarded-For fälschen und die Login-Throttle per Fake-IP umgehen; trust=2 nimmt das 2. von rechts (der vom Proxy bestätigte Client). App bindet an 127.0.0.1 — direkter Spoof-Zugriff ist ohnehin unmöglich.
 // JSON body limits, scoped: only /api/prompt gets the generous parser (prompts
 // carry image dataUrls — base64 — and a multi-page scan set is several MB even
 // after client-side downscaling). It's mounted before the default parser so it
