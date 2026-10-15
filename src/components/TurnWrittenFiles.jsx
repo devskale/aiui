@@ -11,6 +11,7 @@
 // ════════════════════════════════════════════════════════════════════
 import { File as FileIcon } from 'lucide-react'
 import { apiUrl } from '../lib/api'
+import { pathParts } from '../lib/path-label'
 
 function fileName(p) {
   return p.split('/').pop() || p
@@ -38,7 +39,8 @@ export function TurnWrittenFiles({ files }) {
             onClick={() => openFile(filePath)}
           >
             <FileIcon size={12} className="twf-ic" />
-            <span>{fileName(filePath)}</span>
+            <span className="pl-dirs">{pathParts(filePath).dirs}</span>
+            <span className="pl-file">{fileName(filePath)}</span>
           </button>
         ))}
       </div>

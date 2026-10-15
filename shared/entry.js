@@ -81,6 +81,10 @@ export function fromMessage(msg) {
       text: textOf(msg.content),
       thinkingText: extractThinking(msg.content),
       toolCalls,
+      // Per-attempt Usage (Issue per-turn-usage-workdetails): Pflichtfeld am
+      // SDK-Message, im JSONL persistiert — nur carry, nie erfinden. Ohne
+      // usage (alte/defekte Records) bleibt der Key weg → UI zeigt keine Row.
+      ...(msg.usage ? { usage: msg.usage } : {}),
     }
     if (entry.text || entry.toolCalls.length) return entry
     // Provider-Fehler (stopReason 'error'): Content leer, errorMessage am

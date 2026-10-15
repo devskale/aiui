@@ -74,7 +74,7 @@ export function Sidebar({ open, onToggle, connected, sessionAlive, sessionId, on
           <div className="sb-logo">π</div>
           <span className="sb-title">ui</span>
         </div>
-        <button className="sb-icon-btn" onClick={onToggle} title="Collapse sidebar"><PanelLeftClose size={16} /></button>
+        <button className="sb-icon-btn" onClick={onToggle} title="Collapse sidebar" aria-label="Collapse sidebar"><PanelLeftClose size={16} /></button>
       </div>
 
       <nav className="sb-nav">
@@ -143,7 +143,7 @@ export function Sidebar({ open, onToggle, connected, sessionAlive, sessionId, on
 
       <div className="sb-footer">
         {onShowSettings && (
-          <button className="sb-settings-btn" onClick={onShowSettings} title="Settings">
+          <button className="sb-settings-btn" onClick={onShowSettings} title="Settings" aria-label="Settings">
             <Settings size={16} />
           </button>
         )}

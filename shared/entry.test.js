@@ -195,3 +195,16 @@ test('fromMessage: assistant MIT Text gewinnt, errorMessage wird ignoriert', () 
   assert.equal(e.role, 'assistant')
   assert.equal(e.text, 'Teilantwort…')
 })
+
+// ── per-attempt usage carry (Issue per-turn-usage-workdetails) ──
+
+test('fromMessage: assistant trägt usage (Replay-Pfad)', () => {
+  const usage = { input: 1200, output: 340, cacheRead: 90, cacheWrite: 0, totalTokens: 1540, cost: { input: 0.001, output: 0.002, cacheRead: 0, cacheWrite: 0, total: 0.003 } }
+  const entry = fromMessage({ role: 'assistant', content: [{ type: 'text', text: 'ok' }], usage })
+  assert.equal(entry.usage, usage)
+})
+
+test('fromMessage: ohne usage bleibt der Key weg (kein Erfinden)', () => {
+  const entry = fromMessage({ role: 'assistant', content: [{ type: 'text', text: 'ok' }] })
+  assert.equal('usage' in entry, false)
+})

@@ -9,9 +9,9 @@
 // Image capability is NOT configured here — it's a fact derived from each
 // model's `input` array. See App.jsx → imageCapable.
 // ════════════════════════════════════════════════════════════════════
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useModels } from '../hooks/useModels'
-import { useEscape } from '../hooks/useEscape'
+import { useModal } from '../hooks/useModal'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import {
   MODEL_RENDER_CAP, groupModels, isModelAllowed,
@@ -20,8 +20,9 @@ import {
   setFavModels, toggleFav,
 } from '../lib/models'
 
-export function SettingsPanel({ onClose }) {
-  useEscape(onClose)
+export function SettingsPanel({ onClose, workDetails = 'standard', onWorkDetailsChange }) {
+  const panelRef = useRef(null)
+  useModal(panelRef, { onClose })
   const { all: allFlat, loading, refresh, favModels } = useModels()
   const [allowed, setAllowed] = useState(null)      // null = all allowed
   const [search, setSearch] = useState('')
@@ -66,10 +67,10 @@ export function SettingsPanel({ onClose }) {
 
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="settings-panel" onClick={e => e.stopPropagation()}>
+      <div className="settings-panel" ref={panelRef} role="dialog" aria-modal="true" aria-label="Settings" onClick={e => e.stopPropagation()}>
         <header className="sp-header">
           <h2>Settings</h2>
-          <button className="sp-close" onClick={onClose}>✕</button>
+          <button className="sp-close" onClick={onClose} aria-label="Close settings">✕</button>
         </header>
 
         <div className="sp-body">
@@ -113,6 +114,30 @@ export function SettingsPanel({ onClose }) {
             ) : (
               <div className="sp-loading">No favorites yet.</div>
             )}
+          </section>
+
+          {/* ── Work details (process visibility of past turns) ── */}
+          <section className="sp-section">
+            <div className="sp-section-head">
+              <h3>Work Details</h3>
+              <span className="sp-hint">process visibility of past turns</span>
+            </div>
+            <p className="sp-help">
+              How much of a finished turn's process (thinking, tool calls) is shown.
+              Results — files written, usage, follow-ups — stay visible in every mode,
+              and the live turn always shows everything.
+            </p>
+            <div className="sp-actions">
+              {['standard', 'verbose', 'compact'].map(m => (
+                <button
+                  key={m}
+                  className={`sp-action-btn ${workDetails === m ? 'active' : ''}`}
+                  onClick={() => onWorkDetailsChange?.(m)}
+                >
+                  {m}{m === 'standard' ? ' (default)' : ''}
+                </button>
+              ))}
+            </div>
           </section>
 
           {/* ── Allowed models (picker visibility) ── */}

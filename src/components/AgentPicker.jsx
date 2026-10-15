@@ -4,22 +4,24 @@
 // session is built, so a rebuild is how a different Agent takes effect.
 // ════════════════════════════════════════════════════════════════════
 import { useEffect, useRef } from 'react'
-import { useEscape } from '../hooks/useEscape'
+import { useModal } from '../hooks/useModal'
 import { Mic } from 'lucide-react'
 
 export function AgentPicker({ activeAgent, agents, streaming, onSelect, onClose }) {
   const ref = useRef(null)
+  const panelRef = useRef(null)
   useEffect(() => { ref.current?.focus() }, [])
-  useEscape(onClose)
+  useModal(panelRef, { onClose })
 
   return (
     <div className="model-picker-overlay" onClick={onClose}>
-      <div className="model-picker" onClick={e => e.stopPropagation()}>
+      <div className="model-picker" ref={panelRef} role="dialog" aria-modal="true" aria-label="Choose agent" onClick={e => e.stopPropagation()}>
         <div className="mp-search">
           <input
             ref={ref}
             value=""
             readOnly
+            aria-label="Choose an agent — switching starts a new chat"
             placeholder="Choose an agent — switching starts a new chat"
           />
         </div>

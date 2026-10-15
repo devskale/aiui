@@ -5,13 +5,14 @@
 // ════════════════════════════════════════════════════════════════════
 import { useState, useEffect, useRef } from 'react'
 import { apiUrl } from '../lib/api'
-import { useEscape } from '../hooks/useEscape'
+import { useModal } from '../hooks/useModal'
 
 export function ForkPicker({ onClose }) {
-  useEscape(onClose)
+  const listRef = useRef(null)
+  const panelRef = useRef(null) // VOR useModal deklarieren — sonst TDZ-Crash (AGENTS.md-Lektion)
+  useModal(panelRef, { onClose })
   const [targets, setTargets] = useState(null) // null = loading, [] = none
   const [pending, setPending] = useState(null) // entryId being forked
-  const listRef = useRef(null)
 
   useEffect(() => {
     let alive = true
@@ -41,7 +42,7 @@ export function ForkPicker({ onClose }) {
 
   return (
     <div className="model-picker-overlay" onClick={onClose}>
-      <div className="model-picker" onClick={e => e.stopPropagation()}>
+      <div className="model-picker" ref={panelRef} role="dialog" aria-modal="true" aria-label="Branch from a message" onClick={e => e.stopPropagation()}>
         <div className="mp-search fork-head">
           <span className="fork-title">Branch from a message</span>
           <span className="fork-sub">Creates a new session starting at that point.</span>

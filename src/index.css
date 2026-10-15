@@ -716,7 +716,6 @@ pre code { background: none; padding: 0; font-size: 13px; }
 .ib-stop-core { position: absolute; fill: currentColor; stroke: none; opacity: 0.8; }
 
 .attachment-bar { display: flex; gap: 6px; padding: 6px 0; flex-wrap: wrap; }
-.ib-notice { font-size: 11px; color: #f59e0b; padding: 4px 2px 0; }
 .attachment-preview {
   display: flex; align-items: center; gap: 5px; padding: 4px 8px;
   background: var(--bg-elevated); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);
@@ -1117,3 +1116,172 @@ pre code { background: none; padding: 0; font-size: 13px; }
 .stt-line { display: flex; align-items: center; gap: 8px; padding: 4px 10px; font-size: 12.5px; color: var(--text-2); }
 .stt-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); animation: mic-pulse 1.2s infinite; flex: none; }
 .stt-partial { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+
+/* ═══ UI/UX-PASS (Inspirationen: chatbot-template + deepseek-harness) ═══
+   Übernommene Muster, aiui-Hausstil:
+   - JumpToLatest  (chatbot-template MessageScrollerButton, dsh „back-to-bottom
+     sitzt außerhalb des geclippten Transkripts" — hier: schwebend über dem
+     Composer, sichtbar nur wenn der Reader hochgescrollt hat)
+   - shimmer-text  (dsh TextShimmer: laufende Zeilen bekommen einen ruhigen
+     Highlight-Sweep statt eines blinkenden Punkts)
+   - tb-reconnect  (dsh ConnectionIndicator: Verbindungsverlust ist sichtbar,
+     nicht nur ein stiller State)
+   - Reduced motion + sichtbarer Fokusring als Grundlagen (dsh web-styling.md)
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── Jump to latest ── */
+.jump-latest {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: 92px; z-index: 20;
+  width: 30px; height: 30px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-elevated); color: var(--text-2);
+  border: 1px solid var(--border); cursor: pointer;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.45);
+  transition: background .12s ease, color .12s ease, opacity .12s ease;
+}
+.jump-latest:hover { background: var(--bg-hover); color: var(--text); }
+
+/* ── Shimmer for running rows (dsh TextShimmer, vereinfacht: ein Sweep) ── */
+.shimmer-text {
+  background-image: linear-gradient(
+    100deg,
+    currentColor 0%, currentColor 40%,
+    rgba(255,255,255,0.75) 50%,
+    currentColor 60%, currentColor 100%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer-sweep 1.6s ease-in-out infinite;
+}
+@keyframes shimmer-sweep {
+  0%   { background-position: 120% 0; }
+  100% { background-position: -120% 0; }
+}
+
+/* ── Reconnect indicator (Topbar) ── */
+.tb-reconnect {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--warn); font-weight: 500;
+}
+.tb-reconnect-dots { display: inline-flex; gap: 3px; }
+.tb-reconnect-dots i {
+  width: 4px; height: 4px; border-radius: 50%; background: var(--warn);
+  animation: rc-pulse 1.1s ease-in-out infinite;
+}
+.tb-reconnect-dots i:nth-child(2) { animation-delay: .18s; }
+.tb-reconnect-dots i:nth-child(3) { animation-delay: .36s; }
+@keyframes rc-pulse { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+
+/* ── Keyboard focus visibility (dsh: „preserve keyboard focus visibility") ── */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ib-btn:focus-visible, .tb-btn:focus-visible, .sb-nav-item:focus-visible,
+.sb-session:focus-visible, .jump-latest:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+
+/* ── Reduced motion: Animationen aus, Sprünge statt Animationen ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .shimmer-text {
+    -webkit-text-fill-color: currentColor;
+    background: none;
+  }
+}
+
+/* ── Toasts (app-weite Fläche, Issue toast-surface) ──
+   dsh-Regel: transient outcomes → Toast, der außerhalb der meldenden
+   Fläche lebt. Unten rechts über dem Composer, unter den Overlays
+   (z 80 < drop-zone/login 100), max 3 gestapelt (toast-queue.js). */
+.toasts {
+  position: fixed; right: 24px; bottom: 100px; z-index: 80;
+  display: flex; flex-direction: column; gap: 8px; max-width: 360px;
+}
+.toast {
+  display: flex; align-items: flex-start; gap: 9px;
+  background: var(--bg-elevated); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 10px 12px;
+  font-size: 13px; color: var(--text-2); line-height: 1.45;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.55);
+  animation: toast-in .16s ease;
+}
+@keyframes toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.toast-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 6px; flex: none; background: var(--accent); }
+.toast--warn .toast-dot { background: var(--warn); }
+.toast--error .toast-dot { background: var(--danger); }
+.toast--error { color: var(--text); border-color: rgba(239,68,68,0.35); }
+.toast-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.toast-x {
+  background: none; border: none; color: var(--text-4); cursor: pointer;
+  padding: 0 2px; font-size: 13px; line-height: 1.4; flex: none;
+}
+.toast-x:hover { color: var(--text-2); }
+
+/* ── Turn-Rail (Issue turn-navigation) ──
+   dsh: Rail sitzt außerhalb des Chat-Flows (kein Layout-Shift) und
+   blendet sich bei schmalem Transkript aus (dsh-Grenze: 900px verfügbare
+   Content-Breite; hier via Fensterbreite genähert — 1180px Fenster
+   ≈ 930px neben der 248px-Sidebar). */
+.turn-rail {
+  position: absolute; right: 3px; top: 8px; bottom: 8px; z-index: 15;
+  width: 14px; display: flex; flex-direction: column; align-items: center;
+  gap: 3px; overflow-y: auto; overflow-x: hidden; padding: 2px 0;
+  scrollbar-width: none;
+}
+.turn-rail::-webkit-scrollbar { width: 0; display: none; }
+.turn-mark {
+  width: 9px; height: 9px; border-radius: 2.5px; padding: 0; flex: none;
+  background: var(--bg-active); border: none; cursor: pointer;
+  transition: background .12s ease, transform .12s ease;
+}
+.turn-mark:hover { background: var(--text-4); transform: scaleX(1.25); }
+.turn-mark:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Turns außerhalb des Lazy-Render-Fensters: dezenter (Rand-Bereich) */
+.turn-mark.outside { opacity: 0.55; }
+@media (max-width: 1180px) { .turn-rail { display: none; } }
+
+/* ── Turn usage (per-attempt, Issue per-turn-usage-workdetails) ──
+   Native details wie GenericCard: Summary = Kernzahlen im StatsFooter-
+   Vokabular (↑/↓/$), aufgeklappt die Sekundär-Buckets. Nur bei exakter
+   usage — sonst rendert die Komponente nichts. */
+.tu { margin: 3px 0 0; }
+.tu-sum {
+  display: inline-flex; gap: 10px; cursor: pointer; user-select: none;
+  font-family: 'SF Mono', 'JetBrains Mono', monospace; font-size: 10.5px;
+  color: var(--text-4); list-style: none; padding: 1px 3px;
+  border-radius: 4px; transition: color .12s ease;
+}
+.tu-sum::-webkit-details-marker { display: none; }
+.tu-sum:hover { color: var(--text-2); }
+.tu-sum:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+.tu-detail {
+  font-family: 'SF Mono', 'JetBrains Mono', monospace; font-size: 10.5px;
+  color: var(--text-4); padding: 3px 3px 0; line-height: 1.55;
+}
+
+/* ── PathLabel (dsh-Muster): gedämpfte Verzeichnisse + prägnanter Name ── */
+.pl-dirs { color: var(--text-4); }
+.pl-file { color: var(--text-3); }
+.twf-chip .pl-file, .mention-path .pl-file { color: inherit; }
+.twf-chip .pl-dirs, .mention-path .pl-dirs { opacity: .7; }
+
+/* ── Work Details (Issue work-details-folding) ── */
+.sp-action-btn.active {
+  color: var(--text); border-color: var(--accent);
+  background: rgba(16,185,129,0.08);
+}
+.tfs {
+  display: inline-flex; gap: 4px; align-items: baseline;
+  font-size: 11px; color: var(--text-4); background: none;
+  border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);
+  padding: 2px 9px; cursor: pointer; margin: 3px 0; transition: all .1s;
+}
+.tfs:hover { color: var(--text-2); background: var(--bg-hover); }
+.tfs-n { color: var(--text-2); font-weight: 500; }
+.tfs-hint { opacity: .7; }

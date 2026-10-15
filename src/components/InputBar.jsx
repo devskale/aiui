@@ -8,8 +8,10 @@ import { useSlashMenu } from '../hooks/useSlashMenu'
 import { useMention } from '../hooks/useMention'
 import { useStt } from '../hooks/useStt'
 import { rewriteSkillCommand } from '../lib/compose'
+import { pathParts } from '../lib/path-label'
 import { draftKey, saveDraft, loadDraft, clearDraft } from '../lib/draft-store'
 import { MAX_ATTACHMENTS } from '../lib/attachment-limit'
+import { useToast } from './Toasts'
 
 // Splits a file list into accepted + image-rejected. When the current model
 // can't take images, image files are stripped so they never reach the server.
@@ -59,8 +61,11 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
     return () => clearTimeout(t)
   }, [text])
 
-  // Transient inline notice (e.g. "model doesn't support images").
-  const [imageNotice, setImageNotice] = useState('')
+  // Transiente Meldungen laufen durch die app-weite Toast-Fläche
+  // (Issue toast-surface): der Toast überlebt dieses Panel und stapelt mit
+  // anderen Quellen. Warns = Prävention, Errors = STT-Fälle.
+  const toast = useToast()
+  const flashNotice = (msg) => toast({ kind: 'warn', text: msg })
 
   // Prefill seam (deep link + example chips): App owns { text, nonce } and
   // bumps nonce per request — we apply once per bump and focus the field.
@@ -74,10 +79,6 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
       if (ref.current) ref.current.style.height = Math.min(ref.current.scrollHeight, 200) + 'px'
     })
   }, [prefill?.nonce])
-  const flashNotice = (msg) => {
-    setImageNotice(msg)
-    setTimeout(() => setImageNotice(prev => (prev === msg ? '' : prev)), 3200)
-  }
 
   // Add files and report the count the attachment cap rejected (addFiles
   // returns the number of files it could not accept).
@@ -102,7 +103,7 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
         }
       })
     },
-    onError: flashNotice,
+    onError: (msg) => toast({ kind: 'error', text: msg }),
   })
 
   // Hold-to-talk: pointerdown arms a hold; release after ≥250ms stops and
@@ -225,13 +226,15 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
               title={file}
             >
               <span className="mention-icon"><FileIcon size={12} /></span>
-              <span className="mention-path">{shortenPath(file)}</span>
+              <span className="mention-path" title={file}>
+                <span className="pl-dirs">{pathParts(shortenPath(file)).dirs}</span>
+                <span className="pl-file">{pathParts(shortenPath(file)).file}</span>
+              </span>
             </button>
           ))}
         </div>
       )}
 
-      {imageNotice && <div className="ib-notice">{imageNotice}</div>}
       {(stt.state === 'recording' || stt.state === 'processing') && (
         <div className="stt-line">
           {stt.state === 'processing' ? <LoaderCircle size={12} className="spin" /> : <span className="stt-dot" />}
@@ -269,6 +272,7 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
             onPointerDown={micDown}
             onPointerUp={micUp}
             disabled={stt.state === 'processing'}
+            aria-label="Voice input"
             title={stt.mode === 'webspeech' ? 'Speak (browser speech recognition — hold or click)' : stt.mode === 'ws' ? 'Speak (DGX streaming — hold or click)' : 'Speak (transcribed when you stop)'}
           >
             {stt.state === 'recording' ? <Square size={16} />
@@ -276,7 +280,7 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
               : <Mic size={18} />}
           </button>
         )}
-        <button className="ib-btn" onClick={() => fileRef.current?.click()} title={imageCapable ? 'Attach file' : 'Attach file (images disabled — model doesn\'t support them)'}>
+        <button className="ib-btn" onClick={() => fileRef.current?.click()} aria-label="Attach file" title={imageCapable ? 'Attach file' : 'Attach file (images disabled — model doesn\'t support them)'}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
         </button>
         <input ref={fileRef} type="file" multiple style={{ display: 'none' }}
@@ -287,14 +291,14 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
             e.target.value = ''
           }} />
         {streaming ? (
-          <button className="ib-btn stop" onClick={onStop} title="Stop">
+          <button className="ib-btn stop" onClick={onStop} title="Stop" aria-label="Stop generating">
             <span className="ib-stop-wrap">
               <LoaderCircle size={18} className="spin" />
               <Square size={7} className="ib-stop-core" />
             </span>
           </button>
         ) : (
-          <button className="ib-btn send" onClick={handleSend} title="Send" disabled={!text.trim() && !attachments.length}>
+          <button className="ib-btn send" onClick={handleSend} title="Send" aria-label="Send message" disabled={!text.trim() && !attachments.length}>
             <SendHorizontal size={18} />
           </button>
         )}

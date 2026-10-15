@@ -8,7 +8,9 @@ import remarkGfm from 'remark-gfm'
 import { apiUrl } from '../lib/api'
 import { parseFollowUps } from '../lib/followUps'
 import { extractTurnWrittenFiles } from '../lib/turn-written-files'
+import { pathParts } from '../lib/path-label'
 import { TurnWrittenFiles } from './TurnWrittenFiles'
+import { TurnUsage } from './TurnUsage'
 import { File as FileIcon, Terminal, Pen, Sparkles, Copy, Download, ChevronDown, ChevronRight, CornerDownRight } from 'lucide-react'
 
 // ── Tool helpers (ported from pi-gui timeline-item.tsx patterns) ──
@@ -21,6 +23,13 @@ function parseArgs(args) {
 function shortenPath(p) {
   const parts = p.split('/')
   return parts.length > 3 ? '…/' + parts.slice(-3).join('/') : p
+}
+
+// dsh PathLabel: gedämpfte Verzeichnisse + prägnanter Dateiname (der volle
+// Pfad lebt im title-Tooltip des Aufrufers).
+function PathLabel({ path }) {
+  const { dirs, file } = pathParts(path)
+  return <><span className="pl-dirs">{dirs}</span><span className="pl-file">{file}</span></>
 }
 
 function extractToolPath(args) {
@@ -144,17 +153,31 @@ function FullBashOutput({ path }) {
 }
 
 // ── ToolGroup — subtle tool calls with per-tool glyph + expandable output ──
-function ToolGroup({ toolCalls }) {
+function ToolGroup({ toolCalls, defaultOpen = false }) {
   return (
     <div className="tc-group-body">
-      {toolCalls.map((tc, i) => <ToolCallCard key={i} tc={tc} />)}
+      {toolCalls.map((tc, i) => <ToolCallCard key={i} tc={tc} defaultOpen={defaultOpen} />)}
     </div>
   )
 }
 
+// ── ToolFoldSummary — Compact-Modus: Prozess auf eine Zeile, auf Demand
+// aufklappbar (Issue work-details-folding).
+function ToolFoldSummary({ count, onExpand }) {
+  return (
+    <button type="button" className="tfs" onClick={onExpand} title="Show tool calls of this turn">
+      <span className="tfs-n">{count}</span> tool call{count === 1 ? '' : 's'} <span className="tfs-hint">· show</span>
+    </button>
+  )
+}
+
 // ── ToolCallCard — one tool call: glyph + name + path + status, expandable ──
-function ToolCallCard({ tc }) {
-  const [open, setOpen] = useState(false)
+function ToolCallCard({ tc, defaultOpen = false }) {
+  // defaultOpen kommt aus dem Work-Details-Modus; userOpen=null heißt
+  // „kein manueller Override" — Modus-Wechsel wirken, ohne Nutzertoggles
+  // zu übertrampeln (Issue work-details-folding).
+  const [userOpen, setUserOpen] = useState(null)
+  const open = userOpen ?? defaultOpen
   const args = parseArgs(tc.args)
   const isWrite = isWriteTool(tc.name)
   const isBash = isBashTool(tc.name)
@@ -180,17 +203,17 @@ function ToolCallCard({ tc }) {
 
   return (
     <div className={`tc-card ${isError ? 'err' : ''} ${isRunning ? 'running' : ''}`}>
-      <div className="tc-card-head" onClick={() => hasContent && setOpen(!open)}>
+      <div className="tc-card-head" onClick={() => hasContent && setUserOpen(!open)}>
         <span className="tc-glyph"><ToolGlyph name={tc.name} /></span>
         <span className="tc-name">{tc.name}</span>
-        {label && <span className="tc-path">{label}</span>}
+        {label && <span className="tc-path" title={filePath || (isBash && args.command) || tc.name}><PathLabel path={label.startsWith('$') ? label : (filePath || label)} /></span>}
         {diffStats && (
           <span className="tc-diff-stats">
             <span className="add">+{diffStats.added}</span>{' '}
             <span className="del">-{diffStats.removed}</span>
           </span>
         )}
-        <span className="tc-status">{isRunning ? 'running' : isError ? 'failed' : 'done'}</span>
+        <span className={`tc-status ${isRunning ? 'shimmer-text' : ''}`}>{isRunning ? 'running' : isError ? 'failed' : 'done'}</span>
         {hasContent && (
           <button
             className="tc-copy"
@@ -216,15 +239,16 @@ function ToolCallCard({ tc }) {
 }
 
 // ── ThinkingBlock — simple muted one-liner, expandable ──
-function ThinkingBlock({ thinking, thinkingDone, thinkingText }) {
-  const [expanded, setExpanded] = useState(true) // show reasoning by default
+function ThinkingBlock({ thinking, thinkingDone, thinkingText, defaultOpen = true }) {
+  const [userOpen, setUserOpen] = useState(null)
+  const expanded = userOpen ?? defaultOpen
   const text = thinkingText || ''
   const hasText = text.trim().length > 0
 
   return (
-    <div className={`think-line ${hasText ? 'clickable' : ''}`} onClick={() => hasText && setExpanded(!expanded)}>
+    <div className={`think-line ${hasText ? 'clickable' : ''}`} onClick={() => hasText && setUserOpen(!expanded)}>
       <span className={`think-dot ${thinkingDone ? 'done' : ''}`} />
-      <span className="think-label">{thinkingDone ? 'Thought' : 'Thinking…'}</span>
+      <span className={`think-label ${thinkingDone ? '' : 'shimmer-text'}`}>{thinkingDone ? 'Thought' : 'Thinking…'}</span>
       {expanded && hasText && <span className="think-text">{text}</span>}
     </div>
   )
@@ -285,9 +309,9 @@ const mdComponents = {
 
 const COPY_ICON = <Copy size={13} />
 
-export function UserEntry({ text, images, onCopy }) {
+export function UserEntry({ text, images, onCopy, entryIdx }) {
   return (
-    <div className="entry-user">
+    <div className="entry-user" data-entry-idx={entryIdx}>
       {images?.length > 0 && (
         <div className="entry-user-images">
           {images.map((img, i) => (
@@ -314,6 +338,10 @@ export function FollowUps({ questions, onAsk }) {
   if (!onAsk || !questions?.length) return null
   return (
     <div className="followups">
+      {/* Deliberate DE: mirrors the agent-authored section heading the
+          parser strips (followUps.js protocol) — the questions below are
+          German agent output; an EN head would mix languages WITHIN one
+          block. See src/lib/copy.js exceptions. */}
       <div className="followups-head">Mögliche Vertiefungen</div>
       {questions.map((q, i) => (
         <button key={i} type="button" className="followup-chip" onClick={() => onAsk(q)}>
@@ -325,7 +353,16 @@ export function FollowUps({ questions, onAsk }) {
   )
 }
 
-export function AssistantEntry({ entry, isStreaming, onCopy, interactive, onAsk }) {
+export function AssistantEntry({ entry, isStreaming, onCopy, interactive, onAsk, workDetails = 'standard' }) {
+  // Work-Details-Modus (Issue work-details-folding) gilt NUR für
+  // abgeschlossene Turns — das Live-Turn zeigt alles (heutiges Verhalten):
+  //   standard = Thinking offen, Tool-Cards zu (Status quo)
+  //   verbose  = alles offen
+  //   compact  = Thinking zu, Tool-Prozess hinter Summary-Zeile
+  // Ergebnisse (Files written, Usage, Follow-ups) bleiben IMMER sichtbar —
+  // Prozess faltet, Ergebnisse nicht. Widget: kein Prop → standard = heute.
+  const mode = isStreaming ? 'standard' : workDetails
+  const [toolsExpanded, setToolsExpanded] = useState(false)
   const thinkingText = entry.thinkingText || ''
   const hasThinkingText = thinkingText.trim().length > 0
   // Live entry: phase flags (reducer-owned) drive the indicator.
@@ -353,10 +390,13 @@ export function AssistantEntry({ entry, isStreaming, onCopy, interactive, onAsk 
   return (
     <div className="entry-assistant">
       {showThinking && (
-        <ThinkingBlock thinking={entry.thinking} thinkingDone={thinkingDone} thinkingText={thinkingText} />
+        <ThinkingBlock thinking={entry.thinking} thinkingDone={thinkingDone} thinkingText={thinkingText} defaultOpen={mode !== 'compact'} />
       )}
-      {hasTools && <ToolGroup toolCalls={entry.toolCalls} />}
+      {hasTools && (mode === 'compact' && !toolsExpanded
+        ? <ToolFoldSummary count={entry.toolCalls.length} onExpand={() => setToolsExpanded(true)} />
+        : <ToolGroup toolCalls={entry.toolCalls} defaultOpen={mode === 'verbose'} />)}
       {writtenFiles.length > 0 && <TurnWrittenFiles files={writtenFiles} />}
+      {!isStreaming && <TurnUsage usage={entry.usage} />}
       {hasText && (
         <div className="entry-text">
           <Markdown remarkPlugins={[remarkGfm]} components={mdComponents}>{mdText}</Markdown>

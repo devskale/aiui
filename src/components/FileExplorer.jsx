@@ -8,11 +8,12 @@
 // ════════════════════════════════════════════════════════════════════
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { apiUrl } from '../lib/api'
-import { useEscape } from '../hooks/useEscape'
+import { useModal } from '../hooks/useModal'
 import { UploadCloud, Folder, File as FileIcon } from 'lucide-react'
 
 export function FileExplorer({ onClose }) {
-  useEscape(onClose)
+  const panelRef = useRef(null)
+  useModal(panelRef, { onClose })
   const [dir, setDir] = useState('')        // current relative dir ('' = root)
   const [entries, setEntries] = useState(null)
   const [file, setFile] = useState(null)    // { path, name, isImage } when viewing
@@ -78,7 +79,7 @@ export function FileExplorer({ onClose }) {
 
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="file-explorer" onClick={e => e.stopPropagation()}>
+      <div className="file-explorer" ref={panelRef} role="dialog" aria-modal="true" aria-label="Files" onClick={e => e.stopPropagation()}>
         <header className="fe-header">
           <h2>Files</h2>
           <div className="fe-crumb">

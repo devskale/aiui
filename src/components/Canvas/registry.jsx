@@ -5,6 +5,7 @@
 // rendern darf später kommen.
 // ════════════════════════════════════════════════════════════════════
 import { KvTable } from './GenericCard.jsx'
+import { copy } from '../../lib/copy'
 
 // chart: Zahlen-Reihe als SVG-Balkendiagramm
 // data: { unit?: "EUR Mio", bars: [{ label, value }, …] }
@@ -79,7 +80,7 @@ function GraphCard({ card }) {
     .filter((p) => p && Array.isArray(p.nodes) && p.nodes.length > 1)
     .slice(0, 6)
   if (!paths.length) return <KvTable data={d} />
-  const endeLabel = { person: 'natürliche Person', firma_ohne_fn: 'nicht verfolgbar', zyklus: 'Zyklus', tiefe_erreicht: 'Tiefengrenze', keine_kante_erfasst: 'Ende der Kanten' }
+  const endeLabel = copy.graphEnd
   return (
     <div className="cv-graph">
       {paths.map((p, i) => (

@@ -6,6 +6,11 @@ import { useModels } from './hooks/useModels'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { apiUrl } from './lib/api'
 import { visibleWindow, growWindow, captureScrollDistance, restoreScrollTop, isAtTail, PAGE_SIZE } from './lib/chat-window'
+import { prefersReducedMotion } from './lib/motion'
+import { visibleCountForJump } from './lib/turn-rail'
+import { copy } from './lib/copy'
+import { JumpToLatest } from './components/JumpToLatest'
+import { TurnRail } from './components/TurnRail'
 import { Sidebar } from './components/Sidebar'
 import { ModelPicker } from './components/ModelPicker'
 import { AgentPicker } from './components/AgentPicker'
@@ -20,6 +25,7 @@ import { EmptyState } from './components/EmptyState'
 import { ReleaseNotes } from './components/ReleaseNotes'
 import { SettingsPanel } from './components/SettingsPanel'
 import { LoginModal } from './components/LoginModal'
+import { ToastProvider } from './components/Toasts'
 import { UserEntry, AssistantEntry, ErrorEntry } from './components/StreamEntry'
 import { ResearchCanvas } from './components/Canvas/ResearchCanvas.jsx'
 import { useCanvas } from './hooks/useCanvas'
@@ -64,6 +70,13 @@ export default function App() {
   const { entries, current, steerQueue, streaming, connected, sessionAlive, sessionAgent, sessionModel, sessionId, sessionCwd, sessionCwdShort, sessionStartedAt, sessionStats, thinkingLevel, isCompacting, autoCompactionEnabled, sendPrompt, sendSteer, abortAgent, startNewChat, dispatch } = useAgentEvents(authed)
   const { attachments, addFiles, remove: removeAttachment, clear: clearAttachments, buildPayload } = useAttachments()
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  // Work-Details-Modus (Issue work-details-folding): standard = heutiges
+  // Verhalten; persistiert per localStorage. Scroll-Distanz beim Wechsel
+  // bewahren — Compact↔Verbose ändert massiv Höhen (wie Reveal-Older).
+  const [workDetails, setWorkDetails] = useState(() => {
+    const v = localStorage.getItem('aiui-work-details')
+    return ['standard', 'verbose', 'compact'].includes(v) ? v : 'standard'
+  })
   const [showModelPicker, setShowModelPicker] = useState(false)
   const [showAgentPicker, setShowAgentPicker] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
@@ -118,7 +131,42 @@ export default function App() {
 
   const scrollContainerRef = useRef(null)
   const stickToBottomRef = useRef(true)  // stick to bottom unless the user scrolled up
+  const pendingJumpRef = useRef(null)    // { index } — Turn-Rail-Sprung nach Fenster-Wachstum
+
+  // ── Browser-Notification bei Turn-Ende (pi-web-Muster; Ledger-S-Item:
+  // E2E-Recherchen laufen 375s+ — im Hintergrund-Tab wird Ende hörbar/
+  // sichtbar). Nur wenn: Permission granted UND Tab versteckt. Permission
+  // wird beim ersten Prompt-Send geholt (User-Geste → Browser erlaubt sie).
+  const turnRanRef = useRef(false)
+  useEffect(() => { if (streaming) turnRanRef.current = true }, [streaming])
+  useEffect(() => {
+    if (streaming || !turnRanRef.current) return
+    turnRanRef.current = false
+    if (typeof document === 'undefined' || document.visibilityState !== 'hidden') return
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+    const last = [...entries].reverse().find(e => e.role === 'assistant' && (e.text || '').trim())
+    try {
+      const n = new Notification('πui — turn finished', {
+        body: (last?.text || 'The agent has finished its turn.').replace(/\s+/g, ' ').slice(0, 120),
+      })
+      n.onclick = () => { window.focus(); n.close() }
+    } catch { /* manche Kontexte (SW) verbauen den Konstruktor */ }
+  }, [streaming, entries])
+
+  // ── Session pro Tab merken (pi-web #887): sessionStorage überlebt Reloads,
+  // gilt aber nur für DIESEN Tab — parallele Tabs behalten jeweils ihre
+  // eigene Session.
+  const tabSessionRestoredRef = useRef(false)
   const [dragOver, setDragOver] = useState(false)
+  // atTail spiegelt stickToBottomRef in den Render (Ref allein zeigt keinen
+  // Jump-Button). Nur am Ende ist der Button weg — sonst sichtbar.
+  const [atTail, setAtTail] = useState(true)
+  // Reconnect-Indikator erst nach einer ECHTEN Verbindung zeigen: beim ersten
+  // Mount ist connected kurz false (SSE open kommt einen Tick später) — das
+  // wäre ein Flackern beim Laden, kein Ausfall (dsh: Indicator erscheint erst
+  // nach einer Outage, nicht während des Startaufbaus).
+  const [wasConnected, setWasConnected] = useState(false)
+  useEffect(() => { if (connected) setWasConnected(true) }, [connected])
   const [now, setNow] = useState(() => Date.now())
 
   // Re-check once a minute — the uptime shows only the largest unit (w/d/h/m),
@@ -153,7 +201,7 @@ export default function App() {
   // Scrolling up to read pauses auto-scroll; scrolling back down resumes it.
   useEffect(() => {
     if (stickToBottomRef.current) {
-      endRef.current?.scrollIntoView({ behavior: 'smooth' })
+      endRef.current?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth' })
     }
   }, [entries, current])
 
@@ -182,6 +230,37 @@ export default function App() {
     el.scrollTop = restoreScrollTop(el.scrollHeight, p.distance)
   }, [visibleCount])
 
+  // ── Turn-Navigation (Issue turn-navigation): Sprung zum Turn ──
+  // Innerhalb des Fensters sofort scrollen; davor liegende Turns decken
+  // das Fenster auf (visibleCountForJump) — dieser Effect scrollt NACH dem
+  // Re-Render auf das frisch gemountete [data-entry-idx] (wie reveal: erst
+  // wachsen, dann positionieren, damit scrollHeight schon stimmt).
+  useEffect(() => {
+    const p = pendingJumpRef.current
+    if (!p) return
+    const target = document.querySelector(`[data-entry-idx="${p.index}"]`)
+    if (!target) return
+    pendingJumpRef.current = null
+    stickToBottomRef.current = false
+    setAtTail(false)
+    target.scrollIntoView({ behavior: 'auto', block: 'start' })
+  }, [visibleCount, entries])
+
+  const handleJumpToEntry = useCallback((index) => {
+    const target = document.querySelector(`[data-entry-idx="${index}"]`)
+    if (target) {
+      // liegt im Fenster → direkt (smooth, außer reduced motion)
+      stickToBottomRef.current = false
+      setAtTail(false)
+      target.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' })
+      return
+    }
+    // außerhalb: Fenster aufdecken (Index inklusive + etwas Luft), der
+    // Effect oben springt nach dem Render — instant, kein Smooth über Seiten.
+    pendingJumpRef.current = { index }
+    setVisibleCount(c => Math.min(entries.length, visibleCountForJump(c, entries.length, index) + 2))
+  }, [entries.length])
+
   const handleScroll = useCallback(() => {
     const el = scrollContainerRef.current
     if (!el) return
@@ -194,9 +273,39 @@ export default function App() {
         setVisibleCount(c => growWindow(c))
       }
     }
-    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
-    stickToBottomRef.current = distFromBottom < 80  // resume only when near bottom
+    // Gemeinsame Schluss-Regel: Auto-Scroll klebt nur, wenn der Reader am
+    // Ende ist (isAtTail, getestet) — dieselbe Toleranz für Ref und Button.
+    const tail = isAtTail(el.scrollTop, el.clientHeight, el.scrollHeight)
+    stickToBottomRef.current = tail
+    setAtTail(prev => (prev === tail ? prev : tail))
   }, [])
+
+  // „Zum Neuesten" — klebenden Modus wiederherstellen und ans Ende fahren.
+  // Reduced motion bekommt den Sprung statt der Animation.
+  const scrollToLatest = useCallback(() => {
+    stickToBottomRef.current = true
+    setAtTail(true)
+    endRef.current?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth' })
+  }, [])
+
+  // Work-Details-Wechsel: Distanz vom Ende vorher einfangen, nach dem
+  // Re-Render (geänderte Höhen!) wiederherstellen — gleiches Muster wie
+  // Reveal-Older (chat-window.js), kein Springen beim Umklappen.
+  const workScrollRef = useRef(null)
+  const changeWorkDetails = useCallback((mode) => {
+    const el = scrollContainerRef.current
+    if (el) workScrollRef.current = { distance: captureScrollDistance(el.scrollHeight, el.scrollTop) }
+    setWorkDetails(mode)
+    try { localStorage.setItem('aiui-work-details', mode) } catch {}
+  }, [])
+  useEffect(() => {
+    const p = workScrollRef.current
+    if (!p) return
+    workScrollRef.current = null
+    const el = scrollContainerRef.current
+    if (!el) return
+    el.scrollTop = restoreScrollTop(el.scrollHeight, p.distance)
+  }, [workDetails])
 
   // Global drag/drop
   const handleDragOver = useCallback((e) => { e.preventDefault(); setDragOver(true) }, [])
@@ -209,6 +318,11 @@ export default function App() {
   }, [addFiles])
 
   const handleSend = async (text) => {
+    // Notification-Permission beim ersten Send holen (User-Geste). Still
+    // bleiben bei 'denied' — fragenwirbelt niemanden.
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      try { Notification.requestPermission() } catch { /* older API */ }
+    }
     // Resolve @<image> mentions into attachments so they preview live in the
     // chat AND are sent as vision content. (The server also attaches bare
     // @tokens as a fallback; client-side resolution is what powers the preview.)
@@ -237,6 +351,7 @@ export default function App() {
   }
 
   const handleSwitchSession = async (path) => {
+    try { sessionStorage.setItem('aiui-tab-session', path) } catch {}
     await fetch(apiUrl('/api/session/switch'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -246,7 +361,33 @@ export default function App() {
     setSessionRefresh(n => n + 1)
   }
 
+  // Tab-Restore (pi-web #887): nachdem der Server die Live-Session gepusht
+  // hat, springt der Tab EINMAL auf seine gemerkte Session zurück — nur wenn
+  // die noch existiert. Ein neues Chat (kein Pfad gemerkt) räumt den Key ab.
+  useEffect(() => {
+    if (tabSessionRestoredRef.current || !connected || !sessionId) return
+    tabSessionRestoredRef.current = true
+    let stored = null
+    try { stored = sessionStorage.getItem('aiui-tab-session') } catch { return }
+    if (!stored) return
+    fetch(apiUrl('/api/sessions'))
+      .then(r => (r.ok ? r.json() : []))
+      .then(list => {
+        const arr = Array.isArray(list) ? list : (list?.sessions || [])
+        const hit = arr.find(s => s.path === stored)
+        if (hit && hit.id !== sessionId) {
+          fetch(apiUrl('/api/session/switch'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: stored }),
+          }).then(() => { setVisibleCount(PAGE_SIZE); setSessionRefresh(n => n + 1) }).catch(() => {})
+        }
+      })
+      .catch(() => {})
+  }, [connected, sessionId])
+
   const handleNewChat = async () => {
+    try { sessionStorage.removeItem('aiui-tab-session') } catch {}
     await startNewChat()
     setVisibleCount(PAGE_SIZE) // Lazy-Render: Fenster zurücksetzen
     setSessionRefresh(n => n + 1)
@@ -342,6 +483,7 @@ export default function App() {
   }
 
   return (
+    <ToastProvider>
     <div className="app" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
       {dragOver && <div className="drop-zone"><span>Drop files here</span></div>}
       {!authLoading && !authed && <LoginModal onSuccess={checkMe} />}
@@ -365,7 +507,13 @@ export default function App() {
       <main className={`main ${!sidebarOpen ? 'full' : ''}`}>
         <header className="topbar">
           {!sidebarOpen && (
-            <button className="tb-btn" onClick={() => setSidebarOpen(true)}>☰</button>
+            <button className="tb-btn" onClick={() => setSidebarOpen(true)} title="Show sidebar" aria-label="Show sidebar">☰</button>
+          )}
+          {wasConnected && !connected && (
+            <span className="tb-reconnect" role="status" title="Connection lost — reconnecting to the server">
+              <span className="tb-reconnect-dots" aria-hidden="true"><i /><i /><i /></span>
+              Reconnecting
+            </span>
           )}
           {agents.length > 1 && (
             <button className="tb-agent" onClick={() => setShowAgentPicker(true)} title="Choose agent">
@@ -376,6 +524,7 @@ export default function App() {
             <button
               className={`tb-btn tb-tts ${ttsOn ? 'on' : ''} ${speaking ? 'speaking' : ''}`}
               onClick={toggleTts}
+              aria-label={ttsOn ? 'Read answers aloud (on)' : 'Read answers aloud (off)'}
               title={ttsOn ? 'Reads answers aloud (on)' : 'Read answers aloud'}
             >
               {ttsOn ? <Volume2 size={15} /> : <VolumeX size={15} />}
@@ -404,7 +553,8 @@ export default function App() {
             <button
               className={`tb-btn tb-canvas ${canvasOpen ? 'on' : ''}`}
               onClick={() => { const n = !canvasOpen; setCanvasOpen(n); localStorage.setItem('aiui-canvas-open', n ? '1' : '0') }}
-              title={canvasOpen ? 'Recherche-Panel schließen' : 'Recherche-Panel öffnen'}
+              title={canvasOpen ? copy.canvasClose : copy.canvasOpen}
+              aria-label={canvasOpen ? 'Close research panel' : 'Open research panel'}
             >
               <PanelRight size={15} />
             </button>
@@ -415,7 +565,7 @@ export default function App() {
               {me.quota && me.quota.limit !== null && (
                 <span className="tb-user-quota" title="queries used today / daily limit">{me.quota.used}/{me.quota.limit}</span>
               )}
-              <button className="tb-user-logout" onClick={handleLogout} title="Log out">⎋</button>
+              <button className="tb-user-logout" onClick={handleLogout} title="Log out" aria-label="Log out">⎋</button>
             </div>
           )}
           <div style={{ flex: 1 }} />
@@ -430,16 +580,19 @@ export default function App() {
                   revealPendingRef.current = { distance: el ? captureScrollDistance(el.scrollHeight, el.scrollTop) : 0 }
                   setVisibleCount(c => growWindow(c))
                 }}>
-                  ⟨ {Math.min(win.startIndex, PAGE_SIZE)} ältere anzeigen{win.startIndex > PAGE_SIZE ? '' : ' (alles)'} ⟩
+                  {(win.startIndex > PAGE_SIZE
+                    ? copy.showOlder(Math.min(win.startIndex, PAGE_SIZE))
+                    : copy.showOlderAll(Math.min(win.startIndex, PAGE_SIZE)))}
                 </button>
               )}
               {entries.slice(win.startIndex).map((entry, i) => {
-                if (entry.role === 'user') return <UserEntry key={i} text={entry.text} images={entry.images} onCopy={copyEntry} />
+                const entryIdx = win.startIndex + i
+                if (entry.role === 'user') return <UserEntry key={i} entryIdx={entryIdx} text={entry.text} images={entry.images} onCopy={copyEntry} />
                 if (entry.role === 'error') return <ErrorEntry key={i} text={entry.text} onCopy={copyEntry} />
                 // Follow-ups are clickable only on the settled chat tail —
                 // a new turn (current/streaming) unmounts them naturally.
                 const interactive = i === entries.length - win.startIndex - 1 && !current && !streaming
-                return <AssistantEntry key={i} entry={entry} isStreaming={false} onCopy={copyEntry} interactive={interactive} onAsk={handleSend} />
+                return <AssistantEntry key={i} entry={entry} isStreaming={false} onCopy={copyEntry} interactive={interactive} onAsk={handleSend} workDetails={workDetails} />
               })}
               {current && <AssistantEntry entry={current} isStreaming={true} onCopy={copyEntry} />}
               {steerQueue.map((text, i) => (
@@ -455,6 +608,10 @@ export default function App() {
             <EmptyState agents={agents} activeAgent={sessionAgent} onPickAgent={handlePickAgent} onPickExample={pickExample} />
           )}
         </div>
+
+        {hasContent && <TurnRail entries={entries} startIndex={win.startIndex} onJump={handleJumpToEntry} />}
+
+        {hasContent && !atTail && <JumpToLatest onClick={scrollToLatest} />}
 
         <StatsFooter stats={sessionStats} isCompacting={isCompacting} autoCompactionEnabled={autoCompactionEnabled} />
         <InputBar
@@ -515,8 +672,9 @@ export default function App() {
         <ReleaseNotes onClose={() => navigate('')} />
       )}
       {showSettings && (
-        <SettingsPanel onClose={() => setShowSettings(false)} />
+        <SettingsPanel onClose={() => setShowSettings(false)} workDetails={workDetails} onWorkDetailsChange={changeWorkDetails} />
       )}
     </div>
+    </ToastProvider>
   )
 }

@@ -122,14 +122,19 @@ export function reducer(state, action) {
       // DON'T commit current yet — tool_execution events may follow before next message_start
       // Just mark the current turn's message as complete
       if (!state.current) return state
+      // Per-attempt Usage stash (Issue per-turn-usage-workdetails): das
+      // SDK-Event trägt message.usage (Pflichtfeld, defensiv || — alte
+      // Events/Provider ohne usage). Die Commit-Punkte übernehmen es per
+      // Spread mit.
+      const cur = { ...state.current, usage: action.message?.usage || state.current.usage }
       // Provider-Fehler live sichtbar (SDK: Content leer, errorMessage am
       // Message-Objekt). Stash am current; die Commit-Punkte (turn_end /
       // agent_end / agent_settled) machen daraus eine Error-Row — sonst wäre
       // der fehlgeschlagene Turn unsichtbar.
-      if (action.message?.errorMessage && !state.current.text && !state.current.toolCalls.length) {
-        return { ...state, current: { ...state.current, errorMessage: action.message.errorMessage } }
+      if (action.message?.errorMessage && !cur.text && !cur.toolCalls.length) {
+        return { ...state, current: { ...cur, errorMessage: action.message.errorMessage } }
       }
-      return { ...state, current: { ...state.current, messageComplete: true } }
+      return { ...state, current: { ...cur, messageComplete: true } }
     }
 
     case 'turn_end': {

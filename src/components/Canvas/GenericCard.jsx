@@ -11,6 +11,7 @@
 import { Component } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { copy } from '../../lib/copy'
 
 // ── ErrorBoundary: eine Karte, die wirft, wird zur Fehlerkarte ──
 export class CardBoundary extends Component {
@@ -45,7 +46,7 @@ function Value({ v }) {
   }
   if (Array.isArray(v)) {
     if (v.every((x) => typeof x !== 'object')) return <span>{v.join(', ')}</span>
-    return <details className="cv-details"><summary>{v.length} Einträge</summary><KvTable data={Object.fromEntries(v.map((x, i) => [i + 1, x]))} /></details>
+    return <details className="cv-details"><summary>{copy.entriesCount(v.length)}</summary><KvTable data={Object.fromEntries(v.map((x, i) => [i + 1, x]))} /></details>
   }
   return <details className="cv-details"><summary>Objekt</summary><KvTable data={v} /></details>
 }

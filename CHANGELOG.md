@@ -10,6 +10,120 @@ The latest version is shown in the UI under `#/releases`.
 
 ### Added
 
+- **Work-Details-Modi (Issue work-details-folding)** — dsh § „Turn Process
+  Folding", auf aiui übersetzt: Settings → Work Details schaltet die
+  Prozess-Sichtbarkeit ABGESCHLOSSENER Turns — `standard` (Status quo:
+  Thinking offen, Tool-Cards zu) · `verbose` (alles offen) · `compact`
+  (Thinking zu, Tool-Prozess hinter „N tool calls · show"-Zeile, auf
+  Demand aufklappbar). Ergebnisse (Files written, Usage-Row, Follow-ups)
+  bleiben in jedem Modus sichtbar; das Live-Turn zeigt immer alles.
+  Disclosure-Komponenten nutzen Override-Semantik (userOpen=null = Modus
+  gilt, manuelle Toggles bleiben). Modus-Wechsel bewahrt die Scroll-
+  Distanz vom Ende (Reveal-Muster, live exakt 2000→2000px verifiziert),
+  persistiert per localStorage. Widget: kein Prop → standard = exakt heute.
+
+- **Best-of-UX-Batch (Top-Repos, Ledger-Delta 2026-09-28/10-01)** — vier
+  S-Items aus pi-web/dsh, alle im Live-Browser verifiziert:
+  1. **Gewichtete Turn-Marks** (pi-web #939 „tool-call count badge"):
+   Rail-Mark-Höhe wächst mit den Tool-Calls des Turns (sqrt-Skalierung,
+   9–22px) — 1-Zeilen-Antwort vs. 45-Tool-Deep-Research auf einen Blick
+   unterscheidbar; aria-label nennt die Zahl.
+  2. **Browser-Notification bei Turn-Ende** (pi-web; Ledger: E2E-Turns
+   375s+): nur bei granted Permission UND verstecktem Tab; Permission-Frage
+   beim ersten Prompt-Send (User-Geste); Klick fokussiert den Tab.
+  3. **Session pro Tab merken** (pi-web #887): sessionStorage-Key wird bei
+   Session-Wechsel gesetzt, beim Reload EINMAL zurückgesprungen — nur wenn
+   die Session noch existiert; New Chat räumt den Key ab; parallele Tabs
+   behalten jeweils ihre eigene Session.
+  4. **PathLabel** (dsh PathLabel): Pfade als gedämpfte Verzeichnisse +
+   prägnanter Dateiname (`src/lib/path-label.js`, 5 Tests) — in Tool-Cards,
+   Files-written-Chips und @-mention-Dropdown.
+
+- **Per-Turn Token-Usage-Row (Issue per-turn-usage-workdetails)** —
+  dsh-Regel „expandable usage row only when every attempt reports safe,
+  exact usage": jede abgeschlossene Assistant-Antwort zeigt ihre exakte
+  per-attempt Buchhaltung als aufklappbare Zeile (`TurnUsage`, native
+  details wie GenericCard): Summary ↑ in / ↓ out / $ at catalog price,
+  aufgeklappt cache read/write · reasoning (Teil von ↓) · total.
+  Datenlage geklärt via .links/pi: `AssistantMessage.usage` ist SDK-
+  Pflichtfeld und im Session-JSONL persistiert — aiui warf es an zwei
+  Nähten weg. Jetzt: `fromMessage` übernimmt es in den Replay-Entry
+  (conditional spread — ohne usage kein Key), der Reducer stash es am
+  message_end (wie errorMessage; Commit-Punkte übernehmen per Spread).
+  Ohne exakte usage (alte Records, Widget) rendert die Row schlicht nichts.
+  Live verifiziert: DO&CO-Session 44/44 Turns mit Row (↑ 13.2k ↓ 251,
+  Breakdown korrekt), Lazy-Session (keine usage) 0 Rows. Keine Server-
+  Änderung nötig. Work-Details-Folding → Folge-Ticket work-details-folding.
+
+- **UI-Sprache vereinheitlicht: EN (Issue ui-language-unification)** —
+  Entscheidung (Nutzer 2026-10-15): UI-Chrome = Englisch, zentral in neuer
+  Copy-Map `src/lib/copy.js` (Seam für ein späteres i18n-Ticket). Migriert:
+  Reveal-Older („ältere anzeigen“ → „Show N older“), Canvas-Sektionen
+  (Fortschritt/Lücken/Karten → Progress/Gaps/Cards), Gap-Badges (→ not
+  public / not searched), Beleg-/Panel-/Version-Tooltips, EmptyState
+  „Beispiele“ → „Examples“, GenericCard „Einträge“, Graph-End-Labels.
+  Bewusste Ausnahmen (dokumentiert in copy.js + am Code): Agent-Protokolle
+  (followUps-Regex + der „Mögliche Vertiefungen“-Head spiegelt deutsche
+  Agent-Output-Sektion), Gaps-Klassifizierungs-Regexes (parsen Agent-Text),
+  Widget/embed (deutschsprachiges Produkt). Live verifiziert: „Examples“,
+  „⟨ Show 50 older ⟩“; grep-frei bis auf die dokumentierten Ausnahmen.
+
+- **Turn-Navigation: Rail am Transkript-Rand (Issue turn-navigation)** —
+  dsh-Muster (fixede Marks außerhalb des Chat-Flows, blendet sich bei
+  schmalem Transkript aus): `TurnRail` rendert eine Mark pro User-Turn
+  (reine Logik `src/lib/turn-rail.js`, 8 Tests); Klick springt zum Turn —
+  auch außerhalb des Lazy-Render-Fensters: `visibleCountForJump` deckt das
+  Fenster exakt bis zum Ziel auf, ein Effect scrollt nach dem Render auf
+  `[data-entry-idx]` (UserEntries tragen ihren absoluten Index). Innerhalb
+  des Fensters springt der Klick smooth (reduced motion: instant), außerhalb
+  instant (kein Smooth über 5000px). Marks sind native Buttons (Tab/Enter/
+  Fokus-Ring), Tooltip + aria-label mit Turn-Nr und Prompt-Schnitt; außerhalb
+  liegende Marks sind dezenter. Versteckt sich unter 1180px Fensterbreite.
+  Live verifiziert an der 120-Msg-Session: Sprung auf Turn 1 mountet,
+  positioniert exakt, JumpToLatest erscheint korrekt.
+
+- **App-weite Toast-Fläche (Issue toast-surface)** — dsh-Regel „transiente
+  Ergebnis-Meldungen gehören einem Owner außerhalb der meldenden Fläche":
+  neuer `ToastProvider` (`src/components/Toasts.jsx`) in App-Root + reine
+  Queue-Logik (`src/lib/toast-queue.js`, 8 Tests: max 3, älteste fliegt,
+  id-Guard). InputBars ad-hoc-setTimeout-Notice (`.ib-notice`) ist entfernt —
+  Attachment-Cap/Bild-Ablehnung laufen als `warn`-Toasts, STT-Fehler als
+  `error`. Escape-Priorität: Modal-Stack und Composer-Abort gewinnen
+  (Capture/stopPropagation bzw. defaultPrevented), sonst schließt Esc den
+  obersten Toast. Container `role="status"` + `aria-live="polite"`.
+  Im Browser verifiziert: realer Pfad (11. Attachment), Stapelung, Esc-Pop,
+  Modal-überlebt-toast. Widget/embed bewusst unberührt.
+
+- **Modal-A11y: Fokus-Management für alle Overlays** — dsh-Lektion
+  („top-layer Escape and Tab handling, restoring the previous focus on
+  close"): neuer `useModal`-Hook (`src/hooks/useModal.js`) ersetzt `useEscape`
+  in allen 8 Overlays (ModelPicker, AgentPicker, ForkPicker, FileExplorer,
+  SkillsBrowser, ReleaseNotes, SettingsPanel, LoginModal). Tab zirkuliert im
+  Dialog (pure `nextTabTarget` aus dem Widget-Trap — eine Funktion, zwei
+  Oberflächen), Escape schließt nur das oberste Overlay (Stack), und der
+  Fokus kehrt zum Auslöser zurück (Focus-Historie statt Snapshot — der
+  Effect läuft nach dem Autofocus der Komponente). Panels tragen jetzt
+  `role="dialog"` + `aria-modal` + `aria-label`; Icon-Buttons (Mic, Attach,
+  Send, Stop, TTS, Canvas, Logout, Closes) bekommen `aria-label`.
+  Im Browser verifiziert: Tab/Shift+Tab verlässt den Dialog nie, Escape
+  schließt, Fokus landet wieder auf dem Auslöser.
+  Panel-Sweep 2026-10-15 (alle 8 Overlays + Slash/Mention-Menüs grün):
+  zwei Nachfolge-Fixes — ForkPicker-TDZ (panelRef vor useModal deklarieren)
+  und ReleaseNotes fehlendes panelRef; useModal stellt restoreTo jetzt per
+  useLayoutEffect bereit (läuft VOR dem Autofocus der Panels — rassenfrei).
+
+- **UI/UX-Pass (Inspirationen: chatbot-template + deepseek-harness)** —
+  "Jump to latest": schwebender Pfeil-Button über dem Composer, sichtbar nur
+  wenn der Reader hochgescrollt hat (`!atTail`, dieselbe `isAtTail`-Schluss-Regel
+  wie der Autoscroll — chatbot-templates `MessageScrollerButton`, dsh-Regel
+  „back-to-bottom sitzt außerhalb des geclippten Transkripts").
+  "Reconnecting"-Indikator in der Topbar bei verlorener SSE-Verbindung (dsh
+  `ConnectionIndicator`). Laufende Zeilen (Thinking, Tool-Status) bekommen
+  statt Blink-Punkt einen ruhigen Highlight-Sweep (dsh `TextShimmer`).
+  Grundlagen: sichtbarer Fokusring (`:focus-visible`) +
+  `prefers-reduced-motion` (CSS-Animationen aus; JS-Scrolls springen statt
+  animieren via neues `src/lib/motion.js`, 5 Tests).
+
 - **Fehler-Turns sichtbar (Widget + Haupt-App)** — Provider-Fehler
   (z.B. „Modell mit ChatGPT-Account nicht unterstützt") waren UNSICHTBAR:
   Content leer, errorMessage am Message-Objekt — fromMessage lieferte null,

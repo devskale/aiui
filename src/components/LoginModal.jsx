@@ -1,14 +1,19 @@
 // ════════════════════════════════════════════════════════════════════
 // LoginModal — username + passphrase gate, shown over the app shell
 // ════════════════════════════════════════════════════════════════════
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { apiUrl } from '../lib/api'
+import { useModal } from '../hooks/useModal'
 
 export function LoginModal({ onSuccess }) {
   const [username, setUsername] = useState('')
   const [passphrase, setPassphrase] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const formRef = useRef(null)
+  // Focus-Trap ohne Escape (hinter dem Login gibt es nichts zu schließen)
+  // und Fokus-Rückkehr — der Auslöser ist hier die App selbst.
+  useModal(formRef, { escape: false })
 
   const submit = async (e) => {
     e.preventDefault()
@@ -37,7 +42,7 @@ export function LoginModal({ onSuccess }) {
 
   return (
     <div className="login-overlay">
-      <form id="aiui-login-form" className="login-modal" onSubmit={submit}>
+      <form id="aiui-login-form" ref={formRef} className="login-modal" role="dialog" aria-modal="true" aria-label="Log in" onSubmit={submit}>
         <div className="login-title">πui</div>
         <input
           id="aiui-username"

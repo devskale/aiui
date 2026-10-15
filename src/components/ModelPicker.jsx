@@ -3,7 +3,7 @@
 // ════════════════════════════════════════════════════════════════════
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { apiUrl } from '../lib/api'
-import { useEscape } from '../hooks/useEscape'
+import { useModal } from '../hooks/useModal'
 import { useModels } from '../hooks/useModels'
 import { MODEL_RENDER_CAP, withFavsFirst } from '../lib/models'
 
@@ -12,9 +12,10 @@ export function ModelPicker({ activeModel, onSelect, onClose, onOpenSettings }) 
   const [search, setSearch] = useState('')
   const [error, setError] = useState(null)
   const inputRef = useRef(null)
+  const panelRef = useRef(null)
 
   useEffect(() => { inputRef.current?.focus() }, [])
-  useEscape(onClose)
+  useModal(panelRef, { onClose })
 
   const ordered = useMemo(() => withFavsFirst(models, favModels), [models, favModels])
   const q = search.trim().toLowerCase()
@@ -44,13 +45,14 @@ export function ModelPicker({ activeModel, onSelect, onClose, onOpenSettings }) 
 
   return (
     <div className="model-picker-overlay" onClick={onClose}>
-      <div className="model-picker" onClick={e => e.stopPropagation()}>
+      <div className="model-picker" ref={panelRef} role="dialog" aria-modal="true" aria-label="Choose model" onClick={e => e.stopPropagation()}>
         <div className="mp-search">
           <input
             ref={inputRef}
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search models…"
+            aria-label="Search models"
+          placeholder="Search models…"
           />
         </div>
         <div className="mp-list">

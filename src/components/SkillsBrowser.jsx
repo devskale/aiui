@@ -7,7 +7,7 @@
 // ════════════════════════════════════════════════════════════════════
 import { useState, useEffect, useRef } from 'react'
 import { apiUrl } from '../lib/api'
-import { useEscape } from '../hooks/useEscape'
+import { useModal } from '../hooks/useModal'
 
 function fmtInstalls(n) {
   if (!n) return ''
@@ -31,7 +31,8 @@ export function SkillsBrowser({ onClose }) {
   }, [])
 
   useEffect(() => { inputRef.current?.focus() }, [])
-  useEscape(onClose)
+  const panelRef = useRef(null)
+  useModal(panelRef, { onClose })
 
   const runSearch = (query) => {
     if (!query.trim()) { setData(null); return }
@@ -51,7 +52,7 @@ export function SkillsBrowser({ onClose }) {
 
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="skills-browser" onClick={e => e.stopPropagation()}>
+      <div className="skills-browser" ref={panelRef} role="dialog" aria-modal="true" aria-label="Skills catalog" onClick={e => e.stopPropagation()}>
         <header className="fe-header">
           <h2>Skills catalog</h2>
           <input
@@ -59,9 +60,10 @@ export function SkillsBrowser({ onClose }) {
             className="sb-search fe-search"
             value={q}
             onChange={e => onChange(e.target.value)}
+            aria-label="Search skills"
             placeholder="Search skills.sh…"
           />
-          <button className="sp-close" onClick={onClose}>✕</button>
+          <button className="sp-close" onClick={onClose} aria-label="Close">✕</button>
         </header>
 
         <div className="fe-body">

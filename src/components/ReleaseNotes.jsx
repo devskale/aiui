@@ -3,8 +3,8 @@
 // Mounted at route 'releases' (#/releases). Markdown rendered with the
 // same react-markdown + remark-gfm pipeline as chat entries.
 // ════════════════════════════════════════════════════════════════════
-import { useState, useEffect } from 'react'
-import { useEscape } from '../hooks/useEscape'
+import { useState, useEffect, useRef } from 'react'
+import { useModal } from '../hooks/useModal'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { apiUrl } from '../lib/api'
@@ -34,17 +34,18 @@ export function ReleaseNotes({ onClose }) {
     return () => { cancelled = true }
   }, [])
 
-  useEscape(onClose)
+  const panelRef = useRef(null)
+  useModal(panelRef, { onClose })
 
   return (
     <div className="rn-overlay" onClick={onClose}>
-      <div className="rn-panel" onClick={e => e.stopPropagation()}>
+      <div className="rn-panel" ref={panelRef} role="dialog" aria-modal="true" aria-label="Release notes" onClick={e => e.stopPropagation()}>
         <header className="rn-header">
           <div className="rn-title">
             <span className="rn-logo">π</span>
             <span>Release Notes</span>
           </div>
-          <button className="rn-close" onClick={onClose} title="Close (Esc)">{CLOSE_ICON}</button>
+          <button className="rn-close" onClick={onClose} aria-label="Close release notes" title="Close (Esc)">{CLOSE_ICON}</button>
         </header>
         <div className="rn-content">
           {loading && <div className="rn-loading">Loading…</div>}

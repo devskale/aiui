@@ -6,6 +6,7 @@
 // one click from "what can this do?" to a running research.
 // ════════════════════════════════════════════════════════════════════
 import { Mic, Sparkles } from 'lucide-react'
+import { copy } from '../lib/copy'
 
 export function EmptyState({ agents = [], activeAgent = 'default', onPickAgent, onPickExample }) {
   const chooser = agents.length > 1 && onPickAgent
@@ -35,7 +36,7 @@ export function EmptyState({ agents = [], activeAgent = 'default', onPickAgent, 
       {examples.length > 0 && onPickExample && (
         <div className="empty-examples">
           <div className="empty-examples-head">
-            <Sparkles size={12} /> Beispiele
+            <Sparkles size={12} /> {copy.examples}
           </div>
           <div className="empty-examples-list">
             {examples.map((ex, i) => (
