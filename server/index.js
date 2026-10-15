@@ -10,11 +10,12 @@ import * as Mime from './mime.js'
 import { authEnabled, verifyCredentials, issueSession, revokeSession, userLimit, setSessionCookie, clearSessionCookie, clearStaleSessionCookies, readSessionCookies, currentSession, requireAuth, noteLoginAttempt } from './auth.js'
 import { widgetKeyEntry, originAllowed, noteMintAttempt, mintWidgetToken, getWidgetSecret, widgetQuotaAvailable, verifyWidgetToken, frameAncestorsFor } from './widget-auth.js'
 import { consumeQuota, peekQuota } from './quota.js'
-import { getOrCreateSession, disposeSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, listSessions, switchToSession, resumeWidgetVisitor, getAvailableModels, getCommands, getSessionInfo, getSessionStats, getSessionHistory, newSession, workspaceCwd, getForkTargets, forkSession, scopedUser, widgetVisitorStatus, prepareWidgetContext, composeWidgetPrompt, VISITOR_RE } from './pi-session.js'
+import { getOrCreateSession, disposeSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, listSessions, switchToSession, renameSession, deleteSession, resumeWidgetVisitor, getAvailableModels, getCommands, getSessionInfo, getSessionStats, getSessionHistory, newSession, workspaceCwd, getForkTargets, forkSession, scopedUser, widgetVisitorStatus, prepareWidgetContext, composeWidgetPrompt, VISITOR_RE } from './pi-session.js'
 import { listAgents } from './agents.js'
 import { sttConfigured, sttReachable, sttModel, transcribe } from './stt.js'
 import { resolveBashOutputPath, readBashOutput } from './bash-output.js'
 import { listDir, readTextFile, resolveWorkspacePath, mimeFor } from './workspace-files.js'
+import { toMarkdown } from '../shared/session-export.js'
 import { searchCatalog } from './skills-catalog.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -502,6 +503,49 @@ app.post('/api/session/switch', async (req, res) => {
     bus.push('session_stats', getSessionStats(req.user))
   } catch (err) {
     getBus(req.user).push('error', { message: err.message })
+  }
+})
+
+// ── Session doc-mgmt: rename / export / delete ──
+app.post('/api/session/rename', async (req, res) => {
+  const { path: sessionPath, name } = req.body || {}
+  if (!sessionPath) return res.status(400).json({ error: 'no path' })
+  try {
+    await renameSession(req.user, sessionPath, name)
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(400).json({ error: err.message })
+  }
+})
+
+app.get('/api/session/export', async (req, res) => {
+  const sessionPath = (req.query.path || '').toString()
+  if (!sessionPath) return res.status(400).json({ error: 'no path' })
+  try {
+    const ctx = { } // Guard läuft in pi-session; hier lesen über dieselbe Regel:
+    const list = await listSessions(req.user)
+    const wanted = path.resolve(sessionPath)
+    const meta = list.find(s => path.resolve(s.path) === wanted)
+    if (!meta) return res.status(404).json({ error: 'session not found' })
+    const jsonl = fs.readFileSync(meta.path, 'utf8') // Pfad aus der eigenen Liste — kein Traversal
+    const md = toMarkdown(jsonl, { name: meta.name, id: meta.id })
+    const safe = (meta.name || meta.id || 'session').replace(/[^\w\-]+/g, '_').slice(0, 60)
+    res.setHeader('Content-Type', 'text/markdown; charset=utf-8')
+    res.setHeader('Content-Disposition', `attachment; filename="${safe}.md"`)
+    res.send(md)
+  } catch (err) {
+    res.status(400).json({ error: err.message })
+  }
+})
+
+app.post('/api/session/delete', async (req, res) => {
+  const { path: sessionPath } = req.body || {}
+  if (!sessionPath) return res.status(400).json({ error: 'no path' })
+  try {
+    await deleteSession(req.user, sessionPath)
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(400).json({ error: err.message })
   }
 })
 

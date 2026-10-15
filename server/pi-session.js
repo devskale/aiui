@@ -691,6 +691,49 @@ export async function listSessions(user) {
   }
 }
 
+// ── Doc-Mgmt: rename / delete (Issue session-doc-mgmt) ──
+
+// Session-Pfade sind User-Input: resolve + Prefix-Check gegen das eigene
+// sessionDir (Traversal-Guard, endet auf .jsonl). Wirft bei Verstoß.
+function assertSessionPath(ctx, sessionPath) {
+  const resolved = path.resolve(String(sessionPath))
+  const dir = path.resolve(ctx.sessionDir)
+  if (!resolved.startsWith(dir + path.sep) || !resolved.endsWith('.jsonl')) {
+    throw new Error('invalid session path')
+  }
+  return resolved
+}
+
+// Umbenennen via SDK-eigenem Mechanismus: appendSessionInfo hängt eine
+// session_info-Entry an die JSONL — list() nimmt die neueste ("" = löschen
+// den Titel). Funktioniert auch für NICHT aktive Sessions (open() liest die
+// Datei, append schreibt ans Ende — seltene, kleine Zeile, append-atomar).
+export async function renameSession(user, sessionPath, name) {
+  const ctx = ctxFor(user)
+  const resolved = assertSessionPath(ctx, sessionPath)
+  // SDK-Falle: open() auf NICHT existierende Datei baut einen leeren SM,
+  // appendSessionInfo schreibt dann NICHT (flushed=false, keine Konversation)
+  // — stiller No-Op. Existenz prüfen und sauber werfen.
+  if (!fs.existsSync(resolved)) throw new Error('session not found')
+  const sm = SessionManager.open(resolved)
+  sm.appendSessionInfo(String(name ?? ''))
+}
+
+// Löschen einer Session-Datei. Die AKTIVE Session wird abgelehnt (der
+// Runtime hält sie offen — erst wegswitchen oder neue Chat). Fork-Kinder
+// werden zu Wurzeln (buildSessionTree verträgt fehlende Parents).
+export async function deleteSession(user, sessionPath) {
+  const ctx = ctxFor(user)
+  const resolved = assertSessionPath(ctx, sessionPath)
+  if (!fs.existsSync(resolved)) throw new Error('session not found')
+  const activeId = ctx.runtime?.session?.sessionId
+  const targetId = sessionIdFromPath(resolved)
+  if (targetId && targetId === activeId) {
+    throw new Error('cannot delete the active session')
+  }
+  fs.rmSync(resolved)
+}
+
 // Resume a stored session. SDK-owned (runtime.switchSession); bus rebinds via
 // setRebindSession. cwdOverride pins the session to this user's workspace
 // regardless of what's recorded in the session file header. The session's

@@ -10,6 +10,21 @@ The latest version is shown in the UI under `#/releases`.
 
 ### Added
 
+- **Session-Doc-Mgmt: Rename / Export / Delete (Issue session-doc-
+  mgmt)** — Sessions sind Dokumente; die Basis-Pflege hängt jetzt direkt
+  an der Sidebar-Zeile (Hover-Aktionen): **Rename** inline (Enter/Esc,
+  SDK-eigenes appendSessionInfo — persistiert in der JSONL, neueste
+  session_info gewinnt, leerer Name cleart), **Export** als Markdown-Download
+  (pure Transform in shared/session-export.js mit derselben Entry-Pipeline
+  wie der History-Replay — inkl. toolResult-Pairing, Thinking in <details>,
+  Tool-Output auf 2000 Zeichen gekappt, Backtick-Fences bombiert; 7 Tests),
+  **Delete** zweistufig (Armierung verfällt nach 2,5s; aktive Session wird
+  serverseitig abgelehnt und kriegt keinen Button). Server-Guard: Pfad muss
+  resolve() unter dem eigenen sessionDir liegen + .jsonl enden (Traversal),
+  fehlende Datei → sauberer Fehler (SDK-Falle: open() auf nicht existierende
+  Datei + appendSessionInfo ist ein stiller No-Op).
+  Sidebar-Titel zeigt jetzt name || firstMessage.
+
 - **Streaming-Robustheits-Pins (Issue streaming-robustness)** — die zwei
   realexistierenden Bruchkanten sind jetzt gepinnt statt nur gelebt:
   (1) Replay-Duplikate: 4 Reducer-Tests — text_delta vor message_start ist

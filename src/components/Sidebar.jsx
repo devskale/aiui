@@ -1,9 +1,9 @@
 // ════════════════════════════════════════════════════════════════════
 // Sidebar — new chat, sessions, skills/prompts/extensions
 // ════════════════════════════════════════════════════════════════════
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { apiUrl } from '../lib/api'
-import { Settings, SquarePen, GitFork, Folder, ChevronDown, ChevronRight, CornerDownRight, Search, PanelLeftClose, Keyboard } from 'lucide-react'
+import { Settings, SquarePen, GitFork, Folder, ChevronDown, ChevronRight, CornerDownRight, Search, PanelLeftClose, Keyboard, Pencil, Download, Trash2 } from 'lucide-react'
 
 function timeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime()
@@ -41,6 +41,8 @@ export function Sidebar({ open, onToggle, connected, sessionAlive, sessionId, on
   const [commands, setCommands] = useState(null)
   const [sessions, setSessions] = useState([])
   const [search, setSearch] = useState('')
+  const [docRefresh, setDocRefresh] = useState(0) // rename/delete: Liste selbst nachladen
+  const reloadSessions = () => setDocRefresh(n => n + 1)
 
   useEffect(() => {
     fetch(apiUrl('/api/commands'))
@@ -54,7 +56,7 @@ export function Sidebar({ open, onToggle, connected, sessionAlive, sessionId, on
       .then(r => r.json())
       .then(setSessions)
       .catch(() => {})
-  }, [refreshTrigger])
+  }, [refreshTrigger, docRefresh])
 
   const filtered = search
     ? sessions.filter(s => (s.firstMessage || s.id || '').toLowerCase().includes(search.toLowerCase()))
@@ -112,20 +114,12 @@ export function Sidebar({ open, onToggle, connected, sessionAlive, sessionId, on
             filtered.length === 0 ? (
               <div className="connecting"><span className="thinking-dot" /><span>No matches</span></div>
             ) : filtered.map(s => (
-              <button
-                key={s.id}
-                className={`sb-session ${s.id === sessionId ? 'active' : ''}`}
-                onClick={() => onSwitchSession?.(s.path)}
-                title={s.firstMessage}
-              >
-                <span className="sb-session-title">{s.firstMessage || 'New session'}</span>
-                <span className="sb-session-meta">{timeAgo(s.modified)} · {s.messageCount} msgs</span>
-              </button>
+              <SessionRow key={s.id} s={s} active={s.id === sessionId} onSwitchSession={onSwitchSession} onChanged={reloadSessions} />
             ))
           ) : tree.length === 0 ? (
             <div className="connecting"><span className="thinking-dot" /><span>No sessions</span></div>
           ) : tree.map(s => (
-            <SessionNode key={s.id} node={s} sessionId={sessionId} onSwitchSession={onSwitchSession} depth={0} />
+            <SessionNode key={s.id} node={s} sessionId={sessionId} onSwitchSession={onSwitchSession} onChanged={reloadSessions} depth={0} />
           ))}
         </div>
       </div>
@@ -195,23 +189,115 @@ function CollapsibleGroup({ label, items, onBrowse }) {
 }
 // One node in the session tree. Forks render indented under their parent
 // with a branch glyph so the conversation tree (G2) is visible at a glance.
-function SessionNode({ node, sessionId, onSwitchSession, depth }) {
-  const isChild = depth > 0
+function SessionNode({ node, sessionId, onSwitchSession, onChanged, depth }) {
   return (
     <>
-      <button
-        className={`sb-session ${node.id === sessionId ? 'active' : ''} ${isChild ? 'sb-session--child' : ''}`}
-        style={isChild ? { paddingLeft: `${12 + depth * 14}px` } : undefined}
-        onClick={() => onSwitchSession?.(node.path)}
-        title={node.firstMessage}
-      >
-        {isChild && <span className="sb-session-branch"><CornerDownRight size={11} /></span>}
-        <span className="sb-session-title">{node.firstMessage || 'New session'}</span>
-        <span className="sb-session-meta">{timeAgo(node.modified)} · {node.messageCount} msgs</span>
-      </button>
+      <SessionRow s={node} active={node.id === sessionId} isChild={depth > 0} depth={depth}
+        onSwitchSession={onSwitchSession} onChanged={onChanged} />
       {node.children?.map(c => (
-        <SessionNode key={c.id} node={c} sessionId={sessionId} onSwitchSession={onSwitchSession} depth={depth + 1} />
+        <SessionNode key={c.id} node={c} sessionId={sessionId} onSwitchSession={onSwitchSession} onChanged={onChanged} depth={depth + 1} />
       ))}
     </>
+  )
+}
+
+// Session-Zeile mit Doc-Mgmt-Aktionen (Issue session-doc-mgmt): rename
+// (inline), export (Download), delete (zweistufig). Row ist ein div
+// role=button, damit die Action-Buttons echte <button>s bleiben können
+// (keine verschachtelten Buttons). Titel: name || firstMessage.
+function SessionRow({ s, active, isChild = false, depth = 0, onSwitchSession, onChanged }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [armed, setArmed] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const inputRef = useRef(null)
+
+  useEffect(() => { if (editing) inputRef.current?.focus() }, [editing])
+  useEffect(() => { // Armierung verfällt nach 2.5s
+    if (!armed) return
+    const t = setTimeout(() => setArmed(false), 2500)
+    return () => clearTimeout(t)
+  }, [armed])
+
+  const title = s.name || s.firstMessage || 'New session'
+
+  const saveRename = async () => {
+    const name = draft.trim()
+    setEditing(false)
+    if (name === (s.name || '') || !name) return
+    setBusy(true)
+    try {
+      await fetch(apiUrl('/api/session/rename'), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: s.path, name }),
+      })
+      onChanged?.()
+    } finally { setBusy(false) }
+  }
+
+  const doDelete = async () => {
+    if (!armed) { setArmed(true); return } // erster Klick: nur armieren
+    setBusy(true)
+    try {
+      await fetch(apiUrl('/api/session/delete'), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: s.path }),
+      })
+      onChanged?.()
+    } finally { setArmed(false); setBusy(false) }
+  }
+
+  if (editing) {
+    return (
+      <div className={`sb-session sb-session--editing ${active ? 'active' : ''}`}>
+        <input
+          ref={inputRef}
+          className="sb-rename-input"
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') { e.preventDefault(); saveRename() }
+            if (e.key === 'Escape') { e.preventDefault(); setEditing(false) }
+          }}
+          onBlur={saveRename}
+          aria-label="Session name"
+          maxLength={120}
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className={`sb-session ${active ? 'active' : ''} ${isChild ? 'sb-session--child' : ''}`}
+      style={isChild ? { paddingLeft: `${12 + depth * 14}px` } : undefined}
+      role="button"
+      tabIndex={0}
+      onClick={() => !busy && onSwitchSession?.(s.path)}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSwitchSession?.(s.path) } }}
+      title={s.name || s.firstMessage}
+    >
+      {isChild && <span className="sb-session-branch"><CornerDownRight size={11} /></span>}
+      <span className="sb-session-title">{title}</span>
+      <span className="sb-session-actions">
+        <button className="sb-doc-btn" disabled={busy} title="Rename" aria-label={`Rename ${title}`}
+          onClick={e => { e.stopPropagation(); setDraft(s.name || ''); setEditing(true) }}>
+          <Pencil size={11} />
+        </button>
+        <button className="sb-doc-btn" disabled={busy} title="Export as Markdown" aria-label={`Export ${title}`}
+          onClick={e => { e.stopPropagation(); window.open(apiUrl(`/api/session/export?path=${encodeURIComponent(s.path)}`), '_blank') }}>
+          <Download size={11} />
+        </button>
+        {!active && (
+          <button className={`sb-doc-btn sb-doc-btn--del ${armed ? 'armed' : ''}`} disabled={busy}
+            title={armed ? 'Click again to delete' : 'Delete'} aria-label={`Delete ${title}`}
+            onClick={e => { e.stopPropagation(); doDelete() }}>
+            <Trash2 size={11} />
+          </button>
+        )}
+        {armed && <span className="sb-del-hint">sure?</span>}
+      </span>
+      <span className="sb-session-meta">{timeAgo(s.modified)} · {s.messageCount} msgs</span>
+    </div>
   )
 }
