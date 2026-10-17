@@ -7,7 +7,8 @@ import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { getBus } from './event-bus.js'
 import * as Mime from './mime.js'
-import { authEnabled, verifyCredentials, issueSession, revokeSession, userLimit, setSessionCookie, clearSessionCookie, clearStaleSessionCookies, readSessionCookies, currentSession, requireAuth, noteLoginAttempt } from './auth.js'
+import { authEnabled, verifyCredentials, issueSession, revokeSession, revokeAllSessionsFor, userLimit, setSessionCookie, clearSessionCookie, clearStaleSessionCookies, readSessionCookies, currentSession, requireAuth, noteLoginAttempt } from './auth.js'
+import { registerUser, verifyRegistration, resendVerification, requestReset, consumeReset, maybeSendWelcome, registrationMode } from './email-auth.js'
 import { widgetKeyEntry, originAllowed, noteMintAttempt, mintWidgetToken, getWidgetSecret, widgetQuotaAvailable, verifyWidgetToken, frameAncestorsFor } from './widget-auth.js'
 import { consumeQuota, peekQuota } from './quota.js'
 import { getOrCreateSession, disposeSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, listSessions, switchToSession, renameSession, deleteSession, resumeWidgetVisitor, getAvailableModels, getCommands, getSessionInfo, getSessionStats, getSessionHistory, newSession, workspaceCwd, getForkTargets, forkSession, scopedUser, widgetVisitorStatus, prepareWidgetContext, composeWidgetPrompt, VISITOR_RE } from './pi-session.js'
@@ -127,6 +128,54 @@ const storage = multer.diskStorage({
 const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } })
 
 // ═══ API ROUTES (must be before Vite middleware) ═══
+
+// ── Email registration (public — uniform responses, enumeration-safe by design;
+//    rich module results never cross the wire) ──
+app.get('/api/auth/config', (_req, res) => {
+  res.json({ registration: registrationMode() })
+})
+const REGISTERED_OK = { ok: true, message: 'If this address is eligible, a mail is on its way.' }
+app.post('/api/auth/register', async (req, res) => {
+  const { email, passphrase, inviteCode } = req.body || {}
+  const r = await registerUser({ email, passphrase, inviteCode, ip: req.ip })
+  if (r.status === 'closed') return res.status(403).json({ error: 'registration is closed' })
+  if (r.status === 'rate-ip') return res.status(429).json({ error: 'too many attempts, slow down' })
+  if (r.status === 'bad-invite') return res.status(403).json({ error: 'invalid invite code' })
+  if (r.status === 'invalid-email') return res.status(400).json({ error: 'that does not look like an email address' })
+  if (r.status === 'weak-passphrase') return res.status(400).json({ error: 'passphrase needs at least 8 characters' })
+  if (r.status === 'cooldown') return res.status(429).json({ error: 'a mail was just sent — check your inbox, try again in a minute' })
+  res.json(REGISTERED_OK) // created | pending-resent | exists | mail-failed → all uniform
+})
+app.post('/api/auth/verify', (req, res) => {
+  const r = verifyRegistration(String((req.body || {}).token || ''))
+  if (!r) return res.status(400).json({ error: 'link invalid or expired — request a new one' })
+  clearStaleSessionCookies(res, req.secure)
+  setSessionCookie(res, issueSession(r.user), req.secure) // auto-login on activation
+  maybeSendWelcome(r) // fire-and-forget, budget-guarded in mailer
+  res.json({ ok: true, user: r.user })
+})
+app.post('/api/auth/resend', async (req, res) => {
+  const r = await resendVerification({ email: (req.body || {}).email, ip: req.ip })
+  if (r.status === 'rate-ip') return res.status(429).json({ error: 'too many attempts, slow down' })
+  if (r.status === 'cooldown') return res.status(429).json({ error: 'a mail was just sent — try again in a minute' })
+  res.json(REGISTERED_OK)
+})
+app.post('/api/auth/reset-request', async (req, res) => {
+  const r = await requestReset({ email: (req.body || {}).email, ip: req.ip })
+  if (r.status === 'rate-ip') return res.status(429).json({ error: 'too many attempts, slow down' })
+  if (r.status === 'cooldown') return res.status(429).json({ error: 'a mail was just sent — try again in a minute' })
+  res.json(REGISTERED_OK)
+})
+app.post('/api/auth/reset', (req, res) => {
+  const { token, passphrase } = req.body || {}
+  const r = consumeReset(token, passphrase)
+  if (r.status === 'weak-passphrase') return res.status(400).json({ error: 'passphrase needs at least 8 characters' })
+  if (r.status === 'invalid-token') return res.status(400).json({ error: 'link invalid or expired — request a new one' })
+  revokeAllSessionsFor(r.user) // OWASP: credential change kills its sessions
+  clearStaleSessionCookies(res, req.secure)
+  setSessionCookie(res, issueSession(r.user), req.secure) // auto-login after reset
+  res.json({ ok: true, user: r.user })
+})
 
 // ── Auth (public — login/logout/me sit BEFORE requireAuth) ──
 app.post('/api/login', (req, res) => {

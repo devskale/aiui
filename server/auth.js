@@ -30,6 +30,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { patternsOf } from './model-filter.js'
+import { registeredUserFor, registeredUserLimit } from './email-auth.js'
 
 const AUTH_FILE = process.env.AIUI_AUTH_FILE || path.join(os.homedir(), '.aiui-auth.json')
 export const COOKIE_NAME = 'aiui_session'
@@ -115,9 +116,10 @@ function verifyHash(passphrase, entry) {
 // Normalize a credentials-map entry (string | array) to a list of entries.
 function asList(v) { return Array.isArray(v) ? v : [v] }
 
-/** username known AND passphrase matches their credentials: the per-User
- *  `credentials[username]` entries when present (replacement semantics),
- *  otherwise the shared `passphrases` list.
+/** username known AND passphrase matches. Two credential sources:
+ *  the auth file (config) and registered users (email-auth — self-service
+ *  signup). Registered users match by normalized email; their scrypt hash
+ *  uses the same salt:hash contract.
  *
  *  Timing: unbekannte User werfen NICHT früh — sie laufen gegen einen
  *  Dummy-Scrypt (fester Salt/Hash), damit die Antwortzeit bekannte
@@ -125,20 +127,24 @@ function asList(v) { return Array.isArray(v) ? v : [v] }
  *  pi-web-Härtungs-Checkliste 2026-10-15). */
 const DUMMY_ENTRY = 'a3f1c2e4b9d84760513a2b4c5d6e7f80:' + '0'.repeat(64)
 export function verifyCredentials(username, passphrase) {
+  const reg = registeredUserFor(username)
   const c = loadConfig()
   const known = !!(c && Array.isArray(c.users) && c.users.includes(username))
-  const own = known ? c.credentials?.[username] : null
-  const candidates = own ? asList(own)
-    : known ? (Array.isArray(c.passphrases) ? c.passphrases : [])
+  const candidates = reg ? [reg.hash]
+    : known ? asList(c.credentials?.[username] || (Array.isArray(c.passphrases) ? c.passphrases : []))
     : [DUMMY_ENTRY]
   return candidates.some(p => verifyHash(passphrase, p))
 }
 
-/** Per-user daily query limit, or null = unlimited. */
+/** Per-user daily query limit, or null = unlimited. Precedence: explicit
+ *  config limit (admin override) > registered-user quota (low default for
+ *  self-signup) > null (static users stay unlimited, as before). */
 export function userLimit(username) {
   const c = loadConfig()
   const n = c?.limits?.[username]
-  return Number.isFinite(n) && n >= 0 ? n : null
+  if (Number.isFinite(n) && n >= 0) return n
+  const rq = registeredUserLimit(username)
+  return Number.isFinite(rq) && rq >= 0 ? rq : null
 }
 
 // ── widget-auth-Zugriff (ADR-0006) ──
@@ -175,6 +181,14 @@ export function revokeSession(token) {
   if (!token) return
   sessions.delete(hashToken(token))
   saveSessions()
+}
+/** Kill every session of a user — passphrase reset (OWASP: sessions die
+ *  when the credential they authenticate changes). */
+export function revokeAllSessionsFor(user) {
+  let n = 0
+  for (const [h, s] of sessions) if (s.user === user) { sessions.delete(h); n++ }
+  if (n) saveSessions()
+  return n
 }
 
 // ── cookies ──
