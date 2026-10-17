@@ -140,6 +140,7 @@ app.post('/api/auth/register', async (req, res) => {
   const r = await registerUser({ email, passphrase, inviteCode, ip: req.ip })
   if (r.status === 'closed') return res.status(403).json({ error: 'registration is closed' })
   if (r.status === 'rate-ip') return res.status(429).json({ error: 'too many attempts, slow down' })
+  if (r.status === 'day-cap') return res.status(429).json({ error: 'registration is full for today — try again tomorrow' })
   if (r.status === 'bad-invite') return res.status(403).json({ error: 'invalid invite code' })
   if (r.status === 'invalid-email') return res.status(400).json({ error: 'that does not look like an email address' })
   if (r.status === 'weak-passphrase') return res.status(400).json({ error: 'passphrase needs at least 8 characters' })

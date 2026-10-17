@@ -23,6 +23,7 @@ const {
 
 beforeEach(() => {
   delete process.env.REGISTRATION_MODE
+  delete process.env.REGISTER_DAILY_MAX
   try { fs.unlinkSync(USERS) } catch { }
   _resetEmailAuthForTest()
 })
@@ -93,6 +94,24 @@ test('resend is uniform for unknown; pending hits the shared cooldown', async ()
 
 test('requestReset uniform for unknown address', async () => {
   assert.equal((await requestReset({ email: 'nobody@b.io', ip: '7.7.7.7' })).status, 'sent')
+})
+
+test('day-cap: REGISTER_DAILY_MAX counts NEW accounts only, restart-safe by derivation', async () => {
+  process.env.REGISTER_DAILY_MAX = '2'
+  process.env.REGISTRATION_MODE = 'open'
+  assert.equal((await registerUser({ email: 'a@b.io', passphrase: 'longenough1', ip: '1.1.1.1' })).status, 'created')
+  assert.equal((await registerUser({ email: 'c@b.io', passphrase: 'longenough1', ip: '1.1.1.2' })).status, 'created')
+  assert.equal((await registerUser({ email: 'd@b.io', passphrase: 'longenough1', ip: '1.1.1.3' })).status, 'day-cap')
+  // pending re-register creates nothing → must not burn the cap (cooldown cleared)
+  _resetEmailAuthForTest()
+  assert.equal((await registerUser({ email: 'a@b.io', passphrase: 'longenough1', ip: '1.1.1.4' })).status, 'pending-resent')
+  assert.equal((await registerUser({ email: 'e@b.io', passphrase: 'longenough1', ip: '1.1.1.5' })).status, 'day-cap') // still capped
+})
+
+test('day-cap: REGISTER_DAILY_MAX=0 is a registration kill-switch', async () => {
+  process.env.REGISTER_DAILY_MAX = '0'
+  process.env.REGISTRATION_MODE = 'open'
+  assert.equal((await registerUser({ email: 'x@b.io', passphrase: 'longenough1', ip: '2.1.1.1' })).status, 'day-cap')
 })
 
 test('hashPassphrase format matches the auth contract (salt:hash scrypt-32)', () => {

@@ -38,6 +38,13 @@ const USERS_FILE = process.env.AIUI_USERS_FILE || path.join(os.homedir(), '.aiui
 const AUTH_FILE = process.env.AIUI_AUTH_FILE || path.join(os.homedir(), '.aiui-auth.json')
 export const TOKEN_TTL_MS = 30 * 60 * 1000
 const DEFAULT_QUOTA = 5
+// Global cap on NEW accounts per UTC day — derived from the store's `created`
+// timestamps, so it survives restarts with no extra state. Kill-switch at 0.
+const dailyNewUsersMax = () => parseInt(process.env.REGISTER_DAILY_MAX ?? '20', 10)
+function createdTodayCount(now = new Date()) {
+  const today = now.toISOString().slice(0, 10)
+  return loadStore().users.filter(u => typeof u.created === 'string' && u.created.slice(0, 10) === today).length
+}
 
 // ── store ──
 let store = null
@@ -131,6 +138,10 @@ export function registrationMode() {
   const m = (process.env.REGISTRATION_MODE || 'invite').toLowerCase()
   return ['invite', 'open', 'closed'].includes(m) ? m : 'invite'
 }
+/** Day-cap visibility for ops/config endpoints. */
+export function peekRegistrationBudget() {
+  return { createdToday: createdTodayCount(), dailyMax: dailyNewUsersMax() }
+}
 function inviteCodes() {
   const env = (process.env.AIUI_INVITE_CODES || '').split(',').map(s => s.trim()).filter(Boolean)
   if (env.length) return env
@@ -172,6 +183,9 @@ export async function registerUser({ email, passphrase, inviteCode, ip }) {
   }
   const s = loadStore()
   const existing = s.users.find(u => u.norm === n.norm)
+  // Day-cap counts only NEW accounts (a pending re-register creates nothing).
+  // Global, not per-email — an honest 429 leaks no account existence.
+  if (!existing && createdTodayCount() >= dailyNewUsersMax()) return { status: 'day-cap' }
   if (existing && existing.status === 'active') {
     if (!mailCooldownOk(n.norm)) return { status: 'cooldown' }
     try {
