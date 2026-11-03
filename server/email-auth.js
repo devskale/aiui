@@ -168,6 +168,9 @@ function consumeToken(token, purpose) {
 }
 
 const publicUrl = () => (process.env.PUBLIC_URL || 'https://skale.dev/aiui').replace(/\/+$/, '')
+// The mail text states the link TTL — derive it from TOKEN_TTL_MS so changing
+// the real TTL can never leave the in-mail text lying.
+const ttlMinutes = () => Math.round(TOKEN_TTL_MS / 60_000)
 
 // ── flows (rich results; the ROUTE maps to uniform responses) ──
 
@@ -187,13 +190,10 @@ export async function registerUser({ email, passphrase, inviteCode, ip }) {
   // Global, not per-email — an honest 429 leaks no account existence.
   if (!existing && createdTodayCount() >= dailyNewUsersMax()) return { status: 'day-cap' }
   if (existing && existing.status === 'active') {
-    if (!mailCooldownOk(n.norm)) return { status: 'cooldown' }
-    try {
-      // informational, enumeration-safe only because the response is uniform
-      await sendVerifyEmail(n.original, { url: `${publicUrl()}/?verify=already-have-an-account`, ttlMinutes: 30 })
-      noteMailSent(n.norm)
-      return { status: 'exists' }
-    } catch { return { status: 'exists' } }
+    // No mail: a "you already have an account" send would burn real budget
+    // on a fake-token link that 404s on click. The uniform response below
+    // already leaks nothing (created | pending-resent | exists look alike).
+    return { status: 'exists' }
   }
   if (!mailCooldownOk(n.norm)) return { status: 'cooldown' }
   if (!existing) {
@@ -203,7 +203,7 @@ export async function registerUser({ email, passphrase, inviteCode, ip }) {
   }
   const token = mintToken('verify', n.norm)
   try {
-    await sendVerifyEmail(n.original, { url: `${publicUrl()}/?verify=${token}`, ttlMinutes: 30 })
+    await sendVerifyEmail(n.original, { url: `${publicUrl()}/?verify=${token}`, ttlMinutes: ttlMinutes() })
     noteMailSent(n.norm)
   } catch (e) {
     saveStore() // keep user+token even if the mail failed — resend can recover
@@ -238,7 +238,7 @@ export async function resendVerification({ email, ip }) {
   if (!mailCooldownOk(n.norm)) return { status: 'cooldown' }
   const token = mintToken('verify', n.norm)
   try {
-    await sendVerifyEmail(u.email, { url: `${publicUrl()}/?verify=${token}`, ttlMinutes: 30 })
+    await sendVerifyEmail(u.email, { url: `${publicUrl()}/?verify=${token}`, ttlMinutes: ttlMinutes() })
     noteMailSent(n.norm)
   } catch (e) { return { status: 'mail-failed', error: e.code || e.message } }
   return { status: 'sent' }
@@ -253,7 +253,7 @@ export async function requestReset({ email, ip }) {
   if (!mailCooldownOk(n.norm)) return { status: 'cooldown' }
   const token = mintToken('reset', n.norm)
   try {
-    await sendResetEmail(u.email, { url: `${publicUrl()}/?reset=${token}`, ttlMinutes: 30 })
+    await sendResetEmail(u.email, { url: `${publicUrl()}/?reset=${token}`, ttlMinutes: ttlMinutes() })
     noteMailSent(n.norm)
   } catch (e) { return { status: 'mail-failed', error: e.code || e.message } }
   return { status: 'sent' }
