@@ -348,9 +348,13 @@ app.post('/api/prompt', async (req, res) => {
 
   // Per-user daily quota (e.g. guest: 10/day). Auth off → req.user null → no cap.
   const limit = req.user ? userLimit(req.user) : null
-  if (limit !== null && !consumeQuota(req.user, limit).allowed) {
-    getBus(req.user).push('error', { message: `Daily limit reached (${limit} queries/day for "${req.user}").` })
-    return res.status(429).json({ error: 'daily limit reached' })
+  if (limit !== null) {
+    const q = consumeQuota(req.user, limit)
+    getBus(req.user).push('quota', { used: q.used, limit }) // live counter (topbar)
+    if (!q.allowed) {
+      getBus(req.user).push('error', { message: `Daily limit reached (${limit} queries/day for "${req.user}").` })
+      return res.status(429).json({ error: 'daily limit reached' })
+    }
   }
 
   res.json({ ok: true })

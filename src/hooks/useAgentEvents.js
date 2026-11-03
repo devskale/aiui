@@ -42,6 +42,7 @@ export function useAgentEvents(enabled = true) {
       'session_history',
       'thinking_level_changed',
       'error',
+      'quota',
     ]
 
     const connect = () => {

@@ -149,3 +149,19 @@ test('willRetry behält echten Teilinhalt (Text/Tool-Calls) als Entry', () => {
   s = reducer(s, { type: 'agent_end', willRetry: true })
   assert.equal(s.entries[s.entries.length - 1].text, 'Halbfertig', 'echter Inhalt wird committed')
 })
+
+// ── Quota live (SSE 'quota' — Konvergenz-Hebel Quota-Sichtbarkeit) ──
+
+test('quota-Event setzt den Live-Zähler; reset bewahrt ihn (tagesbezogen)', () => {
+  let s = reducer(S0, { type: 'quota', used: 3, limit: 10 })
+  assert.deepEqual(s.quota, { used: 3, limit: 10 })
+  s = reducer(s, { type: 'quota', used: 4, limit: 10 })
+  assert.deepEqual(s.quota, { used: 4, limit: 10 })
+  const r = reducer(s, { type: 'reset' })
+  assert.deepEqual(r.quota, { used: 4, limit: 10 }, 'Quota ist Tages-Stand, kein Session-Stand')
+})
+
+test('quota-Event bei 429 (abgelehnter Prompt) zählt trotzdem truthful', () => {
+  let s = reducer(S0, { type: 'quota', used: 10, limit: 10 })
+  assert.equal(s.quota.used >= s.quota.limit, true, 'am Cap → UI kann rot markieren')
+})

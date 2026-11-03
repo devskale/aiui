@@ -26,6 +26,7 @@ export const initialState = {
   isCompacting: false,
   autoCompactionEnabled: true,
   limitWait: false, // SDK limit gate sichtbar: agent_end(willRetry) → retry läuft
+  quota: null,      // live counter (SSE 'quota' event) — overlays me.quota from /api/me
 }
 
 export function reducer(state, action) {
@@ -55,6 +56,11 @@ export function reducer(state, action) {
 
     case 'session_stats':
       return { ...state, sessionStats: action }
+
+    case 'quota':
+      // Server pusht nach jedem konsumierten Prompt (auch bei 429) — der
+      // Topbar-Zähler lebt, statt nur beim /api/me-Refresh aktuell zu sein.
+      return { ...state, quota: { used: action.used, limit: action.limit } }
 
     case 'session_history':
       return { ...state, entries: action.entries || [], current: null, steerQueue: [] }
@@ -199,7 +205,7 @@ export function reducer(state, action) {
     }
 
     case 'reset':
-      return { ...initialState, connected: state.connected, sessionAlive: state.sessionAlive, sessionAgent: state.sessionAgent, sessionModel: state.sessionModel, sessionStats: state.sessionStats }
+      return { ...initialState, connected: state.connected, sessionAlive: state.sessionAlive, sessionAgent: state.sessionAgent, sessionModel: state.sessionModel, sessionStats: state.sessionStats, quota: state.quota }
 
     default:
       return state

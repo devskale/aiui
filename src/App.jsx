@@ -68,7 +68,7 @@ export default function App() {
     checkMe()
   }
 
-  const { entries, current, steerQueue, streaming, connected, sessionAlive, sessionAgent, sessionModel, sessionId, sessionCwd, sessionCwdShort, sessionStartedAt, sessionStats, thinkingLevel, isCompacting, autoCompactionEnabled, limitWait, sendPrompt, sendSteer, abortAgent, startNewChat, dispatch } = useAgentEvents(authed)
+  const { entries, current, steerQueue, streaming, connected, sessionAlive, sessionAgent, sessionModel, sessionId, sessionCwd, sessionCwdShort, sessionStartedAt, sessionStats, thinkingLevel, isCompacting, autoCompactionEnabled, limitWait, quota, sendPrompt, sendSteer, abortAgent, startNewChat, dispatch } = useAgentEvents(authed)
   const { attachments, addFiles, remove: removeAttachment, clear: clearAttachments, buildPayload } = useAttachments()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   // Work-Details-Modus (Issue work-details-folding): standard = heutiges
@@ -603,9 +603,17 @@ export default function App() {
           {me?.authRequired && me?.user && (
             <div className="tb-user">
               <span className="tb-user-name">{me.user}</span>
-              {me.quota && me.quota.limit !== null && (
-                <span className="tb-user-quota" title="queries used today / daily limit">{me.quota.used}/{me.quota.limit}</span>
-              )}
+              {(() => {
+                const q = quota || me.quota // live SSE counter wins over the /api/me snapshot
+                if (!q || q.limit === null) return null
+                const atCap = q.used >= q.limit
+                return (
+                  <span
+                    className={`tb-user-quota ${atCap ? 'cap' : ''}`}
+                    title="queries used today / daily limit"
+                  >{q.used}/{q.limit}</span>
+                )
+              })()}
               <button className="tb-user-logout" onClick={handleLogout} title="Log out" aria-label="Log out">⎋</button>
             </div>
           )}
