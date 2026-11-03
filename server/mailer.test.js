@@ -53,9 +53,9 @@ test('budget: MAIL_DAILY_MAX=0 is a kill-switch', async () => {
 })
 
 test('verify template: link + TTL in text AND html, ignore-hint present', async () => {
-  const r = await sendVerifyEmail('u@x.io', { url: 'https://skale.dev/aiui/verify?token=abc', ttlMinutes: 30 })
+  const r = await sendVerifyEmail('u@x.io', { url: 'https://skale.dev/aiui/?verify=abc', ttlMinutes: 30 })
   for (const part of [r.text, r.html]) {
-    assert.ok(part.includes('https://skale.dev/aiui/verify?token=abc'), 'link in part')
+    assert.ok(part.includes('https://skale.dev/aiui/?verify=abc'), 'link in part')
     assert.ok(part.includes('30 minutes'), 'TTL stated')
   }
   assert.ok(r.text.includes('did not request'), 'ignore-hint in text')
@@ -68,10 +68,13 @@ test('reset template: "stays unchanged" reassurance', async () => {
   assert.ok(r.html.includes('valid for'))
 })
 
-test('welcome template: login URL + quota hint', async () => {
+test('welcome template: login URL + all three spec bullets (quota, BYOK, scope)', async () => {
   process.env.PUBLIC_URL = 'https://skale.dev/aiui'
   const r = await sendWelcomeEmail('u@x.io', { loginUrl: 'https://skale.dev/aiui' })
-  assert.ok(r.text.includes('quota'))
+  const t = r.text.toLowerCase()
+  assert.ok(t.includes('quota'))
+  assert.ok(t.includes('own key'))   // settings/BYOK bullet
+  assert.ok(t.includes('sandboxed')) // the agent's scope on the machine
   assert.ok(r.html.includes('Open aiui'))
 })
 

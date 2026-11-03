@@ -149,16 +149,17 @@ export async function sendResetEmail(to, { url, ttlMinutes = 30 }) {
   return sendMail({ to, subject, text, html })
 }
 
-/** Welcome after successful verification. */
+/** Welcome after successful verification. Spec §3 P0: one CTA, 3 bullets —
+ *  quota, settings/BYOK, the agent's scope on the machine. */
 export async function sendWelcomeEmail(to, { loginUrl }) {
   const subject = 'Welcome to aiui'
-  const text = `Your aiui account is active.\n\nSign in:\n${loginUrl}\n\nWhat to know:\n- You get a private workspace and an isolated agent session.\n- Daily quota applies; your key stays yours (bring-your-own optional).\n\n${footerFor()}`
+  const text = `Your aiui account is active.\n\nSign in:\n${loginUrl}\n\nWhat to know:\n- Quota: a daily prompt cap applies to your account.\n- Models: use the shared catalog or bring your own key (settings — keys stay on the server).\n- Scope: the agent only ever works inside your private workspace, sandboxed on the machine.\n\n${footerFor()}`
   const html = baseHtml(
     'Welcome to aiui',
     'Your account is active. Your workspace and agent session are ready.',
     'Open aiui',
     loginUrl,
-    `Private workspace, isolated session, daily quota.<br>${footerFor()}`,
+    `Daily quota &bull; shared models or your own key &bull; the agent stays sandboxed to your workspace.<br>${footerFor()}`,
   )
   return sendMail({ to, subject, text, html })
 }

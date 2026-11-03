@@ -9,11 +9,14 @@ import { sendTestMail, sendVerifyEmail, sendResetEmail, sendWelcomeEmail, peekMa
 const to = process.argv[2] || process.env.MAIL_FROM
 if (!to) { console.error('usage: node scripts/mail-smoke.js <to> (or set MAIL_FROM)'); process.exit(1) }
 
-const url = `${process.env.PUBLIC_URL || 'https://skale.dev/aiui'}/verify?token=smoke-token`
+// Same link shape the app really sends: client deep-links (?verify=/?reset=),
+// NOT the proposal's early /verify?token= path form.
+const base = process.env.PUBLIC_URL || 'https://skale.dev/aiui'
+const url = `${base}/?verify=smoke-token`
 const shots = [
   ['test', () => sendTestMail(to)],
   ['verify', () => sendVerifyEmail(to, { url, ttlMinutes: 30 })],
-  ['reset', () => sendResetEmail(to, { url: url.replace('verify', 'reset'), ttlMinutes: 30 })],
+  ['reset', () => sendResetEmail(to, { url: `${base}/?reset=smoke-token`, ttlMinutes: 30 })],
   ['welcome', () => sendWelcomeEmail(to, { loginUrl: process.env.PUBLIC_URL || 'https://skale.dev/aiui' })],
 ]
 
