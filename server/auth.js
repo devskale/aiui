@@ -119,7 +119,10 @@ function asList(v) { return Array.isArray(v) ? v : [v] }
 /** username known AND passphrase matches. Two credential sources:
  *  the auth file (config) and registered users (email-auth — self-service
  *  signup). Registered users match by normalized email; their scrypt hash
- *  uses the same salt:hash contract.
+ *  uses the same salt:hash contract. The sources UNION when a name exists in
+ *  both: a config-defined account must never be locked out just because
+ *  someone registered the same address (registered = SECOND source, per
+ *  proposal-email-registration.md §4 — never a replacement for the config).
  *
  *  Timing: unbekannte User werfen NICHT früh — sie laufen gegen einen
  *  Dummy-Scrypt (fester Salt/Hash), damit die Antwortzeit bekannte
@@ -130,9 +133,11 @@ export function verifyCredentials(username, passphrase) {
   const reg = registeredUserFor(username)
   const c = loadConfig()
   const known = !!(c && Array.isArray(c.users) && c.users.includes(username))
-  const candidates = reg ? [reg.hash]
-    : known ? asList(c.credentials?.[username] || (Array.isArray(c.passphrases) ? c.passphrases : []))
-    : [DUMMY_ENTRY]
+  const candidates = [
+    ...(reg ? [reg.hash] : []),
+    ...(known ? asList(c.credentials?.[username] || (Array.isArray(c.passphrases) ? c.passphrases : [])) : []),
+  ]
+  if (!candidates.length) candidates.push(DUMMY_ENTRY)
   return candidates.some(p => verifyHash(passphrase, p))
 }
 

@@ -18,8 +18,8 @@
 //   - tokens: 32B random, stored sha256-only, single-use, TTL 30 min
 //   - enumeration-safe: module returns rich results for tests/ops; the
 //     ROUTE layer maps every outcome to the same HTTP response
-//   - rate walls: per-IP register window, per-email mail cooldown (shared
-//     across register/resend/reset-request so no path bypasses it)
+//   - rate walls: per-IP register window (shared across register/verify/
+//     resend/reset so no path bypasses it), per-email mail cooldown
 //
 // Registration mode (REGISTRATION_MODE=invite|open|closed, default invite):
 // an agent service hands out shell+quota, so self-service signup stays
@@ -213,16 +213,20 @@ export async function registerUser({ email, passphrase, inviteCode, ip }) {
   return { status: existing ? 'pending-resent' : 'created' }
 }
 
-/** Consume a verify token → activate. Returns {user} or null. */
-export function verifyRegistration(token) {
+/** Consume a verify token → activate. Shares the per-IP register wall —
+ *  token endpoints are guessing surfaces too (proposal §5: limiter on
+ *  register/verify/resend/reset). Returns {status:'rate-ip'} or
+ *  {status:'ok', user, email, wasPending}. */
+export function verifyRegistration(token, ip) {
+  if (!noteRegisterAttempt(ip)) return { status: 'rate-ip' }
   const t = consumeToken(token, 'verify')
-  if (!t) return null
+  if (!t) return { status: 'invalid' }
   const u = loadStore().users.find(u => u.norm === t.norm)
-  if (!u) return null
+  if (!u) return { status: 'invalid' }
   const wasPending = u.status === 'pending'
   u.status = 'active'
   saveStore()
-  return { user: u.norm, email: u.email, wasPending }
+  return { status: 'ok', user: u.norm, email: u.email, wasPending }
 }
 
 export async function resendVerification({ email, ip }) {
@@ -255,8 +259,10 @@ export async function requestReset({ email, ip }) {
   return { status: 'sent' }
 }
 
-/** Consume a reset token → set new passphrase. Email possession is the proof. */
-export function consumeReset(token, newPassphrase) {
+/** Consume a reset token → set new passphrase. Email possession is the proof.
+ *  Shares the per-IP register wall like verify (token-guessing surface). */
+export function consumeReset(token, newPassphrase, ip) {
+  if (!noteRegisterAttempt(ip)) return { status: 'rate-ip' }
   if (typeof newPassphrase !== 'string' || newPassphrase.length < 8) return { status: 'weak-passphrase' }
   const t = consumeToken(token, 'reset')
   if (!t) return { status: 'invalid-token' }

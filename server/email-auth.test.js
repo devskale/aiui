@@ -18,7 +18,7 @@ delete process.env.SMTP_HOST; delete process.env.SMTP_USER; delete process.env.S
 const m = await import('./email-auth.js')
 const {
   _resetEmailAuthForTest, normalizeEmail, hashPassphrase, registeredUserFor, registeredUserLimit,
-  registerUser, resendVerification, requestReset, consumeReset, registrationMode, noteRegisterAttempt,
+  registerUser, verifyRegistration, resendVerification, requestReset, consumeReset, registrationMode, noteRegisterAttempt,
 } = m
 
 beforeEach(() => {
@@ -78,6 +78,18 @@ test('register rate wall: 11th attempt per IP rejected, other IP unaffected', ()
   for (let i = 0; i < 10; i++) assert.ok(noteRegisterAttempt('9.9.9.9'))
   assert.equal(noteRegisterAttempt('9.9.9.9'), false)
   assert.ok(noteRegisterAttempt('8.8.8.8'))
+})
+
+test('verify/reset share the register wall — no unthrottled token endpoint', async () => {
+  process.env.REGISTRATION_MODE = 'open'
+  await registerUser({ email: 'wall@b.io', passphrase: 'longenough1', ip: '10.0.0.1' })
+  for (let i = 0; i < 10; i++) assert.ok(noteRegisterAttempt('10.0.0.2'))
+  // both token endpoints burn the same wall → 429 territory before token checks
+  assert.equal(verifyRegistration('whatever', '10.0.0.2').status, 'rate-ip')
+  assert.equal(consumeReset('whatever', 'newenough99', '10.0.0.2').status, 'rate-ip')
+  // an unthrottled IP just gets the normal uniform failure, not the wall
+  assert.equal(verifyRegistration('garbage', '10.0.0.3').status, 'invalid')
+  assert.equal(consumeReset('garbage', 'newenough99', '10.0.0.3').status, 'invalid-token')
 })
 
 test('reset: garbage token rejected, weak new passphrase rejected early', async () => {

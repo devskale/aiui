@@ -26,6 +26,10 @@ const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aiui-auth-'))
 const authFile = path.join(dir, 'auth.json')
 fs.writeFileSync(authFile, JSON.stringify(cfg))
 process.env.AIUI_AUTH_FILE = authFile
+// Registered-user store must ALSO be sandboxed — auth.js imports email-auth.js,
+// and without this env the store defaults to the real ~/.aiui-users.json.
+const usersFile = path.join(dir, 'users.json')
+process.env.AIUI_USERS_FILE = usersFile
 
 const { authEnabled, verifyCredentials, userLimit, modelFilterFor } = await import('./auth.js')
 
@@ -50,6 +54,23 @@ test('modelFilterFor: user block replaces the global one, global for the rest', 
   assert.deepEqual(modelFilterFor('demo'), { include: ['q*'], notInclude: [] })
   assert.deepEqual(modelFilterFor('hak'), { include: ['unii@tu@'], notInclude: ['unii@tu@llama*'] })
   assert.deepEqual(modelFilterFor(null), { include: ['unii@tu@'], notInclude: ['unii@tu@llama*'] })
+})
+
+test('registered user does NOT lock out a config user with the same name (union)', () => {
+  // Registered store: active account admin@b.io with its own passphrase.
+  fs.writeFileSync(usersFile, JSON.stringify({
+    users: [{ email: 'admin@b.io', norm: 'admin@b.io', hash: makeHash('registered-secret'), status: 'active', created: new Date().toISOString(), quota: 5, invite: null }],
+    tokens: [],
+  }))
+  // Config lists the SAME name with a config passphrase.
+  cfg.users.push('admin@b.io')
+  cfg.credentials['admin@b.io'] = makeHash('config-secret')
+  fs.writeFileSync(authFile, JSON.stringify(cfg))
+  assert.equal(verifyCredentials('admin@b.io', 'config-secret'), true,
+    'config credential survives someone registering the same name')
+  assert.equal(verifyCredentials('admin@b.io', 'registered-secret'), true,
+    'registered credential still works beside the config one')
+  assert.equal(verifyCredentials('admin@b.io', 'wrongwrong'), false)
 })
 
 // Cleanup after the tests ran — top-level rmSync would delete the config

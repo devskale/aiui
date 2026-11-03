@@ -148,8 +148,9 @@ app.post('/api/auth/register', async (req, res) => {
   res.json(REGISTERED_OK) // created | pending-resent | exists | mail-failed → all uniform
 })
 app.post('/api/auth/verify', (req, res) => {
-  const r = verifyRegistration(String((req.body || {}).token || ''))
-  if (!r) return res.status(400).json({ error: 'link invalid or expired — request a new one' })
+  const r = verifyRegistration(String((req.body || {}).token || ''), req.ip)
+  if (r.status === 'rate-ip') return res.status(429).json({ error: 'too many attempts, slow down' })
+  if (r.status !== 'ok') return res.status(400).json({ error: 'link invalid or expired — request a new one' })
   clearStaleSessionCookies(res, req.secure)
   setSessionCookie(res, issueSession(r.user), req.secure) // auto-login on activation
   maybeSendWelcome(r) // fire-and-forget, budget-guarded in mailer
@@ -169,7 +170,8 @@ app.post('/api/auth/reset-request', async (req, res) => {
 })
 app.post('/api/auth/reset', (req, res) => {
   const { token, passphrase } = req.body || {}
-  const r = consumeReset(token, passphrase)
+  const r = consumeReset(token, passphrase, req.ip)
+  if (r.status === 'rate-ip') return res.status(429).json({ error: 'too many attempts, slow down' })
   if (r.status === 'weak-passphrase') return res.status(400).json({ error: 'passphrase needs at least 8 characters' })
   if (r.status === 'invalid-token') return res.status(400).json({ error: 'link invalid or expired — request a new one' })
   revokeAllSessionsFor(r.user) // OWASP: credential change kills its sessions
