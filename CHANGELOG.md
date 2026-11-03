@@ -8,6 +8,28 @@ The latest version is shown in the UI under `#/releases`.
 
 ## [Unreleased]
 
+### Changed
+
+- **Cache-Keeper gepinnt statt gebaut (pi-pocket-Steal, SDK-Aufholjagd)** —
+  die Recherche zeigte: pockets Prompt-Cache-Keeper ist inzwischen **SDK-
+  eingebaut** (`core/cache-warmer.js`: Replay des letzten Requests mit
+  `maxTokens: 1` bei 90 % der Cache-TTL während Tool-Call-Pausen,
+  Mindest-Ersparnis 0.05 $, Modi off/streaming/idle). aiui erbt ihn pro User
+  (SettingsManager aus dem agentDir). Der Default-Tempel pinnt jetzt
+  explizit `cacheWarming: "streaming"` — bewusst NICHT `"idle"`: Idle-Warming
+  würde bei einem Multi-User-Server auch für abgemeldete User Geld verbrennen.
+  Bestands-User behalten ohnehin den Default (streaming).
+
+### Added
+
+- **Mid-Run-Model-Switch als e2e-Pin (pi-web #1527-Parität)** — aiui kann es
+  per Bauweise (SDK liest das Model pro Request aus `agent.state`;
+  `getSessionInfo` liest Live-State, nicht das Session-File; der Picker war
+  nie disabled) — jetzt ist es regressionsgesichert: der `--full`-Smoke
+  schaltet mitten im Stream auf ein Zweitmodell desselben Providers und
+  verlangt bruchfreies Settle + korrektes Live-Status-Modell. Live verifiziert
+  (glm-5.3-flash → glm-4.7 mitten im Turn).
+
 ## [0.5.0] — 2026-11-03
 
 ### Added

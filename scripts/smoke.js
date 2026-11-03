@@ -258,6 +258,60 @@ try {
       if (!answerEcho) throw new Error('Ask-e2e: Antwort „Postgres" kam nie beim Modell an (kein Tool-Result sichtbar)')
       console.log('smoke: Ask-e2e OK (Tool-Call → Card → Antwort → Tool-Result → Settle)')
     }
+
+    // ── Mid-Run-Model-Switch (pi-web #1527): das SDK liest das Model pro
+    // Request aus dem Live-Agent-State — ein Switch WÄHREND eines Streams
+    // gilt ab dem nächsten Request, ohne den Turn zu zerbrechen. Pin: Prompt
+    // feuern, nach dem ersten Text-Delta auf ein zweites Modell desselben
+    // Providers schalten, verlangen: kein error + Settle + Status zeigt das
+    // neue Modell (aus dem Live-State, nicht dem Session-File).
+    {
+      const cats = await getJson(port, '/api/models')
+      const providers = cats.body.providers || {}
+      const pairs = Object.entries(providers).filter(([, ids]) => ids.length >= 2)
+      if (!pairs.length) throw new Error('Mid-Run-Switch: kein Provider mit ≥2 Modellen im Katalog')
+      const sse3 = []
+      const sseSwitch = await openSse(port, sse3)
+      await new Promise(r => setTimeout(r, 400))
+      const statusBefore = sse3.filter(e => e.type === 'session_status').at(-1)
+      const current = statusBefore?.model // "provider@id"
+      if (!current) throw new Error('Mid-Run-Switch: keine aktuelle session_status.model')
+      const curProvider = current.split('@')[0]
+      const targetId = (providers[curProvider] || []).find(id => `${curProvider}@${id}` !== current)
+      if (!targetId) throw new Error(`Mid-Run-Switch: kein Zweitmodell bei Provider ${curProvider}`)
+      const target = `${curProvider}@${targetId}`
+
+      const postedCount = await postJson(port, '/api/prompt', {
+        text: 'Count from 1 to 60, one number per line. Do not use any tool. Finish with the word DONE on its own line.',
+      })
+      if (postedCount.status !== 200) throw new Error(`/api/prompt (switch): HTTP ${postedCount.status}`)
+
+      // Erster Text-Fluss = der Turn streamt → JETZT mitten im Run schalten
+      const streamDeadline = Date.now() + TURN_TIMEOUT
+      while (Date.now() < streamDeadline) {
+        if (sse3.some(e => e.type === 'message_update' && JSON.stringify(e).includes('text_delta'))) break
+        if (sse3.some(e => e.type === 'error')) throw new Error('Mid-Run-Switch: error vor dem Stream-Start')
+        await new Promise(r => setTimeout(r, 200))
+      }
+      const switched = await postJson(port, '/api/model', { model: target })
+      if (switched.status !== 200) throw new Error(`/api/model mid-run: HTTP ${switched.status} — ${switched.body}`)
+
+      const settleDeadline = Date.now() + 2 * TURN_TIMEOUT
+      let settle = null
+      while (Date.now() < settleDeadline) {
+        settle = sse3.find(e => e.type === 'agent_settled' || e.type === 'error')
+        if (settle) break
+        await new Promise(r => setTimeout(r, 500))
+      }
+      sseSwitch.destroy()
+      if (!settle) throw new Error(`Mid-Run-Switch: kein Settle nach dem Switch (${2 * TURN_TIMEOUT / 1000}s)`)
+      if (settle.type === 'error') throw new Error(`Mid-Run-Switch brach den Turn: ${JSON.stringify(settle).slice(0, 200)}`)
+      const statusAfter = sse3.filter(e => e.type === 'session_status').at(-1)
+      if (statusAfter?.model !== target) {
+        throw new Error(`Mid-Run-Switch: Status zeigt ${statusAfter?.model}, erwartet ${target} (Live-State)`)
+      }
+      console.log(`smoke: Mid-Run-Model-Switch OK (${current} → ${target} mitten im Turn, ohne Bruch)`)
+    }
   }
 
   console.log('OK')
