@@ -104,6 +104,9 @@ function verifyHash(pw, entry) {
 }
 
 // ── lookups (used by auth.js for the second credential source) ──
+// Only ACTIVE registrations are a credential source: 'deactivated' accounts
+// (admin action) must not log in. Quota lookup intentionally includes them —
+// a deactivated user with a stale session keeps a 0-ish ceiling, not unlimited.
 export function registeredUserFor(username) {
   if (typeof username !== 'string') return null
   const n = normalizeEmail(username)
@@ -283,6 +286,51 @@ export function consumeReset(token, newPassphrase, ip) {
 export async function maybeSendWelcome({ email, wasPending }) {
   if (!wasPending) return null
   try { return await sendWelcomeEmail(email, { loginUrl: publicUrl() }) } catch { return null }
+}
+
+// ── admin surface (proposal §4 phase 3: /api/admin/users) ──
+// The module owns the store; the ROUTE owns the admin gate (auth.isAdmin).
+// Rich results are fine here — the gate already proved the caller is an
+// admin, so no enumeration-safety mapping applies.
+
+/** Sanitized user list — hashes never leave the module. */
+export function listRegisteredUsers() {
+  return loadStore().users.map(({ hash, ...u }) => u)
+}
+
+/** Set a registered user's daily quota (admin override; number, ≥ 0). */
+export function setRegisteredQuota(email, quota) {
+  const n = normalizeEmail(email)
+  if (!n || !Number.isFinite(quota) || quota < 0) return false
+  const u = loadStore().users.find(u => u.norm === n.norm)
+  if (!u) return false
+  u.quota = Math.floor(quota)
+  saveStore()
+  return true
+}
+
+/** Deactivate: login refused (verifyCredentials skips non-active), data kept. */
+export function deactivateRegisteredUser(email) {
+  const n = normalizeEmail(email)
+  if (!n) return false
+  const u = loadStore().users.find(u => u.norm === n.norm)
+  if (!u) return false
+  u.status = 'deactivated'
+  saveStore()
+  return true
+}
+
+/** Usage per invite code (proposal §4: invite-mode visibility). */
+export function inviteCodeUsage() {
+  const out = {}
+  for (const u of loadStore().users) {
+    const k = u.invite || '(none)'
+    out[k] ||= { total: 0, active: 0, pending: 0 }
+    out[k].total++
+    if (u.status === 'active') out[k].active++
+    else if (u.status === 'pending') out[k].pending++
+  }
+  return out
 }
 
 /** Test seam: fresh store per case. */

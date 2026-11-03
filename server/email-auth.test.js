@@ -146,3 +146,43 @@ test('hashPassphrase format matches the auth contract (salt:hash scrypt-32)', ()
   assert.equal(s.length, 32)
   assert.equal(v.length, 64)
 })
+
+// ── admin surface (proposal §4 phase 3) ──
+const { listRegisteredUsers, setRegisteredQuota, deactivateRegisteredUser, inviteCodeUsage } = m
+
+test('admin: list ist sanitisiert — Hashes verlassen das Modul nie', async () => {
+  process.env.REGISTRATION_MODE = 'open'
+  await registerUser({ email: 'adm@b.io', passphrase: 'longenough1', ip: '13.0.0.1' })
+  const list = listRegisteredUsers()
+  assert.equal(list.length, 1)
+  assert.ok(!('hash' in list[0]), 'kein hash-Feld')
+  assert.equal(list[0].email, 'adm@b.io')
+})
+
+test('admin: Quota setzen — nur existierende User, nur Zahl ≥ 0', async () => {
+  process.env.REGISTRATION_MODE = 'open'
+  await registerUser({ email: 'q@b.io', passphrase: 'longenough1', ip: '13.0.0.2' })
+  assert.equal(setRegisteredQuota('Q@B.IO', 50), true)   // any case → norm
+  assert.equal(registeredUserLimit('q@b.io'), 50)
+  assert.equal(setRegisteredQuota('ghost@b.io', 10), false)
+  assert.equal(setRegisteredQuota('q@b.io', -1), false)
+  assert.equal(setRegisteredQuota('q@b.io', 'lots'), false)
+})
+
+test('admin: deaktivierter User login-gesperrt, Daten bleiben', async () => {
+  process.env.REGISTRATION_MODE = 'open'
+  await registerUser({ email: 'ban@b.io', passphrase: 'longenough1', ip: '13.0.0.3' })
+  assert.equal(deactivateRegisteredUser('ban@b.io'), true)
+  assert.equal(deactivateRegisteredUser('ghost@b.io'), false)
+  const u = listRegisteredUsers()[0]
+  assert.equal(u.status, 'deactivated')
+  assert.equal(registeredUserLimit('ban@b.io'), 5, 'Quota bleibt Mapping-fähig (kein unlimited leak)')
+})
+
+test('admin: invite-usage aggregiert pro Code', async () => {
+  await registerUser({ email: 'i1@b.io', passphrase: 'longenough1', inviteCode: 'TESTCODE', ip: '13.0.0.4' })
+  await registerUser({ email: 'i2@b.io', passphrase: 'longenough1', inviteCode: 'TESTCODE', ip: '13.0.0.5' })
+  const usage = inviteCodeUsage()
+  assert.equal(usage['TESTCODE'].total, 2)
+  assert.equal(usage['TESTCODE'].pending, 2)
+})

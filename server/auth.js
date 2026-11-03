@@ -134,11 +134,23 @@ export function verifyCredentials(username, passphrase) {
   const c = loadConfig()
   const known = !!(c && Array.isArray(c.users) && c.users.includes(username))
   const candidates = [
-    ...(reg ? [reg.hash] : []),
+    // Only ACTIVE registrations count (pending = unverified mail, deactivated
+    // = admin action). The status check also fixes an old gap: a pending
+    // user's passphrase used to log in before any verification happened.
+    ...(reg && reg.status === 'active' ? [reg.hash] : []),
     ...(known ? asList(c.credentials?.[username] || (Array.isArray(c.passphrases) ? c.passphrases : [])) : []),
   ]
   if (!candidates.length) candidates.push(DUMMY_ENTRY)
   return candidates.some(p => verifyHash(passphrase, p))
+}
+
+/** Admin gate for /api/admin/*: `admins` array in the auth config, else the
+ *  first listed user (spec §4: "admin = first user / flag in auth file"). */
+export function isAdmin(username) {
+  const c = loadConfig()
+  if (!c || !username) return false
+  if (Array.isArray(c.admins)) return c.admins.includes(username)
+  return Array.isArray(c.users) && c.users.length > 0 && c.users[0] === username
 }
 
 /** Per-user daily query limit, or null = unlimited. Precedence: explicit

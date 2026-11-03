@@ -287,6 +287,9 @@ in the Node process outside the sandbox.
 | POST | `/api/session/rename` | req | rename a stored session |
 | GET  | `/api/session/export` | req | download a session as Markdown |
 | POST | `/api/session/delete` | req | delete a stored session |
+| GET  | `/api/admin/users` | admin | registered users (sanitized), day-cap, invite usage (invite mode) |
+| POST | `/api/admin/users/quota` | admin | set a registered user's daily quota |
+| POST | `/api/admin/users/deactivate` | admin | deactivate a registered user (+ revoke sessions) |
 | GET  | `/api/changelog` | req | CHANGELOG.md |
 | POST | `/api/upload` | req | file upload (multer) |
 

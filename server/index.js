@@ -7,8 +7,8 @@ import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { getBus } from './event-bus.js'
 import * as Mime from './mime.js'
-import { authEnabled, verifyCredentials, issueSession, revokeSession, revokeAllSessionsFor, userLimit, setSessionCookie, clearSessionCookie, clearStaleSessionCookies, readSessionCookies, currentSession, requireAuth, noteLoginAttempt } from './auth.js'
-import { registerUser, verifyRegistration, resendVerification, requestReset, consumeReset, maybeSendWelcome, registrationMode } from './email-auth.js'
+import { authEnabled, verifyCredentials, issueSession, revokeSession, revokeAllSessionsFor, userLimit, setSessionCookie, clearSessionCookie, clearStaleSessionCookies, readSessionCookies, currentSession, requireAuth, noteLoginAttempt, isAdmin } from './auth.js'
+import { registerUser, verifyRegistration, resendVerification, requestReset, consumeReset, maybeSendWelcome, registrationMode, listRegisteredUsers, setRegisteredQuota, deactivateRegisteredUser, inviteCodeUsage, peekRegistrationBudget } from './email-auth.js'
 import { widgetKeyEntry, originAllowed, noteMintAttempt, mintWidgetToken, getWidgetSecret, widgetQuotaAvailable, verifyWidgetToken, frameAncestorsFor } from './widget-auth.js'
 import { consumeQuota, peekQuota } from './quota.js'
 import { getOrCreateSession, disposeSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, listSessions, switchToSession, renameSession, deleteSession, resumeWidgetVisitor, getAvailableModels, getCommands, getSessionInfo, getSessionStats, getSessionHistory, newSession, workspaceCwd, getForkTargets, forkSession, scopedUser, widgetVisitorStatus, prepareWidgetContext, composeWidgetPrompt, VISITOR_RE } from './pi-session.js'
@@ -322,6 +322,35 @@ app.post('/api/widget/prompt', widgetAuth, async (req, res) => {
 
 // Everything else under /api requires a session when auth is configured.
 app.use('/api', requireAuth)
+
+// ── Admin (proposal §4 phase 3 — admin = `admins` array or first auth user) ──
+function requireAdmin(req, res, next) {
+  if (!isAdmin(req.user)) return res.status(403).json({ error: 'admin only' })
+  next()
+}
+app.get('/api/admin/users', requireAdmin, (_req, res) => {
+  res.json({
+    users: listRegisteredUsers(), // sanitized — hashes never leave email-auth
+    registration: peekRegistrationBudget(), // day-cap: createdToday / dailyMax
+    ...(registrationMode() === 'invite' ? { inviteUsage: inviteCodeUsage() } : {}),
+  })
+})
+app.post('/api/admin/users/quota', requireAdmin, (req, res) => {
+  const { email, quota } = req.body || {}
+  const ok = setRegisteredQuota(email, quota)
+  if (!ok) return res.status(404).json({ error: 'no such user' })
+  res.json({ ok: true })
+})
+app.post('/api/admin/users/deactivate', requireAdmin, (req, res) => {
+  const { email } = req.body || {}
+  const ok = deactivateRegisteredUser(email)
+  if (!ok) return res.status(404).json({ error: 'no such user' })
+  // OWASP: the credential change kills the account's live sessions. Sessions
+  // store the login name as typed — revoke the given and the folded form.
+  revokeAllSessionsFor(email)
+  revokeAllSessionsFor(String(email || '').trim().toLowerCase())
+  res.json({ ok: true })
+})
 
 // ── SSE stream (per-user bus: Events only fan out to this user's clients) ──
 app.get('/api/events', (req, res) => {

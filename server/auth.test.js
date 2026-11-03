@@ -31,7 +31,7 @@ process.env.AIUI_AUTH_FILE = authFile
 const usersFile = path.join(dir, 'users.json')
 process.env.AIUI_USERS_FILE = usersFile
 
-const { authEnabled, verifyCredentials, userLimit, modelFilterFor } = await import('./auth.js')
+const { authEnabled, verifyCredentials, userLimit, modelFilterFor, isAdmin } = await import('./auth.js')
 
 test('per-User credential replaces the shared passphrase for that User', () => {
   assert.equal(verifyCredentials('hak', 'hackler26'), true, 'own password works')
@@ -54,6 +54,30 @@ test('modelFilterFor: user block replaces the global one, global for the rest', 
   assert.deepEqual(modelFilterFor('demo'), { include: ['q*'], notInclude: [] })
   assert.deepEqual(modelFilterFor('hak'), { include: ['unii@tu@'], notInclude: ['unii@tu@llama*'] })
   assert.deepEqual(modelFilterFor(null), { include: ['unii@tu@'], notInclude: ['unii@tu@llama*'] })
+})
+
+test('isAdmin: admins-Array gewinnt, sonst erster gelisteter User (Spec §4)', () => {
+  assert.equal(isAdmin('hak'), true, 'erster User ist Admin-Fallback')
+  assert.equal(isAdmin('demo'), false)
+  cfg.admins = ['demo']
+  fs.writeFileSync(authFile, JSON.stringify(cfg))
+  assert.equal(isAdmin('demo'), true, 'explizites admins-Array')
+  assert.equal(isAdmin('hak'), false)
+  delete cfg.admins
+  fs.writeFileSync(authFile, JSON.stringify(cfg))
+})
+
+test('nur AKTIVE Registrierungen sind eine Credential-Quelle (pending/deactivated nicht)', () => {
+  // pending (unverified): Hash vorhanden, aber Login muss scheitern
+  fs.writeFileSync(usersFile, JSON.stringify({
+    users: [
+      { email: 'pen@b.io', norm: 'pen@b.io', hash: makeHash('pending-secret'), status: 'pending', created: new Date().toISOString(), quota: 5, invite: null },
+      { email: 'dead@b.io', norm: 'dead@b.io', hash: makeHash('dead-secret'), status: 'deactivated', created: new Date().toISOString(), quota: 5, invite: null },
+    ],
+    tokens: [],
+  }))
+  assert.equal(verifyCredentials('pen@b.io', 'pending-secret'), false, 'unverifiziert loggt nicht ein')
+  assert.equal(verifyCredentials('dead@b.io', 'dead-secret'), false, 'deaktiviert loggt nicht ein')
 })
 
 test('registered user does NOT lock out a config user with the same name (union)', () => {
