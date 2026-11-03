@@ -18,6 +18,7 @@ import { resolveBashOutputPath, readBashOutput } from './bash-output.js'
 import { listDir, readTextFile, resolveWorkspacePath, mimeFor } from './workspace-files.js'
 import { toMarkdown } from '../shared/session-export.js'
 import { searchCatalog } from './skills-catalog.js'
+import { listLibrary } from './library.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.join(__dirname, '..')
@@ -654,6 +655,15 @@ app.get('/api/skills/search', async (req, res) => {
     res.json(await searchCatalog((req.query.q || '').toString(), 30))
   } catch {
     res.json({ error: 'search failed' })
+  }
+})
+
+// ── Document library (uploads/-Sicht; #dokname holt Inhalt in den Kontext) ──
+app.get('/api/library', (req, res) => {
+  try {
+    res.json({ docs: listLibrary(workspaceCwd(req.user), (req.query.q || '').toString()) })
+  } catch {
+    res.json({ docs: [] })
   }
 })
 

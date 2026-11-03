@@ -6,6 +6,7 @@ import { useState, useRef, useEffect } from 'react'
 import { File as FileIcon, FileText, Image as ImageIcon, LoaderCircle, Mic, Square, SendHorizontal } from 'lucide-react'
 import { useSlashMenu } from '../hooks/useSlashMenu'
 import { useMention } from '../hooks/useMention'
+import { useLibraryMention } from '../hooks/useLibraryMention'
 import { useStt } from '../hooks/useStt'
 import { rewriteSkillCommand } from '../lib/compose'
 import { pathParts } from '../lib/path-label'
@@ -156,6 +157,7 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
   }
   const slash = useSlashMenu({ text, setText, textareaRef: ref, onHostAction })
   const mention = useMention({ text, setText, textareaRef: ref })
+  const libMention = useLibraryMention({ text, setText, textareaRef: ref })
 
   useEffect(() => {
     if (!streaming) ref.current?.focus()
@@ -179,6 +181,7 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
 
   const handleKey = (e) => {
     if (mention.onKeyDown(e)) return
+    if (libMention.onKeyDown(e)) return
     if (slash.onKeyDown(e)) return
     if (e.key === 'Escape' && streaming) {
       e.preventDefault()
@@ -279,6 +282,24 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
         </div>
       )}
 
+      {libMention.open && (
+        <div className="mention-dropdown">
+          <div className="mention-head">Insert document (# — Inhalt kommt in den Kontext)</div>
+          {libMention.docs.map((doc, i) => (
+            <button
+              key={doc.relPath}
+              className={`mention-item ${i === libMention.index ? 'active' : ''}`}
+              onMouseDown={(e) => { e.preventDefault(); libMention.insert(doc) }}
+              title={`${doc.name} · ${doc.kind}`}
+            >
+              <span className="mention-icon">{doc.kind === 'image' ? <ImageIcon size={12} /> : <FileText size={12} />}</span>
+              <span className="mention-path" title={doc.name}>{doc.name}</span>
+              <span className="att-meta">{doc.kind}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {(stt.state === 'recording' || stt.state === 'processing') && (
         <div className="stt-line">
           {stt.state === 'processing' ? <LoaderCircle size={12} className="spin" /> : <span className="stt-dot" />}
@@ -301,7 +322,7 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
           }}
           onKeyDown={handleKey}
           onPaste={handlePaste}
-          placeholder={streaming ? 'Steer π… (queued after current turn)' : 'Ask π anything…  (type / for commands, @ for files)'}
+            placeholder={streaming ? 'Steer π… (queued after current turn)' : 'Ask π anything…  (type / for commands, @ for files, # for documents)'}
           rows={1}
         />
         {stt.mode && (

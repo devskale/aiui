@@ -8,6 +8,7 @@ import {
   detectSlashTrigger, detectMentionTrigger,
   applyCommand, applyMention,
   buildSlashItems, rewriteSkillCommand,
+  detectHashtagTrigger, applyHashtag,
 } from './compose.js'
 
 // ── trigger detection ──
@@ -89,4 +90,23 @@ test('rewriteSkillCommand: bare /known → /skill:known', () => {
 test('rewriteSkillCommand: unknown /command unchanged', () => {
   assert.equal(rewriteSkillCommand('/unknown', [{ name: 'known' }]), '/unknown')
   assert.equal(rewriteSkillCommand('plain text', [{ name: 'x' }]), 'plain text')
+})
+
+// ── #dokname-Trigger (Bibliothek) ──
+
+test('detectHashtagTrigger: trailing #query wie @ — das LETZTE # ist der Trigger', () => {
+  assert.deepEqual(detectHashtagTrigger('Vergleiche #ber'), { query: 'ber', atIndex: 11 })
+  assert.deepEqual(detectHashtagTrigger('#bericht und #fehlt'), { query: 'fehlt', atIndex: 13 }, 'trailing # ist der Trigger')
+  assert.equal(detectHashtagTrigger('#bericht und fehlt'), null, 'ohne # am Ende kein Trigger')
+  assert.equal(detectHashtagTrigger('kein trigger'), null)
+  assert.deepEqual(detectHashtagTrigger('#'), { query: '', atIndex: 0 })
+})
+
+test('applyHashtag: ersetzt nur den Trigger-Anteil, kein Doppel-Space', () => {
+  const { text, cursor } = applyHashtag('Vergleiche #ber mit X', 11, 'ber', 'Bericht.pdf')
+  assert.equal(text, 'Vergleiche #Bericht.pdf mit X')
+  assert.equal(cursor, 23, 'Cursor vor dem bereits vorhandenen Space')
+  const atEnd = applyHashtag('Siehe #ber', 6, 'ber', 'Bericht.pdf')
+  assert.equal(atEnd.text, 'Siehe #Bericht.pdf ')
+  assert.equal(atEnd.cursor, 'Siehe #Bericht.pdf '.length)
 })

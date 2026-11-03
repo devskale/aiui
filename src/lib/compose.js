@@ -83,3 +83,23 @@ export function rewriteSkillCommand(text, skills) {
   }
   return text
 }
+
+// ── #dokname (Bibliothek) — dieselbe Trigger-Mathe wie @, anderes Zeichen ──
+
+/** Detect a trailing "#query" (library document autocomplete). */
+export function detectHashtagTrigger(text) {
+  const m = /(?:^|\s)#([^\s]*)$/.exec(text)
+  if (!m) return null
+  const query = m[1] ?? ''
+  const atIndex = m.index + (m[0].length - query.length - 1)
+  return { query, atIndex }
+}
+
+/** Replace the #trigger at atIndex with '#' + docName + ' ' (kein Doppel-
+ *  Space, wenn dahinter schon einer steht). */
+export function applyHashtag(text, atIndex, query, docName) {
+  const before = text.slice(0, atIndex)
+  const after = text.slice(atIndex + 1 + query.length)
+  const inserted = '#' + docName + (after.startsWith(' ') ? '' : ' ')
+  return { text: before + inserted + after, cursor: before.length + inserted.length }
+}

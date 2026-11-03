@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url'
 import { getBus } from './event-bus.js'
 import { createAskTool, abortAsks, resolveAsk as askResolve } from './ask.js'
 import { isImageCapable, bridgeImages } from './vision-bridge.js'
+import { extractDocTokens, stripDocTokens, resolveDocToken, docContextBlock } from './library.js'
 import { resolveWorkspacePath } from './workspace-files.js'
 import * as Entry from '../shared/entry.js'
 import * as Sandbox from './sandbox.js'
@@ -493,6 +494,38 @@ export async function prompt(user, text, attachments = []) {
   // displayed inline due to size limits"), so it falls back to pixel-hacking
   // the picture with PIL instead of actually seeing it.
   promptText = attachMentionedImages(promptText, cwd, images)
+  // #dokname — Bibliotheksdokumente (uploads/) deterministisch in den Kontext:
+  // Text/PDF inline, Bilder als Vision-Content (Text-only → Vision-Bridge).
+  // Nicht auflösbare Tokens bleiben stehen (gewöhnlicher Hashtag ≠ Fehler).
+  {
+    const docTokens = extractDocTokens(promptText)
+    if (docTokens.length) {
+      const resolved = []
+      const blocks = []
+      for (const t of docTokens) {
+        const entry = resolveDocToken(cwd, t.name)
+        if (!entry) continue
+        resolved.push(t)
+        if (entry.kind === 'image') {
+          try {
+            const buf = fs.readFileSync(entry.abs)
+            const ext = path.extname(entry.abs).slice(1).toLowerCase()
+            const mime = ext === 'jpg' ? 'image/jpeg' : ext === 'svg' ? 'image/svg+xml' : `image/${ext}`
+            images.push({ type: 'image', mimeType: mime, data: buf.toString('base64'), cachePath: entry.abs })
+          } catch {}
+        } else if (entry.kind === 'other') {
+          blocks.push(`[Document: ${entry.name}] — other file type; it is in the workspace at ${entry.relPath}. Use your read tool if needed.`)
+        } else {
+          const block = await docContextBlock(cwd, entry)
+          if (block) blocks.push(block)
+        }
+      }
+      if (resolved.length) {
+        const stripped = stripDocTokens(promptText, resolved)
+        promptText = blocks.length ? (stripped ? `${stripped}\n\n${blocks.join('\n\n')}` : blocks.join('\n\n')) : stripped
+      }
+    }
+  }
   if (files.length) {
     const pdfs = files.filter(f => /\.pdf$/i.test(f.relPath))
     const others = files.filter(f => !/\.pdf$/i.test(f.relPath))
