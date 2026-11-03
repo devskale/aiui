@@ -8,6 +8,28 @@ The latest version is shown in the UI under `#/releases`.
 
 ## [Unreleased]
 
+### Added
+
+- **Upload-Fokus: PDF / IMG / MD / TXT — drei Pakete in einem Zug:**
+  1. **Attachment-Chips sagen, was mitreist** — Typ-Icon, menschliche Größe,
+     PDF-Seitenzahl (best-effort pdfjs beim Upload), Klick öffnet die
+     Raw-Vorschau (Bilder/PDF nativ, md/txt als Text). Pure Chip-Mathe in
+     `src/lib/attachment-chip.js`.
+  2. **Vision-Bridge** (`server/vision-bridge.js`, pi-web-ui-Muster) — der
+     Client blockt Attachment-Bilder auf Text-only-Modellen, aber
+     @-mentionierte Bilder umgingen den Guard in undefinierte SDK-Fehlerlage.
+     Jetzt: ein vision-fähiges Modell beschreibt die Bilder (One-Shot über
+     die bestehende `ModelRuntime.completeSimple` — keine neue Dependency),
+     die Beschreibung fährt als Text-Evidence mit, die Rohbilder fallen weg.
+     Bridge-Modell: `AIUI_VISION_MODEL` sonst erstes Katalog-Bildmodell ≠
+     aktuell; Cache `<name>.vision.md` neben der Datei.
+  3. **Dokumenten-Bibliothek + `#dokname`** — uploads/ IST die Bibliothek.
+     `#` öffnet das Dokument-Autocomplete (`/api/library`), und das Token
+     holt den Inhalt DIREKT in den Kontext: Text inline (24k-Cap), PDF über
+     den frischen read_pdf-OCR-Cache sonst Textlayer (16k-Cap; Scans
+     verweisen auf read_pdf), Bilder als Vision-Content (Text-only →
+     Bridge). Unaufgelöste `#tags` bleiben einfach stehen.
+
 ### Changed
 
 - **Cache-Keeper gepinnt statt gebaut (pi-pocket-Steal, SDK-Aufholjagd)** —
