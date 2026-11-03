@@ -3,15 +3,43 @@
 // @-mention autocomplete hooks. Owns text + the textarea ref + send/steer.
 // ════════════════════════════════════════════════════════════════════
 import { useState, useRef, useEffect } from 'react'
-import { File as FileIcon, LoaderCircle, Mic, Square, SendHorizontal } from 'lucide-react'
+import { File as FileIcon, FileText, Image as ImageIcon, LoaderCircle, Mic, Square, SendHorizontal } from 'lucide-react'
 import { useSlashMenu } from '../hooks/useSlashMenu'
 import { useMention } from '../hooks/useMention'
 import { useStt } from '../hooks/useStt'
 import { rewriteSkillCommand } from '../lib/compose'
 import { pathParts } from '../lib/path-label'
+import { chipData } from '../lib/attachment-chip'
 import { draftKey, saveDraft, loadDraft, clearDraft } from '../lib/draft-store'
 import { MAX_ATTACHMENTS } from '../lib/attachment-limit'
 import { useToast } from './Toasts'
+
+// ── AttachmentChip — Typ-Icon + Größe + PDF-Seiten, Klick → Raw-Preview
+// (Bilder/PDF rendert der Browser selbst; md/txt zeigt er als Text).
+// Die Daten kommen pure aus lib/attachment-chip (getestet).
+function AttachmentChip({ a, onRemove }) {
+  const chip = chipData(a.serverFile || a)
+  const Icon = chip.kind === 'image' ? ImageIcon : chip.kind === 'other' ? FileIcon : FileText
+  const href = a.serverFile?.path || a.previewUrl
+  return (
+    <div className="attachment-preview">
+      <a
+        className="att-open"
+        href={href || undefined}
+        target="_blank"
+        rel="noreferrer"
+        title={`${a.name}${chip.size ? ` · ${chip.size}` : ''}${chip.pages ? ` · ${chip.pages} Seiten` : ''} — Vorschau öffnen`}
+      >
+        {a.isImage && a.previewUrl
+          ? <img src={a.previewUrl} alt={a.name} />
+          : <Icon size={14} className="att-icon" />}
+        <span className="att-name">{a.name}</span>
+        <span className="att-meta">{[chip.size, chip.pages ? `${chip.pages} S.` : ''].filter(Boolean).join(' · ')}</span>
+      </a>
+      <button className="att-remove" onClick={onRemove} title="Remove" aria-label={`Remove ${a.name}`}>×</button>
+    </div>
+  )
+}
 
 // Splits a file list into accepted + image-rejected. When the current model
 // can't take images, image files are stripped so they never reach the server.
@@ -259,13 +287,7 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
       )}
       {attachments.length > 0 && (
         <div className="attachment-bar">
-          {attachments.map(a => (
-            <div key={a.id} className="attachment-preview">
-              {a.isImage && a.previewUrl && <img src={a.previewUrl} alt={a.name} />}
-              <span>{a.name}</span>
-              <button className="att-remove" onClick={() => onRemoveAttachment(a.id)}>×</button>
-            </div>
-          ))}
+          {attachments.map(a => <AttachmentChip key={a.id} a={a} onRemove={() => onRemoveAttachment(a.id)} />)}
         </div>
       )}
       <div className="input-bar">

@@ -745,6 +745,16 @@ app.post('/api/upload', upload.array('files', 20), async (req, res) => {
       const data = await fs.promises.readFile(f.path)
       info.dataUrl = `data:${mimetype};base64,${data.toString('base64')}`
     }
+    if (mimetype === 'application/pdf') {
+      // Seitenzahl für den Attachment-Chip — best-effort (pdfjs liest den
+      // Trailer; ein kaputter Scan darf den Upload nicht scheitern lassen).
+      try {
+        const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+        const doc = await getDocument({ data: await fs.promises.readFile(f.path), useSystemFonts: false }).promise
+        info.pages = doc.numPages
+        await doc.destroy()
+      } catch {}
+    }
     files.push(info)
   }
   res.json({ files })
