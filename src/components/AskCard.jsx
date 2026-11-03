@@ -33,7 +33,7 @@ export function AskCard({ ask, dispatch }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: ask.id, answers: final.map(a => a.trim()) }),
       })
-      if (!r.ok) throw new Error((await r.json().catch(() => ())).error || 'failed')
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'failed')
       dispatch({ type: 'ask_clear', id: ask.id })
     } catch (e) {
       setError(e.message)
