@@ -128,6 +128,110 @@ were real gaps and got fixed in this pass.
 
 ---
 
+---
+
+## Delta-Review 2026-10-01 (new repos: pi-web-ui-official, pi-web-jmfederico, pi-feats, pi-web-ui-valtterimelkko)
+
+Re-pulled after the best-of ranking (`inspirations/bestof.md`). The four newly
+cloned repos open new feature surfaces that the original four didn't cover —
+especially **multi-user/persistence**, **sandbox/guardrails**, and **subagent
+orchestration**. Grouped by πui-relevance; **bold** = strong fit.
+
+### Already covered — no action
+
+- **Multi-conversation-per-project** (pi-web-ui-official) — each conversation
+  gets its own agent runtime and keeps streaming in the background. aiui
+  already runs one live session per user (the sandbox isolates per-user).
+  Multiple parallel runtimes is a bigger architectural change; noted, not adopted.
+- **Subagent templates** (pi-web-ui-official `subagent-templates.ts`) — a role
+  system prompt + skills whitelist + optional model. aiui has agents but no
+  subagent template registry; overlaps with the Resource-universe entitlement
+  model (ADR-0001). **L — deliberate decision, not a quick win.**
+- **Model test runner** (pi-web-ui-official) — run a test prompt against a new
+  model before selecting. Already noted in §5 (M). No change.
+
+### Strong fits (πui-specific)
+
+- **Steer / follow-up queueing** (pi-web-ui-official ChatInput `queuedMessages`,
+  jmfederico `steer`) — send a follow-up while the agent is replying; it's
+  queued and injected when the current turn's tool calls settle. aiui disables
+  the input while streaming. This is the highest-value UX gap for long turns.
+  **S–M — top pick.**
+- **Compaction, visible** (pi-web-ui-official) — compacted context shows as a
+  card ("compacted from N tokens") + a live banner counting up with the trigger
+  (manual/threshold/overflow). aiui has `compaction_*` events; a structured
+  card + trigger banner is a clean win. **M.**
+- **Vision bridge** (pi-web-ui-official `vision-bridge.ts`) — when the model is
+  text-only, images are transcribed into text evidence by an auto-discovered
+  vision model. aiui attaches images as dataUrl; a text-only model currently
+  can't see them. **M — real gap.**
+- **In-app package manager** (pi-web-ui-official plugins, jmfederico;
+  PiDeck) — install/update extensions, skills, themes from the UI without
+  leaving it. aiui manages resources via config; a UI layer maps to the
+  Resource universe. **L — strategic.**
+- **Subagent runtime** (pi-web-ui-official `subagent-*`) — spawn independent
+  background conversations for parallel exploration/implementation/review,
+  collect via `subagent_wait_all`. Already noted in §8; the official impl is
+  the reference to mine. **M–L.**
+- **Goal-conversation mode** (pi-web-ui-official `goal-*`) — turn goal review
+  into a conversation: an execution chat does the work, the current chat acts
+  as reviewer. Maps to aiui's goal/review ambitions. **L — deliberate.**
+- **Model management UI** (pi-web-ui-official `model-admin.ts`, jmfederico) —
+  provider login, API keys, models, model tests, reasoning level from the UI.
+  aiui keeps credentials file-based (default-deny); a read-only model/status
+  surface is safe, full credential editing is not. **M (read-only) / L (write).**
+- **Usage/token/cost meter** (pi-web-ui-official, vagusPI) — live token + cost
+  stats per session. aiui's StatsFooter covers tokens/cost/context; a per-turn
+  usage meter is polish. **S.**
+
+### Sandbox / confinement (pi-feats — the layer everyone else is missing)
+
+- **Nono policy sandbox** (pi-feats) — constrain a named profile's process,
+  filesystem, network, credentials via a Nono policy. aiui's Sandbox is
+  macOS seatbelt (server/sandbox.js). pi-feats is the closest prior art for
+  **policy-controlled** confinement beyond a single seatbelt profile. **L —
+  study, don't port.**
+- **Isolated profiles** (pi-feats) — per-profile settings, credentials, model
+  state, sessions, `SOUL.md`, skills under `~/.pi/agent/profiles/<profile>/`.
+  Maps to aiui's per-User `agentDir` (ADR-0001). Confirms the per-profile
+  isolation posture. **Posture, not code.**
+- **Guardrails** (pi-feats) — ordered policy instructions at input/tool/output
+  lifecycle stages. aiui has no guardrail layer; this is the model for one.
+  **M–L.**
+- **Context memory** (pi-feats) — bounded persistent operational + personal
+  context loaded at session start. aiui's per-User workspace is the analog;
+  a bounded memory file is a small extension. **S–M.**
+- **Pi Console WebUI** (pi-feats) — authenticated browser ops cockpit for
+  API server, profiles, applications, skills, pulses, logs, terminal. This is
+  the closest thing to a multi-user admin surface — **the reference for πui's
+  admin/ops story. L — strategic.**
+- **Pulse / scheduled prompts** (pi-feats) — cron/one-shot/heartbeat bound to a
+  profile + session. Already noted in §9; pi-feats is the pi-native impl. **L.**
+- **Application routing** (pi-feats) — accept external payloads, route into pi
+  sessions, return integration-specific responses; identity-key mapping for
+  multi-user. **Directly relevant to πui's multi-user + widget ambitions. L —
+  study for the widget-embed idea (§Eigene Ideen).**
+
+### Multi-runtime (valtterimelkko — only if it becomes a goal)
+
+- **Multi-runtime adapter** (valtterimelkko) — Pi + Claude Code + OpenCode +
+  Antigravity in one UI. Only relevant if πui ever drives non-pi agents.
+  **Defer.**
+
+### Multi-user / persistence (jmfederico — the sibling in the target direction)
+
+- **Persistent server-side workspaces** (jmfederico) — sessions keep running
+  in real workspaces after the browser leaves; `sessiond` daemon; remote
+  machines. aiui runs one session per user in-process; a daemon/remote layer
+  is a bigger architecture step. **L — strategic, matches πui's direction.**
+- **Remote machines** (jmfederico) — one PI WEB instance proxies projects,
+  files, git, sessions, terminals from trusted remote machines. aiui is
+  single-host. **Defer (L).**
+- **Supervise multiple sessions in parallel** (jmfederico) — switch between
+  laptop/phone/tablet/desktop. Overlaps with multi-conversation; defer.
+
+---
+
 ## 1. Chat UX / streaming
 
 - **Chat minimap** (pi-web `ChatMinimap.tsx`) — a thin right-edge scrollbar
@@ -313,6 +417,186 @@ were real gaps and got fixed in this pass.
 
 ---
 
+## Embeddability — was die neuen Repos wirklich beitragen
+
+**Kernbefund:** Keins der vier neuen Repos (pi-web-ui-official, pi-web-jmfederico,
+pi-feats, pi-web-ui-valtterimelkko) ist ein **Embed-Widget** (Custom Element,
+script-tag oder iframe-embed). Alle sind eigenständige Apps, die ihr eigenes
+Browser-Fenster betreiben. Aber zwei liefern die **Vorstufe**, die für ein Embed
+entscheidend ist: die **Host-Schnittstelle** und das **Pi-SDK als Embed-Punkt**.
+
+### 1. `window.__piWebUiHost` (pi-web-ui-official) — die Host-Bridge
+
+Das ist die nächste verwandte Sache zu einem Embed. Ein **window-Singleton**,
+über das Plugins die Haupt-App steuern können (kein Import interner Module):
+
+```ts
+window.__piWebUiHost = {
+  version: 6,
+  setView("chat" | "terminal" | "git" | `plugin:<id>`),
+  startChat({ prompt, newChat?, cwd?, model? }) → boolean,
+  openSession({ cwd?, folders?, roots?, prompt?, newChat? }) → Promise<{ok, sessionId?, error?}>,
+  sessions: { list(), open(id) },
+  compose({ text?, attachments? }) → boolean,   // in die Eingabe, warten auf User
+  reloadCatalog(source, { install?, replace? }) → Promise<{ok, error?, entries?, installed?}>,
+  onUiAction(name, handler) → () => void,
+  pageCall({ op, args?, target?, timeoutMs? }) → Promise<{ok, result?, error?}>,
+}
+```
+
+**Warum relevant für πui:** Das ist genau die **host-API-Fläche**, die ein
+Embed-Widget braucht. Bevor man ein `<ai-chat>`-Custom-Element baut, sollte
+man diese **Host-Schnittstelle** als Referenz nehmen: sie zeigt, wie man
+Aktionen (startChat, openSession, compose) **durch eine schmale, versionierte
+Bridge** anbietet, statt die App intern zu importieren. πui's Embed-Widget
+könnte dieselbe Form nutzen — ein `window.__aiuiHost`-Singleton, den der Host
+befüllt und das Widget konsumiert.
+
+**Was fehlt für ein echtes Embed:** `__piWebUiHost` ist **innen** (App → Plugin),
+nicht **außen** (Host-Seite → App). Es fehlt die Umkehrung: eine API, über die
+ein fremder Host das Widget erzeugt/steuert. Das ist die Lücke, die πui mit
+seinem `<ai-chat>`-Custom-Element + Key-Modell füllt.
+
+### 2. Pi-SDK als Embed-Punkt (nicht die Web-UI)
+
+Die eigentliche Embed-Referenz ist **nicht** eine der Web-UIs, sondern das
+**Pi-SDK selbst** (`@earendil-works/pi-coding-agent`). `pi-web-ui-official` und
+`pi-web-jmfederico` nutzen es **in-process** (die Agent-Runtime läuft im eigenen
+Server-Prozess, nicht in einem Kind-Prozess). Das ist der Kern des
+„embed"-Ansatzes: die **Agent-Logik** ist embeddbar (via SDK), die **UI** ist
+es nicht (sie ist eine App).
+
+> **Konsequenz für πui:** Wenn Embeddability ein Ziel ist, ist der richtige
+> Hebel das **Pi-SDK in-process** (das πui schon tut) + eine **schmale
+> Host-Bridge** (analog `__piWebUiHost`) + das **Key-/Token-Modell** (aus der
+> Widget-Idee). Die Web-UIs liefern dafür nur die Host-Bridge-Referenz, nicht
+> das fertige Widget.
+
+### 3. Plugin-API als Embed-äquivalente Erweiterungsfläche
+
+- **pi-web-ui-official** — `plugin-host.ts` + `plugin-api-catalog.ts`: Plugins
+  sind Bare-ESM, dynamisch importiert, steuern die App via `__piWebUiHost`.
+  Ein **Plugin-System** ist eine eng verwandte (aber andere) Form der
+  Erweiterbarkeit als ein Embed — Plugins erweitern *von innen*, ein Widget
+  bettet *von außen* ein.
+- **pi-web-jmfederico** — `pi-web-plugins/` + `pluginPublicApi.test.ts`: erzwungen
+  schmale öffentliche Plugin-API, verbietet direkte interne Imports. **Beste
+  Disziplin für eine öffentliche API-Boundary** — die gleiche Regel sollte πui
+  für sein Embed-Widget setzen (nur public API, keine internen Imports).
+
+### 4. pi-feats — Application Routing (die Multi-User-Embed-Variante)
+
+`pi-feats` hat **Application Routing** (external payloads → pi sessions →
+integration-specific responses, identity-key mapping). Das ist die **serverseitige**
+Embed-Variante: statt ein Widget in eine Seite zu setzen, nimmt es externe
+Payloads an und routet sie in isolierte Sessions. **Direkt relevant für πui's
+Widget-Idee** — es ist das Muster, externe Identitäten (Keys) auf isolierte
+User-Workspaces zu mappen, ohne den echten Credentials auszuliefern.
+
+### Fazit Embeddability
+
+| Quelle | Beitrag | Embed-Bezug |
+|---|---|---|
+| pi-web-ui-official `__piWebUiHost` | Host-Bridge-Referenz | **Hoch** — die API-Fläche, die ein Embed braucht |
+| Pi-SDK (in-process) | eigentlicher Embed-Punkt | **Hoch** — Agent-Logik embeddbar |
+| pi-feats Application Routing | Identity-Key → Session | **Mittel** — serverseitige Embed-Variante |
+| pi-web-jmfederico Plugin-API-Disziplin | schmale public API | **Mittel** — Boundary-Regel fürs Widget |
+| valtterimelkko | Multi-Runtime | **Niedrig** — kein Embed-Bezug |
+
+**Nächster Schritt (falls Embeddability priorisiert wird):** Die Widget-Idee in
+§Eigene Ideen ist die richtige Richtung. Verfeinern mit: (1) `__piWebUiHost`-Stil
+als Host-Bridge, (2) Pi-SDK in-process als Basis (schon vorhanden), (3)
+pi-feats-Routing als Key→Workspace-Mapping, (4) jmfederico-Plugin-API-Disziplin
+als public-API-Regel.
+
+---
+
+## Embedding von Web-Chat-UIs — Best Practices (Web-Recherche 2026-10-01)
+
+Wie man ein Web-Chat-UI in eine fremde Seite einbettet. Drei komplementäre
+Referenz-Implementierungen + die Security-Referenz. Zusammen ergeben sie das
+vollständige Muster für πui's Widget-Idee.
+
+### Die 4 Embed-Muster (Agentkit, universalapi)
+
+| Muster | Integration | Isolation | Wann |
+|---|---|---|---|
+| **JS/script-tag-Widget** | `<script src=".../widget.js" data-key="...">` | Shadow DOM | Standard, kein Build-Schritt |
+| **Custom Element** | `<ai-chat key="...">` | Shadow DOM | Programmgesteuert steuerbar |
+| **iframe** | `<iframe src="...">` | Vollständig (eigener Kontext) | Maximale Isolation, aber kein CSS/DOM-Zugriff |
+| **React/Native-Komponente** | npm-Import | — | Wenn der Host selbst React nutzt |
+
+> **Kernwahl:** Custom Element (Shadow DOM) ist der Sweet Spot — volle
+> Kapselung, trotzdem programmatisch steuerbar. iframe ist der Fallback für
+> maximale Isolation (aber Canvas/Dialoge/Theme-Anpassung werden schwerer).
+
+### Die 3-Schichten-Security-Kette (hodgen.ai „API Key Security Done Right")
+
+Die Kernregel: **der echte Secret darf nie ins Browser-Bundle.** Drei Schichten:
+
+1. **Public Embed Key** (pro Workspace/User, scoped, revocable) — „safe-ish"
+   zu exponieren. Identifiziert nur den Ursprung, kann keinen Model-Spend
+   auslösen. Wie ein Garderoben-Ticket: wertlos, beweist nur „welcher Mantel".
+   - **Scoped:** an einen Workspace + bestimmte Aktionen gebunden.
+   - **Revocable:** `active`-Flag, schneller Index. Churn/Leak → eine Zeile
+     auf inaktiv → Widget stoppt sofort. Kein Rotieren für alle Kunden.
+2. **Session-Endpoint (Token-Broker)** — tauscht den Embed-Key gegen ein
+   **kurzlebiges, workspace-gebundenes Token** (signed JWT, `exp` in Minuten).
+   Der echte Secret bleibt serverseitig. Das Widget **re-mintet** bei Ablauf.
+   - **Rate-Limit den Session-Endpoint selbst** — sonst kann ein geleakter
+     Key unbegrenzt Tokens prägen (Problem nur eine Ebene tiefer).
+3. **Scoped, tenant-isolierte Endpoints** — jede Request trägt das Token;
+   der Backend liest den Workspace aus dem **signed claim**, nie aus
+   Query-Param/Header, den der Browser setzen kann.
+
+> **Konsequenz für πui:** Embed-Key (pro Mandant) → `POST /api/widget/session`
+> → kurzlebiges Token → SSE + prompt. Das Token ist an einen User-`agentDir`
+> gebunden (ADR-0001); der Key mappt auf einen User + engeren Scope.
+
+### Architektur-Muster (universalapi, dangntvn)
+
+- **widget.js ist minimal** — liest `data-*`-Attribute, ruft `/embed/config`
+  (validiert Token), erzeugt eine **geschlossene Shadow DOM**. Kein Secret, kein
+  Business-Logic im öffentlichen File.
+- **Config als Daten, nicht Code** (dangntvn) — ein neuer Kunde = ein
+  Profile-Objekt (Theme-Tokens, Copy, Adapter, API-Base). Keine Logik-Datei
+  wird angefasst. `core/` kennt nur eine `ChatTransport`-Interface, injiziert
+  am Composition-Root; neuer Backend = ein Adapter-File.
+- **Storage nach Zugriffsmuster** (dangntvn) — `conversationId` (klein, beim
+  Mount synchron nötig) in `localStorage`; Message-History (unbegrenzt,
+  häufig geschrieben) in `IndexedDB`, ohne Wrapper-Bibliothek.
+- **Domain-Restriction** (universalapi) — Token funktioniert nur auf den
+  beim Erstellen angegebenen Domains. Rate-Limit pro Token/IP.
+- **Tool-Call-Details + Metrics-Bar** (universalapi) — nach jeder Antwort
+  aufklappbare „N Tool Calls"-Sektion + Token/Cycle/Duration/Tools-Bar.
+  Direkt übertragbar auf πui's Tool-Call-Karten + StatsFooter.
+
+### Referenz-Implementierungen
+
+| Referenz | Stack | Besonderheit |
+|---|---|---|
+| [dangntvn/ai-embeddable-chat-widget-starter](https://github.com/dangntvn/ai-embeddable-chat-widget-starter) | Vite lib-mode · TS · Preact (~3KB) · Vitest | **Shadow-DOM Custom Element**, 4-Layer one-way-Dependency, `ChatTransport`-Adapter-Seam, Playwright-E2E gegen echten Backend |
+| [hodgen.ai — API Key Security Done Right](https://hodgen.ai/blog/embeddable-ai-widget-for-saas) | — | **Die Security-Referenz**: scoped/revocable Keys + ephemeral Tokens + Rate-Limit |
+| [universalapi — Embed AI Chat Widget](https://blog.universalapi.co/posts/embed-ai-chat-widget-any-website.html) | — | **Architektur**: script-tag + Shadow DOM, `/embed/config`, `/embed/chat`, Domain-Restriction, Tool-Call-Details, Metrics-Bar |
+| [Google CX Agent Studio Web widget](https://docs.cloud.google.com/gemini-enterprise-cx/cx-agent-studio/deploy/web-widget) | — | **Token-Broker** (Service-Account im eigenen GCP-Projekt generiert Zugriffstoken) |
+| [nivq — Chat widget (embed)](https://nivq.ai/en/docs/chat-widget/) | Web Component | Framework-agnostisch, kleiner Token-Broker, Secret erreicht nie den Browser |
+| [rakib-sikder/ai-chat-widget](https://github.com/rakib-sikder/ai-chat-widget) | — | White-labeled, single-tag, kein Framework nötig |
+| [agentkit.ai — Embed Chatbot](https://agentkit.ai/blog/embed-chatbot-on-website) | — | Die 4 Embed-Wege (JS-Widget, React, iframe, WordPress) |
+
+### Was πui übernehmen sollte
+
+1. **Custom Element `<ai-chat>` + Shadow DOM** als Primärweg (flexibel,
+   kapselbar); iframe als Fallback.
+2. **3-Schichten-Security:** Embed-Key (pro Mandant, scoped, revocable) →
+   rate-limited Session-Endpoint → kurzlebiges workspace-gebundenes Token.
+3. **Minimales `embed.js`** — nur Key lesen, Token holen, UI mounten.
+4. **Config als Daten** — Theme/Copy/Adapter pro Kunde als Profile-Objekt.
+5. **`ChatTransport`-Interface** als Adapter-Seam — `core/` kennt kein Backend.
+6. **Domain-Restriction + Rate-Limit** auf den Widget-Endpoints.
+7. **Tool-Call-Details + Metrics-Bar** in das Widget übernehmen.
+
+---
+
 ## Notes on architecture patterns
 
 - **Adapter pattern** (universal-agent-ui) — single `BaseAdapter` interface; new providers via one file; dynamic UI theming from adapter metadata.
@@ -338,6 +622,7 @@ High value / low effort (do first):
 4. **Per-session draft persistence** (S)
 5. **Browser notifications** on turn finish (S)
 6. **Chat minimap** navigation for long sessions (S–M)
+7. **Steer / follow-up queueing** (pi-web-ui-official, jmfederico) — S–M, top pick from the 2026-10-01 delta-review
 
 Medium value / medium effort (next):
 7. **Lazy render** of long histories (M)
@@ -350,6 +635,9 @@ Defer / out of scope:
 - Worktrees per session (L, sandbox already isolates)
 - Web-based credential management (conflicts with default-deny entitlement)
 - Full i18n (pi-web has en/zh/ja/ru; only if multi-language is a goal)
+- Multi-runtime adapter (valtterimelkko) — only if πui drives non-pi agents
+- Remote machines / sessiond daemon (jmfederico) — strategic, matches πui's multi-user direction
+- In-app package manager + Pi Console WebUI (pi-feats) — strategic admin/ops surface, L
 
 ---
 

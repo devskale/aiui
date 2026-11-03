@@ -12,3 +12,4 @@ pi
 .env.local
 .env.*.local
 refs/
+.work/
