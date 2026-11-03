@@ -8,6 +8,7 @@ import remarkGfm from 'remark-gfm'
 import { apiUrl } from '../lib/api'
 import { parseFollowUps } from '../lib/followUps'
 import { extractTurnWrittenFiles } from '../lib/turn-written-files'
+import { argRows } from '../lib/tool-fields'
 import { pathParts } from '../lib/path-label'
 import { TurnWrittenFiles } from './TurnWrittenFiles'
 import { TurnUsage } from './TurnUsage'
@@ -226,7 +227,10 @@ function ToolCallCard({ tc, defaultOpen = false }) {
       {open && hasContent && (
         <div className="tc-card-body">
           {args && Object.keys(args).length > 0 && (
-            <pre className="tc-args">{prettyArgs(args)}</pre>
+            argRows(args)
+              ? <table className="tc-args-table">{argRows(args).map(r =>
+                  <tr key={r.key}><td className="tc-args-k">{r.key}</td><td className="tc-args-v">{r.value}</td></tr>)}</table>
+              : <pre className="tc-args">{prettyArgs(args)}</pre>
           )}
           {output && (isWrite && extractDiffFromOutput(output)
             ? <InlineDiff diff={extractDiffFromOutput(output)} />

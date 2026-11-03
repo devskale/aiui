@@ -345,6 +345,16 @@ pre code { background: none; padding: 0; font-size: 13px; }
   max-height: 260px; overflow-y: auto; margin: 0;
 }
 .tc-output { color: var(--text-4); }
+/* Args-Tabelle (nur bei komplett flachen Args — lib/tool-fields): kompakter
+   als der JSON-Block, gleiche Optikfamilie. */
+.tc-args-table {
+  font-size: 11px; color: var(--text-3); line-height: 1.45;
+  background: rgba(0,0,0,0.25); border-radius: var(--radius-sm);
+  border-collapse: collapse; max-height: 260px; overflow-y: auto; display: block;
+}
+.tc-args-table td { padding: 3px 10px; vertical-align: top; word-break: break-word; }
+.tc-args-k { color: var(--text-4); white-space: nowrap; }
+.tc-args-v { color: var(--text-3); }
 
 /* Full-output affordance for truncated bash calls (W4) */
 .tc-full-output { margin-top: 6px; }
