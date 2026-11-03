@@ -68,7 +68,7 @@ export default function App() {
     checkMe()
   }
 
-  const { entries, current, steerQueue, streaming, connected, sessionAlive, sessionAgent, sessionModel, sessionId, sessionCwd, sessionCwdShort, sessionStartedAt, sessionStats, thinkingLevel, isCompacting, autoCompactionEnabled, sendPrompt, sendSteer, abortAgent, startNewChat, dispatch } = useAgentEvents(authed)
+  const { entries, current, steerQueue, streaming, connected, sessionAlive, sessionAgent, sessionModel, sessionId, sessionCwd, sessionCwdShort, sessionStartedAt, sessionStats, thinkingLevel, isCompacting, autoCompactionEnabled, limitWait, sendPrompt, sendSteer, abortAgent, startNewChat, dispatch } = useAgentEvents(authed)
   const { attachments, addFiles, remove: removeAttachment, clear: clearAttachments, buildPayload } = useAttachments()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   // Work-Details-Modus (Issue work-details-folding): standard = heutiges
@@ -636,6 +636,13 @@ export default function App() {
                 return <AssistantEntry key={i} entry={entry} isStreaming={false} onCopy={copyEntry} interactive={interactive} onAsk={handleSend} workDetails={workDetails} />
               })}
               {current && <AssistantEntry entry={current} isStreaming={true} onCopy={copyEntry} />}
+              {limitWait && (
+                <div className="steer-msg limit-wait">
+                  <span className="steer-arrow">↻</span>
+                  <span className="steer-text">Provider limit reached — the run pauses briefly and retries automatically.</span>
+                  <span className="steer-badge">retrying</span>
+                </div>
+              )}
               {steerQueue.map((text, i) => (
                 <div key={`steer-${i}`} className="steer-msg">
                   <span className="steer-arrow">↳</span>

@@ -114,3 +114,38 @@ test('doppeltes session_history-Replay ist idempotent (StrictMode-Doppel-Open)',
   assert.equal(twice.entries.length, 2)
   assert.deepEqual(once.entries, twice.entries)
 })
+
+// ── Limit gate sichtbar (agent_end willRetry — pi-pocket-Muster) ──
+
+test('agent_end willRetry → limitWait an, KEINE Error-Row, streaming bleibt', () => {
+  let s = reducer(S0, { type: 'agent_start' })
+  s = reducer(s, { type: 'message_start' })
+  s = reducer(s, { type: 'message_end', message: { role: 'assistant', content: [], stopReason: 'error', errorMessage: '429 too many requests' } })
+  s = reducer(s, { type: 'agent_end', willRetry: true })
+  assert.equal(s.limitWait, true, 'Retry-Status sichtbar')
+  assert.equal(s.streaming, true, 'der Run läuft weiter')
+  assert.ok(!s.entries.some(e => e.role === 'error'), 'Fehlversuch ist kein endgültiges Ergebnis')
+  assert.equal(s.current, null)
+})
+
+test('Retry-Start räumt limitWait ab; endgültiger Settle committet die Error-Row', () => {
+  let s = reducer({ ...S0, limitWait: true }, { type: 'agent_start' })
+  assert.equal(s.limitWait, false, 'agent_start beendet die Warte-Anzeige')
+  s = reducer(s, { type: 'message_start' })
+  s = reducer(s, { type: 'message_end', message: { role: 'assistant', content: [], stopReason: 'error', errorMessage: '429 again, retries exhausted' } })
+  s = reducer(s, { type: 'agent_end', willRetry: false })
+  s = reducer(s, { type: 'agent_settled' })
+  assert.equal(s.limitWait, false)
+  assert.equal(s.streaming, false)
+  const last = s.entries[s.entries.length - 1]
+  assert.equal(last.role, 'error', 'endgültig gescheitert → Error-Row')
+})
+
+test('willRetry behält echten Teilinhalt (Text/Tool-Calls) als Entry', () => {
+  let s = reducer(S0, { type: 'agent_start' })
+  s = reducer(s, { type: 'message_start' })
+  s = reducer(s, { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'Halbfertig' } })
+  s = reducer(s, { type: 'message_end', message: { role: 'assistant', content: [], stopReason: 'error', errorMessage: 'x' } })
+  s = reducer(s, { type: 'agent_end', willRetry: true })
+  assert.equal(s.entries[s.entries.length - 1].text, 'Halbfertig', 'echter Inhalt wird committed')
+})

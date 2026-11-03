@@ -25,6 +25,7 @@ export const initialState = {
   thinkingLevel: null,
   isCompacting: false,
   autoCompactionEnabled: true,
+  limitWait: false, // SDK limit gate sichtbar: agent_end(willRetry) → retry läuft
 }
 
 export function reducer(state, action) {
@@ -78,7 +79,7 @@ export function reducer(state, action) {
     }
 
     case 'agent_start':
-      return { ...state, streaming: true }
+      return { ...state, streaming: true, limitWait: false }
 
     case 'queue_update':
       // SDK source of truth for queued steer/follow-up messages
@@ -150,6 +151,20 @@ export function reducer(state, action) {
     }
 
     case 'agent_end': {
+      // Limit gate (Sichtbarkeit, pi-pocket-Muster): willRetry=true heißt, das
+      // SDK hat einen wiederholbaren Provider-Fehler (429/overloaded/…) und
+      // startet nach Backoff von selbst neu. Der Fehlversuch ist dann KEIN
+      // endgültiges Ergebnis — nur der Live-Status limitWait geht an, die
+      // Error-Row entsteht erst, wenn ein späterer Settle es wirklich beendet.
+      if (action.willRetry) {
+        const hasContent = state.current && (state.current.text.trim() || state.current.toolCalls.length > 0)
+        return {
+          ...state,
+          entries: hasContent ? [...state.entries, state.current] : state.entries,
+          current: null,
+          limitWait: true,
+        }
+      }
       let entries = state.entries
       if (state.current && (state.current.text.trim() || state.current.toolCalls.length > 0)) {
         entries = [...entries, state.current]
@@ -171,7 +186,7 @@ export function reducer(state, action) {
       if (state.current?.errorMessage && !state.current.text && !state.current.toolCalls.length) {
         entries = [...entries, Entry.error(state.current.errorMessage)]
       }
-      return { ...state, entries, current: null, streaming: false }
+      return { ...state, entries, current: null, streaming: false, limitWait: false }
     }
 
     case 'error': {
