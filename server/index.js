@@ -104,9 +104,9 @@ app.use((_req, res, next) => {
 const storage = multer.diskStorage({
     // Upload into the user's workspace so the agent's read tool can reach the
     // file (the shared uploads/ dir is outside the sandbox cwd). 'uploads' is
-    // listed in the file browser + mention autocomplete, so users can see and
-    // reuse what they uploaded (read_pdf etc.).
-  destination: (req, _file, cb) => {
+    // listed in the file browser + mention autocomplete + document library,
+    // so users can see and reuse what they uploaded (read_pdf etc.).
+  destination: (req, file, cb) => {
     // Target dir: the FileExplorer passes ?dir= (the browsed folder, even ''
     // for root); the InputBar omits it and defaults to 'uploads/'. Validated
     // by resolveWorkspacePath (assertInside) so a crafted dir can't escape cwd.
@@ -114,6 +114,7 @@ const storage = multer.diskStorage({
       const sub = req.query.dir !== undefined ? req.query.dir.toString() : 'uploads'
       const dir = resolveWorkspacePath(workspaceCwd(req.user), sub)
       fs.mkdirSync(dir, { recursive: true })
+      file._libDir = dir // für den filename-cb (Kollisions-Check)
       cb(null, dir)
     } catch (e) {
       cb(e)
@@ -122,8 +123,17 @@ const storage = multer.diskStorage({
   filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname)
     const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9._-]/g, '_')
-    const date = new Date().toISOString().slice(0, 10)
-    cb(null, `${date}_${base}${ext}`)
+    // Originalname zuerst (die Bibliothek/#dokname zeigen und matchen ihn),
+    // Datums-Präfix nur als Kollisions-Ausweich — nie ein bestehendes File
+    // überschreiben.
+    const plain = `${base}${ext}`
+    try {
+      if (file._libDir && fs.existsSync(path.join(file._libDir, plain))) {
+        const date = new Date().toISOString().slice(0, 10)
+        return cb(null, `${date}_${base}${ext}`)
+      }
+    } catch { /* Fallthrough auf den sicheren Namen */ }
+    cb(null, plain)
   },
 })
 const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } })

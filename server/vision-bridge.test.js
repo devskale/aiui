@@ -18,8 +18,8 @@ beforeEach(() => {
 
 const IMG = { mimeType: 'image/png', data: Buffer.from('fakepng').toString('base64') }
 
-function fakeRt(models, impl) {
-  return { getModels: () => models, completeSimple: impl }
+function fakeRt(models, impl, { authed = true } = {}) {
+  return { getModels: () => models, completeSimple: impl, getAuth: async () => (authed ? 'key' : null) }
 }
 
 const VISION = { provider: 'p', id: 'see-1', input: ['text', 'image'] }
@@ -32,13 +32,15 @@ test('isImageCapable: nur models mit input:image', () => {
   assert.equal(isImageCapable(null), false)
 })
 
-test('pickBridgeModel: env gewinnt, sonst erstes image-Modell ≠ aktuell, sonst null', () => {
+test('pickBridgeModel: env gewinnt, sonst erstes authes image-Modell ≠ aktuell, sonst null', async () => {
   const rt = fakeRt([TEXTONLY, VISION, VISION2])
-  assert.equal(pickBridgeModel(rt, 'p@blind-1')?.id, 'see-1')
+  assert.equal((await pickBridgeModel(rt, 'p@blind-1'))?.id, 'see-1')
   process.env.AIUI_VISION_MODEL = 'p@see-2'
-  assert.equal(pickBridgeModel(rt, 'p@blind-1')?.id, 'see-2', 'env override')
-  assert.equal(pickBridgeModel(fakeRt([TEXTONLY]), 'p@blind-1'), null, 'kein vision-Modell')
-  assert.equal(pickBridgeModel(fakeRt([VISION]), 'p@see-1'), null, 'nur das aktuelle selbst')
+  assert.equal((await pickBridgeModel(rt, 'p@blind-1'))?.id, 'see-2', 'env override')
+  assert.equal(await pickBridgeModel(fakeRt([TEXTONLY]), 'p@blind-1'), null, 'kein vision-Modell')
+  assert.equal(await pickBridgeModel(fakeRt([VISION]), 'p@see-1'), null, 'nur das aktuelle selbst')
+  assert.equal(await pickBridgeModel(fakeRt([VISION], undefined, { authed: false }), 'p@blind-1'), null,
+    'Katalog-Eintrag ohne aufgelöste Auth = toter Bridge-Call — übersprungen')
 })
 
 test('bridgeImages: Beschreibung landet im Text-Block; Cache macht den zweiten Call überflüssig', async () => {
@@ -58,6 +60,28 @@ test('bridgeImages: Beschreibung landet im Text-Block; Cache macht den zweiten C
   const r2 = await bridgeImages({ rt, images: [{ ...IMG, cachePath }], currentModelRef: 'p@blind-1' })
   assert.equal(r2.ok, true)
   assert.equal(calls, 1, 'Cache-Hit: kein zweiter Bridge-Call')
+})
+
+test('Kandidaten-Fallback: erster Provider lehnt ab → zweiter liefert die Beschreibung', async () => {
+  process.env.AIUI_VISION_MODEL = ''
+  const bad = { provider: 'p', id: 'bad-1', input: ['text', 'image'] }
+  const good = { provider: 'p', id: 'good-1', input: ['text', 'image'] }
+  const calls = []
+  const rt = {
+    getModels: () => [bad, good],
+    getAuth: async () => 'key',
+    completeSimple: async (model) => {
+      calls.push(model.id)
+      if (model.id === 'bad-1') {
+        return { stopReason: 'error', errorMessage: 'model not supported with this account', content: [] }
+      }
+      return { stopReason: 'stop', content: [{ type: 'text', text: 'Fallback description.' }] }
+    },
+  }
+  const r = await bridgeImages({ rt, images: [{ ...IMG }], currentModelRef: 'p@blind-1' })
+  assert.equal(r.ok, true, 'Fallback rettet den Turn')
+  assert.ok(r.textSection.includes('Fallback description.'))
+  assert.deepEqual(calls, ['bad-1', 'good-1'], 'beide Kandidaten in Reihenfolge versucht')
 })
 
 test('Fehlerpfade: kein Bridge-Modell / leerer Call → ok:false mit Reason', async () => {

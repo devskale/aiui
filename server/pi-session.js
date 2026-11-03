@@ -546,7 +546,7 @@ export async function prompt(user, text, attachments = []) {
   // Guard. Statt undefinierter SDK-Fehlerlage: ein vision-fähiges Modell
   // beschreibt die Bilder (Cache: <name>.vision.md), das Modell bekommt Text.
   if (images.length && !isImageCapable(s.model)) {
-    const rt = await modelRuntimeFor(u)
+    const rt = await modelRuntimeFor(scopeKey(user))
     const bridged = await bridgeImages({
       rt,
       images,

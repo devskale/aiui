@@ -154,21 +154,11 @@ try {
 
   if (FULL) {
     // SSE mitlauschen, dann Bild-only-Prompt (leerer Text) feuern.
+    // openSse merged die event:-Zeile — aiui-eigene Pushes (error etc.) tragen
+    // das type NUR in der event:-Zeile, nicht im Payload.
     const events = []
-    let sseErr = null
-    const sse = http.get({ host: '127.0.0.1', port, path: '/api/events' }, res => {
-      res.setEncoding('utf8')
-      let buf = ''
-      res.on('data', c => {
-        buf += c
-        for (const line of buf.split('\n')) {
-          if (!line.startsWith('data:')) continue
-          try { events.push(JSON.parse(line.slice(5))) } catch { /* Teilzeile */ }
-        }
-        buf = buf.slice(buf.lastIndexOf('\n') + 1)
-      })
-    })
-    sse.on('error', e => (sseErr = e))
+    const sse = await openSse(port, events)
+    const sseErr = null
     await new Promise(r => setTimeout(r, 500))
 
     const posted = await postJson(port, '/api/prompt', {
@@ -208,19 +198,7 @@ try {
     // SSE-Card-Event, Answer-Route, Tool-Result zurück ans Modell.
     {
       const ev2 = []
-      const sse2 = http.get({ host: '127.0.0.1', port, path: '/api/events' }, res => {
-        res.setEncoding('utf8')
-        let buf = ''
-        res.on('data', c => {
-          buf += c
-          for (const line of buf.split('\n')) {
-            if (!line.startsWith('data:')) continue
-            try { ev2.push(JSON.parse(line.slice(5))) } catch { /* Teilzeile */ }
-          }
-          buf = buf.slice(buf.lastIndexOf('\n') + 1)
-        })
-      })
-      sse2.on('error', e => (sseErr = e))
+      const sse2 = await openSse(port, ev2) // merged event:-Zeile (aiui-Pushes haben kein .type im Payload)
       await new Promise(r => setTimeout(r, 500))
 
       const postedAsk = await postJson(port, '/api/prompt', {
@@ -311,6 +289,84 @@ try {
         throw new Error(`Mid-Run-Switch: Status zeigt ${statusAfter?.model}, erwartet ${target} (Live-State)`)
       }
       console.log(`smoke: Mid-Run-Model-Switch OK (${current} → ${target} mitten im Turn, ohne Bruch)`)
+    }
+
+    // ── #dokname-e2e (Bibliothek): Upload → Prompt mit #token → das Modell
+    // kennt den Magic-String nur aus dem INLINE-Dokument (kein Tool-Call).
+    {
+      const fd = new FormData()
+      fd.append('files', new Blob(['The magic string is MAGIC-XYZZY-42.'], { type: 'text/markdown' }), 'smoke-doc.md')
+      const up = await fetch(`http://127.0.0.1:${port}/api/upload`, { method: 'POST', body: fd })
+      if (!up.ok) throw new Error(`/api/upload (library): HTTP ${up.status}`)
+      const lib = await getJson(port, '/api/library?q=smoke-doc')
+      if (!lib.body.docs?.some(d => d.name === 'smoke-doc.md')) throw new Error('/api/library: smoke-doc.md fehlt in der Liste')
+
+      const ev4 = []
+      const sse4 = await openSse(port, ev4)
+      await new Promise(r => setTimeout(r, 400))
+      const postedDoc = await postJson(port, '/api/prompt', {
+        text: '#smoke-doc Repeat the magic string from this document verbatim. Answer with ONLY the string.',
+      })
+      if (postedDoc.status !== 200) throw new Error(`/api/prompt (#doc): HTTP ${postedDoc.status}`)
+
+      const docDeadline = Date.now() + TURN_TIMEOUT
+      let docSettled = null
+      while (Date.now() < docDeadline) {
+        docSettled = ev4.find(e => e.type === 'agent_settled' || e.type === 'error')
+        if (docSettled) break
+        await new Promise(r => setTimeout(r, 500))
+      }
+      sse4.destroy()
+      if (!docSettled) throw new Error(`#dokname-e2e: kein Settle (${TURN_TIMEOUT / 1000}s)`)
+      if (docSettled.type === 'error') throw new Error(`#dokname-e2e: Agent-Fehler: ${JSON.stringify(docSettled).slice(0, 200)}`)
+      if (!ev4.some(e => JSON.stringify(e).includes('MAGIC-XYZZY-42'))) {
+        throw new Error('#dokname-e2e: Magic-String kam nie zurück — Inline-Inlining wirkte nicht')
+      }
+      console.log('smoke: #dokname-e2e OK (Upload → #token → Inline → Modell-Echo)')
+    }
+
+    // ── Vision-Bridge-e2e: auf ein Text-only-Modell schalten und ein
+    // @-mentiones Bild prompten — der alte Weg endete in undefinierter
+    // Fehlerlage, jetzt beschreibt die Bridge und der Turn settled.
+    {
+      const cats = await getJson(port, '/api/models')
+      const imageModels = new Set(cats.body.imageModels || [])
+      const providers = cats.body.providers || {}
+      const textOnlyRef = Object.entries(providers)
+        .flatMap(([p, ids]) => ids.map(id => `${p}@${id}`))
+        .find(ref => !imageModels.has(ref))
+      if (!textOnlyRef) {
+        console.log('smoke: Vision-Bridge übersprungen (kein Text-only-Modell im Katalog)')
+      } else {
+        const fd = new FormData()
+        const pngB64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+        fd.append('files', new Blob([Buffer.from(pngB64, 'base64')], { type: 'image/png' }), 'smoke-red.png')
+        const up = await fetch(`http://127.0.0.1:${port}/api/upload`, { method: 'POST', body: fd })
+        if (!up.ok) throw new Error(`/api/upload (bridge): HTTP ${up.status}`)
+
+        const sw = await postJson(port, '/api/model', { model: textOnlyRef })
+        if (sw.status !== 200) throw new Error(`/api/model (text-only): HTTP ${sw.status} — ${sw.body}`)
+
+        const ev5 = []
+        const sse5 = await openSse(port, ev5)
+        await new Promise(r => setTimeout(r, 400))
+        const postedImg = await postJson(port, '/api/prompt', {
+          text: '@uploads/smoke-red.png What color is this image? One short sentence.',
+        })
+        if (postedImg.status !== 200) throw new Error(`/api/prompt (bridge): HTTP ${postedImg.status}`)
+
+        const bridgeDeadline = Date.now() + 2 * TURN_TIMEOUT
+        let settled = null
+        while (Date.now() < bridgeDeadline) {
+          settled = ev5.find(e => e.type === 'agent_settled' || e.type === 'error')
+          if (settled) break
+          await new Promise(r => setTimeout(r, 500))
+        }
+        sse5.destroy()
+        if (!settled) throw new Error(`Vision-Bridge-e2e: kein Settle (${2 * TURN_TIMEOUT / 1000}s)`)
+        if (settled.type === 'error') throw new Error(`Vision-Bridge-e2e: Agent-Fehler: ${JSON.stringify(settled).slice(0, 200)}`)
+        console.log(`smoke: Vision-Bridge-e2e OK (Text-only ${textOnlyRef} + @-Bild → Beschreibung, Turn settled)`)
+      }
     }
   }
 
