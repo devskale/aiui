@@ -8,6 +8,77 @@ The latest version is shown in the UI under `#/releases`.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-11-03
+
+### Added
+
+- **E-Mail-Registrierung, Phasen 0–3 (`docs/proposal-email-registration.md`)**
+  — der komplette Zyklus vom Proposal bis zum Admin-Panel:
+  1. **Mailer** (`server/mailer.js`): env-konfigurierter SMTP-Transport,
+     Budget-Caps im Prozess (`MAIL_DAILY_MAX`, `MAIL_PER_MINUTE`, 0 =
+     Kill-Switch), Dry-Run unkonfiguriert — Dev/Tests berühren nie das Netz.
+     Templates verify/reset/welcome/test: ein CTA, TTL im Mailtext (abgeleitet
+     aus `TOKEN_TTL_MS`), Enumeration-safe Ignore-Hints.
+  2. **Registrierung** (`server/email-auth.js`): users store
+     `~/.aiui-users.json` (atomic 0600, sibling der Auth-Config), verify/reset-
+     Tokens (32B, sha256-at-rest, single-use, 30min — Mint invalidiert ältere
+     same-purpose Tokens), whole-address-Case-Fold-Normalisierung, OWASP-
+     Uniform-Routen (`/api/auth/{config,register,verify,resend,reset-request,
+     reset}`), `REGISTRATION_MODE=invite|open|closed` (Default invite), Login-
+     Modal mit Register/Forgot-Tabs + `?verify=`/`?reset=`-Deep-Links.
+  3. **Day-Cap**: max. neue Accounts pro UTC-Tag (`REGISTER_DAILY_MAX`,
+     Default 20, 0 = Kill-Switch) — aus den `created`-Timestamps abgeleitet,
+     restart-safe, zählt nur NEUE Accounts.
+  4. **Admin-Endpoints** (Phase 3): `GET /api/admin/users` (sanitisierte
+     Liste — Hashes verlassen das Modul nie, Day-Cap-Stand, Invite-Usage im
+     Invite-Mode), `POST .../quota` (Quota setzen ohne Handedit),
+     `POST .../deactivate` (+ Session-Revoke). Admin = `admins`-Array in der
+     Auth-Config, sonst erster User (Spec-Formel).
+
+- **Limit gate sichtbar (pi-pocket-Muster)** — das SDK retryt wiederholbare
+  Provider-Fehler (429/overloaded, geerbter `retry`-Block: 8 Versuche,
+  Backoff bis 60s) — der Client sah davon nichts. Jetzt: `agent_end` mit
+  `willRetry` schaltet eine Live-„retrying"-Statuszeile; die Error-Row des
+  Fehlversuchs wird erst beim endgültigen Settle committet, echter
+  Teilinhalt bleibt erhalten. (3 Reducer-Tests.)
+
+- **Live-Quota-Counter (Konvergenz-Hebel Quota-Sichtbarkeit)** —
+  `/api/prompt` pusht nach jedem konsumierten Prompt ein `quota`-SSE-Event
+  (auch im 429-Fall — truthful); der Topbar-Zähler lebt statt nur beim
+  `/api/me`-Refresh aktuell zu sein und färbt sich am Cap rot. Reset bewahrt
+  ihn (tagesbezogen, nicht sessionbezogen).
+
+- **Queue-Erhalt bei Abort (pi-web-ui #834-Muster)** — `abort()` gibt die
+  entleerte Queue zurück (`clearQueue()` → `{steering, followUp}`),
+  `/api/abort` als `queued`-Texte, InputBar restored sie in den Draft und
+  fokussiert. Gestoppte Texte sind nie wieder weg.
+
+- **Tool-Args-Tabelle (pi-web `tool-fields.ts`-Port)** — Tool-Call-Args
+  erscheinen als kompakte Tabelle, sobald ALLE Argumente flache Primitives
+  sind; jedes verschachtelte Feld → JSON-View (All-or-Nothing, kein
+  Per-Tool-Config, kein abgeschnittener Teilbaum). Pure in
+  `src/lib/tool-fields.js` (3 Tests).
+
+### Fixed
+
+- **Registrierte User sperren keine Config-Accounts mehr aus** —
+  `verifyCredentials` vereinigt beide Credential-Quellen statt den
+  registrierten Hash stillschweigend gewinnen zu lassen (Registrierung mit
+  gleichem Name wie ein Auth-File-User = Aussperren). Ebenfalls geschlossen:
+  ein **pending** (unverifizierter) User konnte sich bisher schon mit seinem
+  Passwort einloggen, und deaktivierte Accounts authentifizierten weiter —
+  nur `active` zählt jetzt als Credential-Quelle.
+- **verify/reset hinter der IP-Wall** — beide Token-Endpoints waren
+  unthrottled (Spec §5 verlangt Limiter auf allen vier Auth-Routen); sie
+  teilen sich jetzt die Register-Wall, `rate-ip` → 429.
+- **Keine echte Mail bei Re-Registrierung einer aktiven Adresse** — der
+  „already have an account"-Fake-Token-Link verbrannte Mail-Budget und 404te
+  beim Klick; die Uniform-Response leakt ohnehin nichts.
+- **Welcome-Mail mit allen drei Spec-Bullets** — Quota, geteilte Modelle vs.
+  eigener Key, „agent stays sandboxed to your workspace" (der Sandbox-Verweis
+  fehlte komplett); mail-smoke nutzt die echte Deep-Link-Form
+  (`?verify=`/`?reset=`) statt der alten Proposal-Pfadform.
+
 ### Added
 
 - **Session-Doc-Mgmt: Rename / Export / Delete (Issue session-doc-
