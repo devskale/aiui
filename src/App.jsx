@@ -17,6 +17,7 @@ import { AgentPicker } from './components/AgentPicker'
 import { useTts } from './hooks/useTts'
 import { InputBar } from './components/InputBar'
 import { StatsFooter } from './components/StatsFooter'
+import { AskCard } from './components/AskCard'
 import { ThinkingPicker } from './components/ThinkingPicker'
 import { ForkPicker } from './components/ForkPicker'
 import { FileExplorer } from './components/FileExplorer'
@@ -68,7 +69,7 @@ export default function App() {
     checkMe()
   }
 
-  const { entries, current, steerQueue, streaming, connected, sessionAlive, sessionAgent, sessionModel, sessionId, sessionCwd, sessionCwdShort, sessionStartedAt, sessionStats, thinkingLevel, isCompacting, autoCompactionEnabled, limitWait, quota, sendPrompt, sendSteer, abortAgent, startNewChat, dispatch } = useAgentEvents(authed)
+  const { entries, current, steerQueue, streaming, connected, sessionAlive, sessionAgent, sessionModel, sessionId, sessionCwd, sessionCwdShort, sessionStartedAt, sessionStats, thinkingLevel, isCompacting, autoCompactionEnabled, limitWait, quota, pendingAsks, sendPrompt, sendSteer, abortAgent, startNewChat, dispatch } = useAgentEvents(authed)
   const { attachments, addFiles, remove: removeAttachment, clear: clearAttachments, buildPayload } = useAttachments()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   // Work-Details-Modus (Issue work-details-folding): standard = heutiges
@@ -669,6 +670,8 @@ export default function App() {
 
         {hasContent && !atTail && <JumpToLatest onClick={scrollToLatest} />}
 
+        {/* ask choice cards — der Run pausiert, bis hier geantwortet wird */}
+        {pendingAsks.map(ask => <AskCard key={ask.id} ask={ask} dispatch={dispatch} />)}
         <StatsFooter stats={sessionStats} isCompacting={isCompacting} autoCompactionEnabled={autoCompactionEnabled} />
         <InputBar
           onSend={handleSend}

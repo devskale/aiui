@@ -43,6 +43,7 @@ export function useAgentEvents(enabled = true) {
       'thinking_level_changed',
       'error',
       'quota',
+      'ask',
     ]
 
     const connect = () => {

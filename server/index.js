@@ -11,7 +11,7 @@ import { authEnabled, verifyCredentials, issueSession, revokeSession, revokeAllS
 import { registerUser, verifyRegistration, resendVerification, requestReset, consumeReset, maybeSendWelcome, registrationMode, listRegisteredUsers, setRegisteredQuota, deactivateRegisteredUser, inviteCodeUsage, peekRegistrationBudget } from './email-auth.js'
 import { widgetKeyEntry, originAllowed, noteMintAttempt, mintWidgetToken, getWidgetSecret, widgetQuotaAvailable, verifyWidgetToken, frameAncestorsFor } from './widget-auth.js'
 import { consumeQuota, peekQuota } from './quota.js'
-import { getOrCreateSession, disposeSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, listSessions, switchToSession, renameSession, deleteSession, resumeWidgetVisitor, getAvailableModels, getCommands, getSessionInfo, getSessionStats, getSessionHistory, newSession, workspaceCwd, getForkTargets, forkSession, scopedUser, widgetVisitorStatus, prepareWidgetContext, composeWidgetPrompt, VISITOR_RE } from './pi-session.js'
+import { getOrCreateSession, disposeSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, listSessions, switchToSession, renameSession, deleteSession, resumeWidgetVisitor, getAvailableModels, getCommands, getSessionInfo, getSessionStats, getSessionHistory, newSession, workspaceCwd, getForkTargets, forkSession, scopedUser, widgetVisitorStatus, prepareWidgetContext, composeWidgetPrompt, resolveAsk, VISITOR_RE } from './pi-session.js'
 import { listAgents } from './agents.js'
 import { sttConfigured, sttReachable, sttModel, transcribe } from './stt.js'
 import { resolveBashOutputPath, readBashOutput } from './bash-output.js'
@@ -426,6 +426,14 @@ app.post('/api/abort', async (req, res) => {
     queued = [...(q?.steering || []), ...(q?.followUp || [])]
   } catch {}
   res.json({ ok: true, queued })
+})
+
+// ── Ask (choice cards — the model's `ask` tool parks here until answered) ──
+app.post('/api/ask/answer', (req, res) => {
+  const { id, answers } = req.body || {}
+  if (!id || !Array.isArray(answers)) return res.status(400).json({ error: 'id and answers required' })
+  if (!resolveAsk(req.user, id, answers)) return res.status(404).json({ error: 'no pending question' })
+  res.json({ ok: true })
 })
 
 // ── Models (per-User catalog under hybrid keys — ADR-0002) ──

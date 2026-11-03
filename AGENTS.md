@@ -57,6 +57,8 @@ server/
                     thinking, agents, stt, commands, sessions, uploads, files
   pi-session.js     ★ the core — per-user session lifecycle (see below)
   agents.js         ★ the Agent catalog (ADR-0004) — loads agents/<id>/agent.md
+  ask.js            ask-Tool (human-in-the-loop): 1–4 Fragen mit Choices,
+                    Run pausiert bis POST /api/ask/answer — Choice-Card-UI
   auth.js           login: ~/.aiui-auth.json, scrypt, persistente Sessions
                     (gehasht in ~/.aiui-sessions.json — überleben Deploys);
                     registered users (email-auth) als zweite Credential-Quelle
@@ -261,6 +263,7 @@ in the Node process outside the sandbox.
 | GET  | `/api/events` | req | SSE stream (per-user bus) |
 | POST | `/api/prompt` | req | send prompt (quota-checked) |
 | POST | `/api/abort` | req | abort current turn; returns drained queue (`queued` — client restores the texts) |
+| POST | `/api/ask/answer` | req | answer a parked ask-tool question (choice cards) |
 | GET  | `/api/models` | req | per-user model catalog (hybrid keys) |
 | POST | `/api/model` | req | set session model |
 | GET/POST | `/api/thinking-level` | req | get/set thinking level |

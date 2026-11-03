@@ -782,6 +782,39 @@ pre code { background: none; padding: 0; font-size: 13px; }
 .limit-wait .steer-badge { color: var(--warn, #b45309); }
 .limit-wait .steer-text { color: var(--text-3); }
 
+/* ── Ask choice cards (ask-Tool, pi-pocket-Muster) ── */
+.ask-card {
+  margin: 0 14px 8px; padding: 12px 14px;
+  background: var(--bg-elevated); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius, 10px); font-size: 13px;
+}
+.ask-head {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--text-4); margin-bottom: 10px; display: flex; align-items: center; gap: 6px;
+}
+.ask-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent, #34d399); animation: pulse 1.2s ease-in-out infinite; }
+.ask-q { margin-bottom: 10px; }
+.ask-q-text { color: var(--text-1); font-weight: 550; margin-bottom: 7px; }
+.ask-choices { display: flex; flex-wrap: wrap; gap: 6px; }
+.ask-choice {
+  font-size: 12.5px; padding: 5px 12px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border-subtle); background: var(--bg); color: var(--text-2);
+  transition: all .1s;
+}
+.ask-choice:hover { border-color: var(--accent, #34d399); color: var(--text-1); }
+.ask-choice.picked { background: var(--accent, #34d399); border-color: var(--accent, #34d399); color: #0b1512; font-weight: 550; }
+.ask-freetext textarea {
+  width: 100%; resize: vertical; font: inherit; font-size: 12.5px;
+  background: var(--bg); color: var(--text-1); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm, 6px); padding: 7px 9px; box-sizing: border-box;
+}
+.ask-submit {
+  font-size: 12.5px; padding: 6px 16px; border-radius: 999px; cursor: pointer;
+  border: none; background: var(--accent, #34d399); color: #0b1512; font-weight: 600;
+}
+.ask-submit:disabled { opacity: .45; cursor: default; }
+.ask-error { color: var(--danger, #e06c6c); font-size: 12px; margin-top: 6px; }
+
 /* ═══ DROP ZONE ═══ */
 .drop-zone {
   position: fixed; inset: 0; background: rgba(255,255,255,0.03);

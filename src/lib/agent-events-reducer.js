@@ -27,6 +27,7 @@ export const initialState = {
   autoCompactionEnabled: true,
   limitWait: false, // SDK limit gate sichtbar: agent_end(willRetry) → retry läuft
   quota: null,      // live counter (SSE 'quota' event) — overlays me.quota from /api/me
+  pendingAsks: [],  // offene ask-Choice-Cards ({ id, questions }) — Tools warten auf Antwort
 }
 
 export function reducer(state, action) {
@@ -61,6 +62,14 @@ export function reducer(state, action) {
       // Server pusht nach jedem konsumierten Prompt (auch bei 429) — der
       // Topbar-Zähler lebt, statt nur beim /api/me-Refresh aktuell zu sein.
       return { ...state, quota: { used: action.used, limit: action.limit } }
+
+    case 'ask':
+      // Das ask-Tool parkt bis zur Antwort — der Card-Zustand lebt im Reducer,
+      // damit Session-Wechsel/Historie ihn nicht verlieren.
+      return { ...state, pendingAsks: [...(state.pendingAsks || []), { id: action.id, questions: action.questions || [] }] }
+
+    case 'ask_clear':
+      return { ...state, pendingAsks: (state.pendingAsks || []).filter(a => a.id !== action.id) }
 
     case 'session_history':
       return { ...state, entries: action.entries || [], current: null, steerQueue: [] }
@@ -192,7 +201,9 @@ export function reducer(state, action) {
       if (state.current?.errorMessage && !state.current.text && !state.current.toolCalls.length) {
         entries = [...entries, Entry.error(state.current.errorMessage)]
       }
-      return { ...state, entries, current: null, streaming: false, limitWait: false }
+      // Settle beendet auch hängende ask-Cards (Timeout/Abort hat das Tool
+      // längst aufgelöst — hier nur noch UI-Restzustand weg).
+      return { ...state, entries, current: null, streaming: false, limitWait: false, pendingAsks: [] }
     }
 
     case 'error': {

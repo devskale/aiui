@@ -165,3 +165,17 @@ test('quota-Event bei 429 (abgelehnter Prompt) zählt trotzdem truthful', () => 
   let s = reducer(S0, { type: 'quota', used: 10, limit: 10 })
   assert.equal(s.quota.used >= s.quota.limit, true, 'am Cap → UI kann rot markieren')
 })
+
+// ── ask choice cards (ask-Tool — pendingAsks im Reducer) ──
+
+test('ask-Event parkt die Card; ask_clear nimmt sie raus; Settle räumt Reste ab', () => {
+  const questions = [{ question: 'Which db?', choices: ['postgres', 'sqlite'] }]
+  let s = reducer(S0, { type: 'ask', id: 'a1', questions })
+  assert.equal(s.pendingAsks.length, 1)
+  assert.deepEqual(s.pendingAsks[0].questions, questions)
+  s = reducer(s, { type: 'ask_clear', id: 'a1' })
+  assert.equal(s.pendingAsks.length, 0)
+  s = reducer(s, { type: 'ask', id: 'a2', questions })
+  s = reducer({ ...s, streaming: true }, { type: 'agent_settled' })
+  assert.equal(s.pendingAsks.length, 0, 'Settle räumt hängende Cards weg')
+})

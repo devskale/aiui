@@ -11,6 +11,7 @@ import crypto from 'node:crypto'
 import os from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { getBus } from './event-bus.js'
+import { createAskTool, abortAsks, resolveAsk as askResolve } from './ask.js'
 import { resolveWorkspacePath } from './workspace-files.js'
 import * as Entry from '../shared/entry.js'
 import * as Sandbox from './sandbox.js'
@@ -223,9 +224,13 @@ function ctxFor(user) {
     // (Erst NACH den mkdirs — createTools schreibt das Seatbelt-Profil in cwd.)
     const pending = instance ? pendingWidgetConfig.get(u) : null
     const widgetAgent = pending?.agent || 'default'
-    const tools = instance && pending?.readonly
+    let tools = instance && pending?.readonly
       ? createReadonlyTools(cwd)
       : Sandbox.createTools(cwd)
+    // ask tool (choice cards) nur für die Haupt-App — Widget-Embeds rendern
+    // keine Cards, dort würde der Tool-Call bis zum Timeout hängen.
+    const askTools = instance ? [] : [createAskTool(u, getBus(u))]
+    tools = tools ? [...tools, ...askTools] : (askTools.length ? askTools : undefined)
     // Seed behavioral defaults on first creation (ADR-0001). Entitlement stays
     // empty (default-deny); the admin curates it per-User.
     const settingsPath = path.join(agentDir, 'settings.json')
@@ -538,8 +543,14 @@ export async function abort(user) {
   // into the input draft. Typed text is never lost to a Stop
   // (queued-message loss prevention, pi-web-ui #834 pattern).
   const queued = s.clearQueue() // { steering: string[], followUp: string[] }
+  abortAsks(scopeKey(user)) // parked ask cards resolve with "aborted" — no hanging run
   await s.abort()
   return queued
+}
+
+/** Route seam: the user's parked ask gets the answers (see ask.js). */
+export function resolveAsk(user, id, answers) {
+  return askResolve(scopeKey(user), id, answers)
 }
 
 export async function setModel(user, modelId) {
