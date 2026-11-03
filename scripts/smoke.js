@@ -3,10 +3,13 @@
 // smoke — boot the server and verify the live SDK wiring end to end
 //
 // Default (fast, no model call): boot → GET /api/models (non-empty provider
-// catalog) → GET /api/agents (catalog loads) → shutdown.
-// --full (real model call, needs provider credentials): additionally send an
-// image-only prompt (1×1 PNG, empty text — the #9797 regression path) and
-// wait for turn_end or an error event on the SSE stream.
+// catalog) → GET /api/agents (catalog loads) → ask-route contract (400/404)
+// → shutdown.
+// --full (real model calls, needs provider credentials): additionally send an
+// image-only prompt (1×1 PNG, empty text — the #9797 regression path), wait
+// for turn_end, check the reconnect history replay, then run the ask-e2e:
+// prompt the model to call ask → answer the parked card via /api/ask/answer
+// → verify the tool result reached the model and the run settled.
 //
 // Run: node scripts/smoke.js [--full]
 // Exit 0 = smoke passed, 1 = failure (server boot, endpoint, or model error).
@@ -139,6 +142,16 @@ try {
     console.log('smoke: SSE-Resync OK (session_status auf jedem frischen Connect ×2)')
   }
 
+  // ── Ask-Contract (ask-Tool): Answer-Route lehnt malformed/unknown ab —
+  // 400 ohne id/answers, 404 für eine unbekannte (nie geparkte) id.
+  {
+    const malformed = await postJson(port, '/api/ask/answer', {})
+    if (malformed.status !== 400) throw new Error(`/api/ask/answer ohne body: HTTP ${malformed.status}, erwartet 400`)
+    const unknown = await postJson(port, '/api/ask/answer', { id: 'smoke-no-such-id', answers: ['x'] })
+    if (unknown.status !== 404) throw new Error(`/api/ask/answer unbekannte id: HTTP ${unknown.status}, erwartet 404`)
+    console.log('smoke: Ask-Contract OK (400 malformed / 404 unknown)')
+  }
+
   if (FULL) {
     // SSE mitlauschen, dann Bild-only-Prompt (leerer Text) feuern.
     const events = []
@@ -189,6 +202,62 @@ try {
       throw new Error('Reconnect-Replay fehlt: kein session_history mit Entries nach abgeschlossenem Turn')
     }
     console.log(`smoke: Reconnect-Replay OK (session_history mit ${replay.entries.length} Entries)`)
+
+    // ── Ask-e2e (ask-Tool): Modell ruft ask → Smoke antwortet → Turn
+    // settled mit der Antwort. Beweist die ganze Kette: Tool-Registration,
+    // SSE-Card-Event, Answer-Route, Tool-Result zurück ans Modell.
+    {
+      const ev2 = []
+      const sse2 = http.get({ host: '127.0.0.1', port, path: '/api/events' }, res => {
+        res.setEncoding('utf8')
+        let buf = ''
+        res.on('data', c => {
+          buf += c
+          for (const line of buf.split('\n')) {
+            if (!line.startsWith('data:')) continue
+            try { ev2.push(JSON.parse(line.slice(5))) } catch { /* Teilzeile */ }
+          }
+          buf = buf.slice(buf.lastIndexOf('\n') + 1)
+        })
+      })
+      sse2.on('error', e => (sseErr = e))
+      await new Promise(r => setTimeout(r, 500))
+
+      const postedAsk = await postJson(port, '/api/prompt', {
+        text: 'Call your ask tool NOW with exactly one question "Which database should we use?" and the choices ["Postgres", "SQLite"]. Do nothing else — no other tool, no text.',
+      })
+      if (postedAsk.status !== 200) throw new Error(`/api/prompt (ask): HTTP ${postedAsk.status} — ${postedAsk.body}`)
+
+      // Auf die ask-Card warten (ask-Event-Payload trägt id + questions, kein .type)
+      const askDeadline = Date.now() + TURN_TIMEOUT
+      let ask = null
+      while (Date.now() < askDeadline) {
+        ask = ev2.find(e => e.id && Array.isArray(e.questions))
+        if (ask) break
+        if (ev2.some(e => e.type === 'error')) throw new Error(`Ask-e2e: Agent-Fehler vor dem ask-Call: ${JSON.stringify(ev2.find(e => e.type === 'error')).slice(0, 200)}`)
+        await new Promise(r => setTimeout(r, 500))
+      }
+      if (!ask) throw new Error(`Ask-e2e: kein ask-Event nach ${TURN_TIMEOUT / 1000}s — Modell hat das Tool nicht gerufen`)
+      console.log(`smoke: ask-Card OK (1 Frage, ${ask.questions[0]?.choices?.length || 0} Choices)`)
+
+      const answered = await postJson(port, '/api/ask/answer', { id: ask.id, answers: ['Postgres'] })
+      if (answered.status !== 200) throw new Error(`/api/ask/answer: HTTP ${answered.status} — ${answered.body}`)
+
+      const settleDeadline = Date.now() + TURN_TIMEOUT
+      let settled = null
+      while (Date.now() < settleDeadline) {
+        settled = ev2.find(e => e.type === 'agent_settled' || e.type === 'error')
+        if (settled) break
+        await new Promise(r => setTimeout(r, 500))
+      }
+      sse2.destroy()
+      if (!settled) throw new Error(`Ask-e2e: kein agent_settled nach der Antwort (${TURN_TIMEOUT / 1000}s)`)
+      if (settled.type === 'error') throw new Error(`Ask-e2e: Agent-Fehler nach der Antwort: ${JSON.stringify(settled).slice(0, 200)}`)
+      const answerEcho = ev2.some(e => (e.messages || []).some?.(m => JSON.stringify(m.content || '').includes('Postgres')))
+        || ev2.some(e => JSON.stringify(e).includes('Postgres'))
+      if (!answerEcho) throw new Error('Ask-e2e: Antwort „Postgres" kam nie beim Modell an (kein Tool-Result sichtbar)')
+      console.log('smoke: Ask-e2e OK (Tool-Call → Card → Antwort → Tool-Result → Settle)')
+    }
   }
 
   console.log('OK')
