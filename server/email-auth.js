@@ -149,9 +149,14 @@ function inviteCodes() {
 }
 
 // ── tokens ──
+// Mint invalidates every still-pending token of the same purpose+norm first
+// (spec §4: "resend = mint new token, invalidate old") — only the freshest
+// mail's link ever works, so an intercepted/resent older mail can't be replayed.
 function mintToken(purpose, norm, ttlMs = TOKEN_TTL_MS) {
+  const s = loadStore()
+  s.tokens = s.tokens.filter(t => !(t.purpose === purpose && t.norm === norm))
   const token = crypto.randomBytes(32).toString('base64url')
-  loadStore().tokens.push({ hash: crypto.createHash('sha256').update(token).digest('hex'), purpose, norm, expires: Date.now() + ttlMs })
+  s.tokens.push({ hash: crypto.createHash('sha256').update(token).digest('hex'), purpose, norm, expires: Date.now() + ttlMs })
   saveStore()
   return token
 }

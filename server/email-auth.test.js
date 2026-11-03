@@ -13,6 +13,10 @@ const USERS = path.join(TMP, 'users.json')
 process.env.AIUI_USERS_FILE = USERS
 process.env.AIUI_INVITE_CODES = 'TESTCODE'
 process.env.PUBLIC_URL = 'https://skale.dev/aiui'
+// Dry-run battery: dry-run sends consume budget too (mailer wall behaves
+// identically in dev/tests) — this file fires ~10 sends, which would trip the
+// default 10/minute cap. Budget semantics are tested in mailer.test.js.
+process.env.MAIL_PER_MINUTE = '100'
 delete process.env.SMTP_HOST; delete process.env.SMTP_USER; delete process.env.SMTP_PASS; delete process.env.MAIL_FROM
 
 const m = await import('./email-auth.js')
@@ -124,6 +128,17 @@ test('day-cap: REGISTER_DAILY_MAX=0 is a registration kill-switch', async () => 
   process.env.REGISTER_DAILY_MAX = '0'
   process.env.REGISTRATION_MODE = 'open'
   assert.equal((await registerUser({ email: 'x@b.io', passphrase: 'longenough1', ip: '2.1.1.1' })).status, 'day-cap')
+})
+
+test('token invalidation: a fresh mint kills the older same-purpose token', async () => {
+  process.env.REGISTRATION_MODE = 'open'
+  await registerUser({ email: 'inv@b.io', passphrase: 'longenough1', ip: '12.0.0.1' })
+  assert.equal(JSON.parse(fs.readFileSync(USERS, 'utf-8')).tokens.length, 1)
+  _resetEmailAuthForTest() // clears the 60s mail cooldown; store reloads from disk
+  const r = await registerUser({ email: 'inv@b.io', passphrase: 'otherenough2', ip: '12.0.0.2' })
+  assert.equal(r.status, 'pending-resent')
+  const verify = JSON.parse(fs.readFileSync(USERS, 'utf-8')).tokens.filter(t => t.purpose === 'verify')
+  assert.equal(verify.length, 1, 'only the freshest verify link exists — older mails are dead')
 })
 
 test('hashPassphrase format matches the auth contract (salt:hash scrypt-32)', () => {

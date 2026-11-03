@@ -92,6 +92,32 @@ interface, depth, seam, adapter, leverage, locality — is separate from this li
   `guest: 10`). `null` = unlimited. Enforced in `/api/prompt`; over-limit → a
   429 + an error Event on that User's bus.
 
+### Registration & accounts
+
+- **Registered user** — a self-service account created by email signup, stored
+  in `~/.aiui-users.json` (sibling of the auth config; home module
+  `server/email-auth.js`). Identified by the **normalized email** (whole
+  address lowercased — no provider munging), with `status` pending → active.
+  A *second* credential source **beside** the auth config (verifyCredentials
+  unions both): a registration can never lock out a config-defined account.
+  Default Quota is low (5/day) until an admin raises it.
+- **Registration mode** — `REGISTRATION_MODE=invite|open|closed` (default
+  `invite`); invite codes come from the auth file's `inviteCodes` + env
+  `AIUI_INVITE_CODES` (env wins).
+- **Verify/Reset token** — the single-use link token of a registration or
+  passphrase-reset mail: 32 random bytes, stored sha256-only, 30-min TTL
+  (`TOKEN_TTL_MS`). Minting invalidates every still-pending token of the same
+  purpose — only the freshest mail's link ever works. Consumed via
+  `server/email-auth.js`; auto-login on success.
+- **Mail budget** — the in-process outbound-mail caps (`MAIL_DAILY_MAX`,
+  `MAIL_PER_MINUTE`, 0 = kill-switch) plus the shared 60s per-address mail
+  cooldown. Unconfigured SMTP → dry-run (no network). Home module
+  `server/mailer.js`.
+- **Day-cap** — the global limit on NEW accounts per UTC day
+  (`REGISTER_DAILY_MAX`, default 20, 0 = registration kill-switch). Derived
+  from the users store's `created` timestamps — restart-safe, counts only new
+  accounts (pending re-registers burn nothing).
+
 - **Entitlement** *(planned)* — the set of Resources a User is permitted to use;
   the Resource-universe boundary. Under ADR-0001 an Entitlement is expressed
   purely in pi canonics, via two mechanisms in the User's `agentDir/settings.json`:

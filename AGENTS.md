@@ -8,6 +8,14 @@ isolated session.
 Review layer: `CODING_STANDARDS.md` — judgement rules a diff is reviewed
 against (isolation, shape ownership, SDK boundary).
 
+**Inspirations (repo to watch):** `../inspirations/` (sibling of this repo,
+NOT part of aiui) — reference repos to watch/steal from. Indexed in
+`../inspirations/inspirations.md` (initial review), `bestof.md` (ranking),
+`findings.md` (ecosystem research); idea ledger: `ideas.md` (this repo).
+Clones: chatbot-template (shadcn-ui), pi-web (agegr), pi-web-jmfederico,
+pi-web-ui-official (xing-shuyin), pi-web-ui-valtterimelkko, pi-feats,
+pi-gui (minghinmatthewlam), deepseek-harness (deepseek-ai).
+
 **Scope: this repo is aiui-only** (Nutzer-Entscheid 2026-09-30). Arbeiten in
 `www/aiui` = nur aiui. Recherchen zu anderen Projekten (Firmenbuch/
 firmenbuch_AT, EPO, Crawler, Deployments fremder Services) gehören in deren
@@ -50,7 +58,13 @@ server/
   pi-session.js     ★ the core — per-user session lifecycle (see below)
   agents.js         ★ the Agent catalog (ADR-0004) — loads agents/<id>/agent.md
   auth.js           login: ~/.aiui-auth.json, scrypt, persistente Sessions
-                    (gehasht in ~/.aiui-sessions.json — überleben Deploys)
+                    (gehasht in ~/.aiui-sessions.json — überleben Deploys);
+                    registered users (email-auth) als zweite Credential-Quelle
+  email-auth.js     self-service registration: ~/.aiui-users.json (atomic 0600),
+                    verify/reset-Tokens (single-use, sha256-at-rest, 30min),
+                    Registration-Mode invite|open|closed, IP-/Mail-Walls
+  mailer.js         outbound SMTP mit Budget-Caps (MAIL_DAILY_MAX/PER_MINUTE,
+                    0 = Kill-Switch); unkonfiguriert → Dry-Run (kein Netz)
   quota.js          per-user daily prompt cap (in-memory, UTC reset)
   event-bus.js      SSE fan-out — ONE BUS PER USER (getBus(user))
   sandbox.js        macOS seatbelt: createTools(cwd) | undefined, assertInside
@@ -238,9 +252,15 @@ in the Node process outside the sandbox.
 | POST | `/api/login` | public | verify credentials, set session cookie |
 | POST | `/api/logout` | public | revoke session |
 | GET  | `/api/me` | public | auth state + user + quota |
+| GET  | `/api/auth/config` | public | registration mode (invite/open/closed) |
+| POST | `/api/auth/register` | public | self-service signup (uniform, enumeration-safe) |
+| POST | `/api/auth/verify` | public | consume verify token → activate + auto-login |
+| POST | `/api/auth/resend` | public | re-send verification mail (per-IP wall + cooldown) |
+| POST | `/api/auth/reset-request` | public | request reset mail (uniform) |
+| POST | `/api/auth/reset` | public | consume reset token → new passphrase + auto-login |
 | GET  | `/api/events` | req | SSE stream (per-user bus) |
 | POST | `/api/prompt` | req | send prompt (quota-checked) |
-| POST | `/api/abort` | req | abort current turn |
+| POST | `/api/abort` | req | abort current turn; returns drained queue (`queued` — client restores the texts) |
 | GET  | `/api/models` | req | per-user model catalog (hybrid keys) |
 | POST | `/api/model` | req | set session model |
 | GET/POST | `/api/thinking-level` | req | get/set thinking level |
@@ -264,6 +284,9 @@ in the Node process outside the sandbox.
 | POST | `/api/compact` | req | compact context |
 | POST | `/api/compact/abort` | req | abort compaction |
 | POST | `/api/compaction/auto` | req | toggle auto-compaction |
+| POST | `/api/session/rename` | req | rename a stored session |
+| GET  | `/api/session/export` | req | download a session as Markdown |
+| POST | `/api/session/delete` | req | delete a stored session |
 | GET  | `/api/changelog` | req | CHANGELOG.md |
 | POST | `/api/upload` | req | file upload (multer) |
 
