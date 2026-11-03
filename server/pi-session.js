@@ -12,6 +12,7 @@ import os from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { getBus } from './event-bus.js'
 import { createAskTool, abortAsks, resolveAsk as askResolve } from './ask.js'
+import { isImageCapable, bridgeImages } from './vision-bridge.js'
 import { resolveWorkspacePath } from './workspace-files.js'
 import * as Entry from '../shared/entry.js'
 import * as Sandbox from './sandbox.js'
@@ -474,7 +475,13 @@ export async function prompt(user, text, attachments = []) {
     .filter(a => a.isImage && a.dataUrl)
     .map(a => {
       const match = a.dataUrl.match(/^data:([^;]+);base64,(.+)$/)
-      return { type: 'image', mimeType: match?.[1] || 'image/png', data: match?.[2] }
+      return {
+        type: 'image',
+        mimeType: match?.[1] || 'image/png',
+        data: match?.[2],
+        // für den Bridge-Cache (.vision.md neben der Datei)
+        cachePath: a.relPath ? path.join(workspaceCwd(user), a.relPath) : undefined,
+      }
     })
   // Non-image attachments now land inside the user's workspace (uploads/), so
   // point the agent at them. PDFs get their own hint — the read tool returns
@@ -501,6 +508,23 @@ export async function prompt(user, text, attachments = []) {
     promptText += `\n\n${sections.join('\n\n')}`
   }
   if (!promptText.trim()) promptText = images.length ? 'Describe this image.' : ''
+  // Vision bridge: ein Text-only-Modell kann Bilder nicht sehen — der Client
+  // blockt Attachment-Bilder zwar vor, aber @-mentionierte Bilder umgehen den
+  // Guard. Statt undefinierter SDK-Fehlerlage: ein vision-fähiges Modell
+  // beschreibt die Bilder (Cache: <name>.vision.md), das Modell bekommt Text.
+  if (images.length && !isImageCapable(s.model)) {
+    const rt = await modelRuntimeFor(u)
+    const bridged = await bridgeImages({
+      rt,
+      images,
+      currentModelRef: s.model ? `${s.model.provider}@${s.model.id}` : null,
+    })
+    if (!bridged.ok) {
+      throw new Error(`Image attached, but this model cannot see images and the vision bridge failed: ${bridged.reason}`)
+    }
+    promptText += bridged.textSection
+    images.length = 0 // dem Modell mitgeben wäre totes Gewicht (oder Fehler)
+  }
   const options = { images }
   if (s.isStreaming) options.streamingBehavior = 'steer' // prompting mid-turn
   return s.prompt(promptText, options)
@@ -528,9 +552,9 @@ export function attachMentionedImages(text, cwd, images) {
   for (const { rel, abs } of found) {
     try {
       const buf = fs.readFileSync(abs)
-      const ext = path.extname(rel).slice(1).toLowerCase()
+      const ext = path.extname(abs).slice(1).toLowerCase()
       const mime = ext === 'jpg' ? 'image/jpeg' : ext === 'svg' ? 'image/svg+xml' : `image/${ext}`
-      images.push({ type: 'image', mimeType: mime, data: buf.toString('base64') })
+      images.push({ type: 'image', mimeType: mime, data: buf.toString('base64'), cachePath: abs })
     } catch {}
   }
   return stripped.replace(/\s{2,}/g, ' ').trim()
