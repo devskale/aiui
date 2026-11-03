@@ -93,8 +93,14 @@ export function useAgentEvents(enabled = true) {
     })
   }
 
+  // Returns the server's drained queue (texts typed while streaming) so the
+  // caller can restore them into the input draft — aborting loses nothing.
   const abortAgent = async () => {
-    await fetch(apiUrl('/api/abort'), { method: 'POST' })
+    try {
+      const r = await fetch(apiUrl('/api/abort'), { method: 'POST' })
+      const data = await r.json().catch(() => null)
+      return Array.isArray(data?.queued) ? data.queued : []
+    } catch { return [] }
   }
 
   const startNewChat = async (agentId) => {

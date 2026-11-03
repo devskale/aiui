@@ -384,9 +384,15 @@ app.get('/embed', (req, res) => {
 })
 
 // ── Abort ──
+// Returns the drained queue as `queued` texts — the client restores them into
+// the input draft, so aborting never loses what was typed while streaming.
 app.post('/api/abort', async (req, res) => {
-  try { await abort(req.user) } catch {}
-  res.json({ ok: true })
+  let queued = []
+  try {
+    const q = await abort(req.user)
+    queued = [...(q?.steering || []), ...(q?.followUp || [])]
+  } catch {}
+  res.json({ ok: true, queued })
 })
 
 // ── Models (per-User catalog under hybrid keys — ADR-0002) ──

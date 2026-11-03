@@ -533,8 +533,13 @@ export function attachMentionedImages(text, cwd, images) {
 
 export async function abort(user) {
   const s = await getOrCreateSession(user)
-  s.clearQueue() // drop queued steers/followUps so Stop fully halts (emits queue_update)
-  return s.abort()
+  // Stop fully halts — but the queued steers/followUps are RETURNED, not
+  // dropped: the caller hands them back to the client, which restores them
+  // into the input draft. Typed text is never lost to a Stop
+  // (queued-message loss prevention, pi-web-ui #834 pattern).
+  const queued = s.clearQueue() // { steering: string[], followUp: string[] }
+  await s.abort()
+  return queued
 }
 
 export async function setModel(user, modelId) {

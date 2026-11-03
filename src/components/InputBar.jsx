@@ -133,12 +133,28 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
     if (!streaming) ref.current?.focus()
   }, [streaming])
 
+  // Stop: der Server entleert seine Queue beim Abbruch und liefert die
+  // geparkten Texte zurück (queued-message loss prevention) — hier landen
+  // sie im Draft zurück, statt im Abort verloren zu gehen.
+  const handleStop = async () => {
+    let queued = []
+    try { queued = (await onStop?.()) || [] } catch {}
+    const restored = queued.filter(t => typeof t === 'string' && t.trim()).join('\n\n')
+    if (restored) {
+      setText(t => t ? `${t}\n\n${restored}` : restored)
+      requestAnimationFrame(() => {
+        if (ref.current) ref.current.style.height = Math.min(ref.current.scrollHeight, 200) + 'px'
+        ref.current?.focus()
+      })
+    }
+  }
+
   const handleKey = (e) => {
     if (mention.onKeyDown(e)) return
     if (slash.onKeyDown(e)) return
     if (e.key === 'Escape' && streaming) {
       e.preventDefault()
-      onStop()
+      handleStop()
       return
     }
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -291,7 +307,7 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
             e.target.value = ''
           }} />
         {streaming ? (
-          <button className="ib-btn stop" onClick={onStop} title="Stop" aria-label="Stop generating">
+          <button className="ib-btn stop" onClick={handleStop} title="Stop" aria-label="Stop generating">
             <span className="ib-stop-wrap">
               <LoaderCircle size={18} className="spin" />
               <Square size={7} className="ib-stop-core" />
