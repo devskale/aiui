@@ -47,6 +47,15 @@ rows per preset directory).
   browser. Reachability is probed (cached) so the mic self-hides where the
   gateway host is unroutable (e.g. prod without a route to the DGX) and
   self-heals when networking lands.
+  - *Amended 2026-11-13*: streaming STT added a second, deliberate path —
+    `GET /api/stt/config` (authed) hands `STT_TOKEN` to LOGGED-IN browsers
+    for direct WS streaming with live partials (browsers cannot set WS
+    headers, hence the `?token=` query-param pattern; rationale in the route
+    comment, `server/index.js`). `/api/stt` remains the server-proxied
+    fallback. The "never reaches the browser" claim above described the
+    original proxy-only design. Note the trade-off this accepts: every
+    logged-in user (incl. low-quota self-registered ones) can use the
+    gateway directly, outside the /api/prompt quota.
 - **Baseline extensions are per-User file entitlement**, same stance as the
   seeded `fetch-url`/`web-search` skills: `generate-image`
   (`extensions/generate-image/`) is seeded via `default-user-settings.json`

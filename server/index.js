@@ -820,8 +820,12 @@ if (process.env.NODE_ENV === 'production') {
 const base = (process.env.VITE_BASE || '').replace(/\/+$/, '')
 // Mount uploads at both the base-prefixed path (direct access) and bare /uploads
 // (nginx proxy_pass with trailing slash strips the /aiui/ prefix before reaching us).
-app.use(`${base}/uploads`, express.static(uploadsDir))
-app.use(`/uploads`, express.static(uploadsDir))
+// Authed: the dir is a legacy shared surface (uploads now land in per-user
+// workspaces) — leftover pre-migration files must not be fetchable anonymously.
+// Same-origin <img>/preview requests carry the session cookie, so logged-in
+// previews keep working; no-auth local mode passes through (requireAuth).
+app.use(`${base}/uploads`, requireAuth, express.static(uploadsDir))
+app.use(`/uploads`, requireAuth, express.static(uploadsDir))
 
 const PORT = process.env.PORT || 3107
 const HOST = process.env.HOST || '127.0.0.1'

@@ -69,6 +69,19 @@ The latest version is shown in the UI under `#/releases`.
 
 ### Security
 
+- **Statische `/uploads`-Mounts hinter `requireAuth`** — der globale
+  uploads/-Dir ist eine Legacy-Fläche (Uploads landen längst im
+  Per-User-Workspace), wurde aber ungeprüft ausgeliefert: alte
+  Pre-Migrations-Dateien wären anonym abrufbar gewesen. Gleich-Origin-
+  Previews (Session-Cookie) funktionieren weiter; der No-Auth-Lokalmodus
+  passt durch (`requireAuth`).
+- **ADR-0004-StT-Text an die Realität angeglichen** — `/api/stt/config`
+  (authed) gibt `STT_TOKEN` bewusst an eingeloggte Browser für direktes
+  WS-Streaming (`?token=`-Pattern, Browser kann keine WS-Header setzen);
+  der ADR behauptete noch "never reaches the browser". Datierter
+  Amendment-Abschnitt dokumentiert jetzt die bewusste Entscheidung samt
+  Trade-off (Gateway-Nutzung außerhalb der Quota für alle eingeloggten
+  User).
 - **Session-Switch-Traversal-Gap geschlossen** — `switchToSession` reichte
   den Client-Pfad ungeprüft an die SDK-`switchSession` weiter; rename/delete
   validierten denselben Input über `assertSessionPath`, switch nicht. Damit
