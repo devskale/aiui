@@ -11,7 +11,7 @@ import { authEnabled, verifyCredentials, issueSession, revokeSession, revokeAllS
 import { registerUser, verifyRegistration, resendVerification, requestReset, consumeReset, maybeSendWelcome, registrationMode, listRegisteredUsers, setRegisteredQuota, deactivateRegisteredUser, inviteCodeUsage, peekRegistrationBudget } from './email-auth.js'
 import { widgetKeyEntry, originAllowed, noteMintAttempt, mintWidgetToken, getWidgetSecret, widgetQuotaAvailable, verifyWidgetToken, frameAncestorsFor } from './widget-auth.js'
 import { consumeQuota, peekQuota } from './quota.js'
-import { getOrCreateSession, disposeSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, listSessions, switchToSession, renameSession, deleteSession, resumeWidgetVisitor, getAvailableModels, getCommands, getSessionInfo, getSessionStats, getSessionHistory, newSession, workspaceCwd, getForkTargets, forkSession, scopedUser, widgetVisitorStatus, prepareWidgetContext, composeWidgetPrompt, resolveAsk, VISITOR_RE } from './pi-session.js'
+import { getOrCreateSession, disposeSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, listSessions, switchToSession, renameSession, deleteSession, resumeWidgetVisitor, getAvailableModels, getCommands, getSessionInfo, getSessionStats, getSessionHistory, newSession, workspaceCwd, getForkTargets, forkSession, scopedUser, widgetVisitorStatus, prepareWidgetContext, composeWidgetPrompt, resolveAsk, migrateLegacyWorkspace, VISITOR_RE } from './pi-session.js'
 import { listAgents } from './agents.js'
 import { sttConfigured, sttReachable, sttModel, transcribe } from './stt.js'
 import { resolveBashOutputPath, readBashOutput } from './bash-output.js'
@@ -195,12 +195,18 @@ app.post('/api/auth/reset', (req, res) => {
 app.post('/api/login', (req, res) => {
   const { username, passphrase } = req.body || {}
   if (!noteLoginAttempt(req.ip)) return res.status(429).json({ error: 'too many attempts, slow down' })
-  if (!verifyCredentials(username, passphrase)) return res.status(401).json({ error: 'invalid credentials' })
+  const user = verifyCredentials(username, passphrase) // canonical identity (null = bad credentials)
+  if (!user) return res.status(401).json({ error: 'invalid credentials' })
+  // Registered users are their NORMALIZED email (CONTEXT.md; the mail-link
+  // flows already issue normalized sessions). Merge any workspace the
+  // as-typed spelling created before login caught up — quota and slug key
+  // on the session user, so without this one account stayed split in two.
+  if (user !== username) migrateLegacyWorkspace(username, user)
   // Expire stale session cookies at other paths (accumulated from past deploys)
   // before setting the fresh Path=/ cookie — so only one aiui_session sticks.
   clearStaleSessionCookies(res, req.secure)
-  setSessionCookie(res, issueSession(username), req.secure)
-  res.json({ ok: true, user: username })
+  setSessionCookie(res, issueSession(user), req.secure)
+  res.json({ ok: true, user })
 })
 app.post('/api/logout', (req, res) => {
   if (req.user) disposeSession(req.user) // drop the in-memory session → next login is fresh

@@ -52,6 +52,21 @@ The latest version is shown in the UI under `#/releases`.
   verlangt bruchfreies Settle + korrektes Live-Status-Modell. Live verifiziert
   (glm-5.3-flash → glm-4.7 mitten im Turn).
 
+### Fixed
+
+- **Login normalisiert die Identität** — der Passwort-Login stellte die
+  Session mit dem Namen "wie getippt" aus, während die Mail-Link-Flows
+  (Verify/Reset) längst normalisiert ausstellen. `Foo@bar.com` vs
+  `foo@bar.com` war damit EIN Konto mit ZWEI Quota-Zählern (doppeltes
+  Tagesbudget) und zwei Workspace-Dirs. `verifyCredentials` liefert jetzt
+  die kanonische Identität (Registered = normalisierte Mail, Config =
+  exakter gelisteter Name; bei Doppel-Match gewinnt die Config — sie bleibt
+  die primäre Quelle), `/api/login` stellt die Session damit aus.
+  Bestandsdaten: beim Login wird ein Legacy-Workspace der alten Schreibweise
+  einmalig in den kanonischen Dir gemerged (`mergeDirInto` in
+  `server/pi-session.js` — kollisionsfreie Einträge wandern, Kollisionen
+  bleiben für Admin-Recovery liegen, leerer Legacy-Dir fällt weg; idempotent).
+
 ### Security
 
 - **Session-Switch-Traversal-Gap geschlossen** — `switchToSession` reichte

@@ -34,17 +34,17 @@ process.env.AIUI_USERS_FILE = usersFile
 const { authEnabled, verifyCredentials, userLimit, modelFilterFor, isAdmin } = await import('./auth.js')
 
 test('per-User credential replaces the shared passphrase for that User', () => {
-  assert.equal(verifyCredentials('hak', 'hackler26'), true, 'own password works')
-  assert.equal(verifyCredentials('hak', 'shared-secret'), false, 'shared password no longer works for hak')
+  assert.equal(verifyCredentials('hak', 'hackler26'), 'hak', 'own password works')
+  assert.equal(verifyCredentials('hak', 'shared-secret'), null, 'shared password no longer works for hak')
 })
 
 test('Users without an override verify against the shared list', () => {
-  assert.equal(verifyCredentials('demo', 'shared-secret'), true)
-  assert.equal(verifyCredentials('demo', 'hackler26'), false, 'hak password does not leak to demo')
+  assert.equal(verifyCredentials('demo', 'shared-secret'), 'demo')
+  assert.equal(verifyCredentials('demo', 'hackler26'), null, 'hak password does not leak to demo')
 })
 
 test('unknown users always fail; auth counts credentials as a source; limits intact', () => {
-  assert.equal(verifyCredentials('nobody', 'shared-secret'), false)
+  assert.equal(verifyCredentials('nobody', 'shared-secret'), null)
   assert.equal(authEnabled(), true)
   assert.equal(userLimit('demo'), 10)
   assert.equal(userLimit('hak'), null)
@@ -76,8 +76,8 @@ test('nur AKTIVE Registrierungen sind eine Credential-Quelle (pending/deactivate
     ],
     tokens: [],
   }))
-  assert.equal(verifyCredentials('pen@b.io', 'pending-secret'), false, 'unverifiziert loggt nicht ein')
-  assert.equal(verifyCredentials('dead@b.io', 'dead-secret'), false, 'deaktiviert loggt nicht ein')
+  assert.equal(verifyCredentials('pen@b.io', 'pending-secret'), null, 'unverifiziert loggt nicht ein')
+  assert.equal(verifyCredentials('dead@b.io', 'dead-secret'), null, 'deaktiviert loggt nicht ein')
 })
 
 test('registered user does NOT lock out a config user with the same name (union)', () => {
@@ -90,11 +90,24 @@ test('registered user does NOT lock out a config user with the same name (union)
   cfg.users.push('admin@b.io')
   cfg.credentials['admin@b.io'] = makeHash('config-secret')
   fs.writeFileSync(authFile, JSON.stringify(cfg))
-  assert.equal(verifyCredentials('admin@b.io', 'config-secret'), true,
+  assert.equal(verifyCredentials('admin@b.io', 'config-secret'), 'admin@b.io',
     'config credential survives someone registering the same name')
-  assert.equal(verifyCredentials('admin@b.io', 'registered-secret'), true,
+  assert.equal(verifyCredentials('admin@b.io', 'registered-secret'), 'admin@b.io',
     'registered credential still works beside the config one')
-  assert.equal(verifyCredentials('admin@b.io', 'wrongwrong'), false)
+  assert.equal(verifyCredentials('admin@b.io', 'wrongwrong'), null)
+})
+
+test('registered login is canonical: any spelling returns the normalized email', () => {
+  fs.writeFileSync(usersFile, JSON.stringify({
+    users: [{ email: 'Foo@B.io', norm: 'foo@b.io', hash: makeHash('mixed-secret'), status: 'active', created: new Date().toISOString(), quota: 5, invite: null }],
+    tokens: [],
+  }))
+  // The session user is the canonical identity — quota and workspace slug key
+  // on it, so the account must not fork per spelling.
+  assert.equal(verifyCredentials('FOO@B.io', 'mixed-secret'), 'foo@b.io', 'mixed-case login → normalized')
+  assert.equal(verifyCredentials('foo@b.io', 'mixed-secret'), 'foo@b.io')
+  assert.equal(verifyCredentials('Foo@B.io', 'mixed-secret'), 'foo@b.io', 'verbatim registration spelling also normalizes')
+  assert.equal(verifyCredentials('FOO@B.io', 'wrong'), null)
 })
 
 // Cleanup after the tests ran — top-level rmSync would delete the config

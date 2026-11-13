@@ -205,6 +205,37 @@ function workspaceSlug(user) {
   return `${slug}-${hash}`
 }
 
+// One-shot legacy merge (login identity normalization): an account that
+// logged in under two spellings owned two workspace dirs — the slug hash
+// covers the raw name. Move everything that does NOT collide into the
+// canonical dir; collisions stay put for admin recovery; drop the legacy
+// dir once empty. Idempotent, and a failed merge must never block login.
+export function mergeDirInto(fromDir, toDir) {
+  if (!fs.existsSync(fromDir)) return
+  fs.mkdirSync(toDir, { recursive: true })
+  for (const name of fs.readdirSync(fromDir)) {
+    const from = path.join(fromDir, name)
+    const to = path.join(toDir, name)
+    if (fs.existsSync(to)) {
+      if (fs.statSync(from).isDirectory() && fs.statSync(to).isDirectory()) mergeDirInto(from, to)
+      continue // file collision: the canonical copy wins, legacy keeps its own
+    }
+    fs.renameSync(from, to)
+  }
+  if (fs.readdirSync(fromDir).length === 0) fs.rmdirSync(fromDir)
+}
+
+// Merge the legacy workspace + agentDir of a pre-normalization spelling into
+// the canonical identity's dirs. Called from /api/login, where both the
+// as-typed and the canonical name are known.
+export function migrateLegacyWorkspace(fromUser, toUser) {
+  if (!fromUser || !toUser || fromUser === toUser) return
+  try {
+    mergeDirInto(path.join(WORKSPACE_ROOT, workspaceSlug(fromUser)), path.join(WORKSPACE_ROOT, workspaceSlug(toUser)))
+    mergeDirInto(path.join(AGENT_ROOT, workspaceSlug(fromUser)), path.join(AGENT_ROOT, workspaceSlug(toUser)))
+  } catch { /* best-effort — login proceeds regardless */ }
+}
+
 function ctxFor(user) {
   evictIdleContexts(contexts, IDLE_EVICT_MS)
   evictVisitorContexts(contexts, WIDGET_VISITOR_TTL_MS)

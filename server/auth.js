@@ -116,13 +116,21 @@ function verifyHash(passphrase, entry) {
 // Normalize a credentials-map entry (string | array) to a list of entries.
 function asList(v) { return Array.isArray(v) ? v : [v] }
 
-/** username known AND passphrase matches. Two credential sources:
- *  the auth file (config) and registered users (email-auth — self-service
- *  signup). Registered users match by normalized email; their scrypt hash
- *  uses the same salt:hash contract. The sources UNION when a name exists in
- *  both: a config-defined account must never be locked out just because
- *  someone registered the same address (registered = SECOND source, per
- *  proposal-email-registration.md §4 — never a replacement for the config).
+/** username known AND passphrase matches → the CANONICAL identity the session
+ *  must carry (string), or null on failure. Canonical: a config match keeps
+ *  the exact listed name; a registered match is its NORMALIZED email —
+ *  login must not fork one account into per-spelling quota counters and
+ *  workspace dirs (CONTEXT.md: registered identity is the normalized
+ *  address; the mail-link flows already issue normalized sessions).
+ *
+ *  Two credential sources: the auth file (config) and registered users
+ *  (email-auth — self-service signup). Registered users match by normalized
+ *  email; their scrypt hash uses the same salt:hash contract. The sources
+ *  UNION when a name exists in both: a config-defined account must never be
+ *  locked out just because someone registered the same address (registered
+ *  = SECOND source, per proposal-email-registration.md §4 — never a
+ *  replacement for the config). On a double match the CONFIG name wins the
+ *  identity (primary source).
  *
  *  Timing: unbekannte User werfen NICHT früh — sie laufen gegen einen
  *  Dummy-Scrypt (fester Salt/Hash), damit die Antwortzeit bekannte
@@ -141,7 +149,14 @@ export function verifyCredentials(username, passphrase) {
     ...(known ? asList(c.credentials?.[username] || (Array.isArray(c.passphrases) ? c.passphrases : [])) : []),
   ]
   if (!candidates.length) candidates.push(DUMMY_ENTRY)
-  return candidates.some(p => verifyHash(passphrase, p))
+  // Registered hashes sit FIRST in the list — the match index attributes the
+  // credential to its source (config = primary on a double match).
+  const regCount = reg && reg.status === 'active' ? 1 : 0
+  for (let i = 0; i < candidates.length; i++) {
+    if (!verifyHash(passphrase, candidates[i])) continue
+    return i < regCount ? reg.norm : username
+  }
+  return null
 }
 
 /** Admin gate for /api/admin/*: `admins` array in the auth config, else the

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { evictIdleContexts, attachMentionedImages, MAX_MENTION_IMAGE_BYTES, readModelPref, rememberModel, assertSessionPath } from './pi-session.js'
+import { evictIdleContexts, attachMentionedImages, MAX_MENTION_IMAGE_BYTES, readModelPref, rememberModel, assertSessionPath, mergeDirInto } from './pi-session.js'
 
 // ── evictIdleContexts ──
 test('evict: idle non-streaming contexts are dropped and disposed', () => {
@@ -90,4 +90,36 @@ test('assertSessionPath: accepts own sessionDir .jsonl, rejects cross-user/trave
   assert.throws(() => assertSessionPath(ctx, '/ws/alice/sessions/../../bob/sessions/x.jsonl'), /invalid session path/)
   assert.throws(() => assertSessionPath(ctx, '/ws/alice/sessions/notes.txt'), /invalid session path/)
   assert.throws(() => assertSessionPath(ctx, '/ws/alice/sessions-evil/x.jsonl'), /invalid session path/, 'prefix must end at a dir boundary')
+})
+
+// ── mergeDirInto (legacy workspace migration at login) ──
+test('mergeDirInto: moves non-colliding entries, recurses into shared dirs, canonical wins collisions', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aiui-merge-'))
+  const from = path.join(root, 'legacy')
+  const to = path.join(root, 'canonical')
+  fs.mkdirSync(path.join(from, 'sessions'), { recursive: true })
+  fs.mkdirSync(path.join(to, 'sessions'), { recursive: true })
+  fs.writeFileSync(path.join(from, 'sessions', 'a.jsonl'), 'A')
+  fs.writeFileSync(path.join(from, 'sessions', 'b.jsonl'), 'B-legacy')
+  fs.writeFileSync(path.join(to, 'sessions', 'b.jsonl'), 'B-canonical')
+  fs.writeFileSync(path.join(from, 'upload.pdf'), 'PDF')
+  mergeDirInto(from, to)
+  assert.equal(fs.readFileSync(path.join(to, 'sessions', 'a.jsonl'), 'utf8'), 'A', 'non-colliding file moved')
+  assert.equal(fs.readFileSync(path.join(to, 'sessions', 'b.jsonl'), 'utf8'), 'B-canonical', 'collision: canonical copy wins')
+  assert.equal(fs.readFileSync(path.join(to, 'upload.pdf'), 'utf8'), 'PDF', 'top-level file moved')
+  assert.deepEqual(fs.readdirSync(path.join(from, 'sessions')), ['b.jsonl'], 'only the collision stays in legacy')
+  fs.rmSync(root, { recursive: true, force: true })
+})
+
+test('mergeDirInto: drops the legacy dir once empty; missing source is a no-op', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aiui-merge-'))
+  const from = path.join(root, 'legacy')
+  const to = path.join(root, 'canonical')
+  fs.mkdirSync(from, { recursive: true })
+  fs.writeFileSync(path.join(from, 'notes.md'), 'x')
+  mergeDirInto(from, to)
+  assert.ok(fs.readFileSync(path.join(to, 'notes.md'), 'utf8') === 'x')
+  assert.ok(!fs.existsSync(from), 'fully drained legacy dir removed')
+  mergeDirInto(path.join(root, 'never-existed'), to) // must not throw
+  fs.rmSync(root, { recursive: true, force: true })
 })
