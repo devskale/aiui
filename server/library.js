@@ -16,6 +16,7 @@
 // ════════════════════════════════════════════════════════════════════
 import fs from 'node:fs'
 import path from 'node:path'
+import { IMAGE_EXTS_LIBRARY } from './mime.js'
 
 const LIBRARY_DIR = 'uploads'
 const LIST_CAP = 200
@@ -23,7 +24,7 @@ const INLINE_MAX_TEXT = 24_000
 const INLINE_MAX_PDF = 16_000
 
 const TEXT_KIND_RE = /\.(md|markdown|mdown|txt|csv|log|json)$/i
-const IMG_KIND_RE = /\.(png|jpe?g|gif|webp|bmp|avif|svg)$/i
+const IMG_KIND_RE = new RegExp(`\\.(?:${IMAGE_EXTS_LIBRARY})$`, 'i')
 
 /** kind einer Bibliotheks-Datei (für Chip + Inline-Entscheidung). */
 export function libraryKind(name) {

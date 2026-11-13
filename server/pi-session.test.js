@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { evictIdleContexts, attachMentionedImages, MAX_MENTION_IMAGE_BYTES, readModelPref, rememberModel, assertSessionPath, mergeDirInto } from './pi-session.js'
+import { evictIdleContexts, attachMentionedImages, MAX_MENTION_IMAGE_BYTES, readModelPref, rememberModel, assertSessionPath, mergeDirInto, sweepVisitorDirs } from './pi-session.js'
 
 // ── evictIdleContexts ──
 test('evict: idle non-streaming contexts are dropped and disposed', () => {
@@ -121,5 +121,29 @@ test('mergeDirInto: drops the legacy dir once empty; missing source is a no-op',
   assert.ok(fs.readFileSync(path.join(to, 'notes.md'), 'utf8') === 'x')
   assert.ok(!fs.existsSync(from), 'fully drained legacy dir removed')
   mergeDirInto(path.join(root, 'never-existed'), to) // must not throw
+  fs.rmSync(root, { recursive: true, force: true })
+})
+
+// ── sweepVisitorDirs (ADR-0006 D2: old visitor dirs) ──
+test('sweepVisitorDirs: drops stale visitor dirs, keeps fresh ones and main workspaces', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aiui-sweep-'))
+  const stale = path.join(root, 'w-demo-aaaa1111', 'visitors', 'v-old')
+  const fresh = path.join(root, 'w-demo-aaaa1111', 'visitors', 'v-new')
+  fs.mkdirSync(path.join(stale, 'sessions'), { recursive: true })
+  fs.mkdirSync(path.join(fresh, 'sessions'), { recursive: true })
+  fs.writeFileSync(path.join(stale, 'sessions', 'a.jsonl'), 'old')
+  fs.writeFileSync(path.join(fresh, 'sessions', 'b.jsonl'), 'new')
+  const old = new Date(Date.now() - 8 * 24 * 3600 * 1000)
+  fs.utimesSync(path.join(stale, 'sessions', 'a.jsonl'), old, old)
+  fs.utimesSync(path.join(stale, 'sessions'), old, old)
+  fs.utimesSync(stale, old, old)
+  const home = path.join(root, 'w-demo-aaaa1111', 'uploads')
+  fs.mkdirSync(home, { recursive: true })
+  fs.writeFileSync(path.join(home, 'x.pdf'), 'kept')
+  const removed = sweepVisitorDirs(root, 7 * 24 * 3600 * 1000)
+  assert.ok(!fs.existsSync(stale), 'stale visitor dir removed (recursive newest mtime)')
+  assert.ok(fs.existsSync(fresh), 'fresh visitor dir kept')
+  assert.ok(fs.existsSync(path.join(home, 'x.pdf')), 'main workspace untouched')
+  assert.equal(removed.length, 1)
   fs.rmSync(root, { recursive: true, force: true })
 })

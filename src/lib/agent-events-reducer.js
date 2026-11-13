@@ -8,6 +8,21 @@
 // ════════════════════════════════════════════════════════════════════
 import * as Entry from '../../shared/entry.js'
 
+// Commit-Shared-Point: `current` (Entry-Wert + Reducer-Phase-Flags) → die
+// committete Zeile. Phase-Flags (thinking/thinkingDone/messageComplete)
+// sind transienter Reducer-Zustand und dürfen NIE in den committeten Wert
+// (CODING_STANDARDS §2) — hier wird EINMALIG gestrippt, alle Commit-Punkte
+// (turn_end / agent_end / agent_settled) teilen diese Funktion. Ein nur
+// gestashtes errorMessage wird zur Error-Row (außer errorRows:false — der
+// willRetry-Zweig committet nur echte Inhalte, die Error-Row kommt vom
+// späteren Settle). Liefert null für "nichts Sichtbares".
+function commitEntry(current, { errorRows = true } = {}) {
+  if (!current) return null
+  const { thinking, thinkingDone, messageComplete, errorMessage, ...value } = current
+  if ((value.text || '').trim() || value.toolCalls.length > 0) return value
+  return errorRows && errorMessage ? Entry.error(errorMessage) : null
+}
+
 export const initialState = {
   entries: [],       // committed entries (user + assistant turns)
   current: null,     // in-progress assistant turn being streamed
@@ -155,14 +170,8 @@ export function reducer(state, action) {
 
     case 'turn_end': {
       // Commit current to entries — the turn is fully done
-      let entries = state.entries
-      if (state.current && (state.current.text.trim() || state.current.toolCalls.length > 0)) {
-        entries = [...entries, state.current]
-      }
-      if (state.current?.errorMessage && !state.current.text && !state.current.toolCalls.length) {
-        entries = [...entries, Entry.error(state.current.errorMessage)]
-      }
-      return { ...state, entries, current: null }
+      const turnEntry = commitEntry(state.current)
+      return { ...state, entries: turnEntry ? [...state.entries, turnEntry] : state.entries, current: null }
     }
 
     case 'agent_end': {
@@ -170,40 +179,36 @@ export function reducer(state, action) {
       // SDK hat einen wiederholbaren Provider-Fehler (429/overloaded/…) und
       // startet nach Backoff von selbst neu. Der Fehlversuch ist dann KEIN
       // endgültiges Ergebnis — nur der Live-Status limitWait geht an, die
-      // Error-Row entsteht erst, wenn ein späterer Settle es wirklich beendet.
+      // Error-Row entsteht erst, wenn ein späterer Settle es wirklich beendet
+      // (deshalb errorRows:false — nur echte Inhalte committen).
       if (action.willRetry) {
-        const hasContent = state.current && (state.current.text.trim() || state.current.toolCalls.length > 0)
+        const retryEntry = commitEntry(state.current, { errorRows: false })
         return {
           ...state,
-          entries: hasContent ? [...state.entries, state.current] : state.entries,
+          entries: retryEntry ? [...state.entries, retryEntry] : state.entries,
           current: null,
           limitWait: true,
         }
       }
-      let entries = state.entries
-      if (state.current && (state.current.text.trim() || state.current.toolCalls.length > 0)) {
-        entries = [...entries, state.current]
-      }
-      if (state.current?.errorMessage && !state.current.text && !state.current.toolCalls.length) {
-        entries = [...entries, Entry.error(state.current.errorMessage)]
-      }
+      const endEntry = commitEntry(state.current)
       // Stay streaming until agent_settled (SDK 0.80.4+): tool calls or
       // steering messages may still be pending after agent_end.
-      return { ...state, entries, current: null }
+      return { ...state, entries: endEntry ? [...state.entries, endEntry] : state.entries, current: null }
     }
 
     case 'agent_settled': {
       // Agent is fully settled — no pending tool calls or steering messages.
-      let entries = state.entries
-      if (state.current && (state.current.text.trim() || state.current.toolCalls.length > 0)) {
-        entries = [...entries, state.current]
-      }
-      if (state.current?.errorMessage && !state.current.text && !state.current.toolCalls.length) {
-        entries = [...entries, Entry.error(state.current.errorMessage)]
-      }
+      const settledEntry = commitEntry(state.current)
       // Settle beendet auch hängende ask-Cards (Timeout/Abort hat das Tool
       // längst aufgelöst — hier nur noch UI-Restzustand weg).
-      return { ...state, entries, current: null, streaming: false, limitWait: false, pendingAsks: [] }
+      return {
+        ...state,
+        entries: settledEntry ? [...state.entries, settledEntry] : state.entries,
+        current: null,
+        streaming: false,
+        limitWait: false,
+        pendingAsks: [],
+      }
     }
 
     case 'error': {

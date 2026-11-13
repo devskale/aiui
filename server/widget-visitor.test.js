@@ -106,18 +106,19 @@ test('composeWidgetPrompt: non-string fields are dropped, never stringified', ()
   assert.equal(out, 'Frage')
 })
 
-// ── stripWidgetPageContext: Replay zeigt reinen Prompt-Text ──
-test('stripWidgetPageContext: entfernt den komponierten Page-Context-Block', async () => {
-  const { stripWidgetPageContext, composeWidgetPrompt } = await import('./pi-session.js')
+// ── stripPageContext: Replay zeigt reinen Prompt-Text ──
+test('stripPageContext: entfernt den komponierten Page-Context-Block', async () => {
+  const { composeWidgetPrompt } = await import('./pi-session.js')
+  const { stripPageContext } = await import('../shared/page-context.js')
   const composed = composeWidgetPrompt('Frage?', {
     url: 'http://kunde.at/x', title: 'T', locale: 'de', selection: 'markiert',
   })
   assert.ok(composed.includes('[Page context'), 'Komposit enthält den Marker')
-  assert.equal(stripWidgetPageContext(composed), 'Frage?')
+  assert.equal(stripPageContext(composed), 'Frage?')
   // kein Kontext → Text bleibt; Nicht-String → Leerstring
-  assert.equal(stripWidgetPageContext('nur text'), 'nur text')
-  assert.equal(stripWidgetPageContext(undefined), '')
+  assert.equal(stripPageContext('nur text'), 'nur text')
+  assert.equal(stripPageContext(undefined), '')
   // mehrfach (alte Sessions): alles ab dem ERSTEN Marker fliegt
   const doubled = 'a' + composed.slice('Frage?'.length)
-  assert.equal(stripWidgetPageContext(doubled), 'a')
+  assert.equal(stripPageContext(doubled), 'a')
 })

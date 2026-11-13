@@ -61,6 +61,23 @@ The latest version is shown in the UI under `#/releases`.
   Widget-Embeds rendern keine Cards (`ctxFor` verdrahtet ask nur dort).
   `server/ask.js` + `src/components/AskCard.jsx`, e2e-gepinnt.
 
+- **Visitor-Dir-Sweep (ADR-0006 D2 nachgeholt)** — neben der In-Memory-
+  Eviction räumt jetzt ein lazy Sweep (max. 1×/h, getriggert aus `ctxFor`)
+  die Visitor-Workspace-Dirs ab: eine Instanz fällt komplett, sobald ihre
+  neueste Datei (rekursiv) älter als 7 Tage ist. `sweepVisitorDirs` ist rein
+  über (root, maxAge, now) und getestet.
+
+### Changed
+
+- **Dedup: Page-Context-Marker + Bild-Extensions haben je ein Zuhause** —
+  der Widget-Page-Context-Marker existierte 3× (Server-Komposition,
+  Server-Replay-Strip, Widget-UI-Strip) → `shared/page-context.js`: eine
+  Quelle, Marker-Drift schlägt nicht mehr unbemerkt durch. Die Bild-
+  Extensions-Listen (@-Mention-Regex, Bibliotheks-Kind, ext→mime im
+  Prompt-Pfad) lagen dreifach und hatten gedriftet (avif nur in der
+  Bibliothek) → benannte Tiers (`IMAGE_EXTS_MENTION`/`IMAGE_EXTS_LIBRARY`)
+  + `imageMimeLoose` in `server/mime.js`, Membership unverändert.
+
 ### Fixed
 
 - **Login normalisiert die Identität** — der Passwort-Login stellte die
@@ -75,6 +92,14 @@ The latest version is shown in the UI under `#/releases`.
   einmalig in den kanonischen Dir gemerged (`mergeDirInto` in
   `server/pi-session.js` — kollisionsfreie Einträge wandern, Kollisionen
   bleiben für Admin-Recovery liegen, leerer Legacy-Dir fällt weg; idempotent).
+
+- **Committed Entries tragen keine Phase-Flags mehr (CODING_STANDARDS §2)**
+  — turn_end/agent_end/agent_settled committeten `current` inkl.
+  thinking/thinkingDone/messageComplete/errorMessage in `entries[]`. Ein
+  gemeinsamer Commit-Punkt (`commitEntry` im Reducer) stript die Flags
+  einmalig und dedupliziert die vier Copy-Paste-Blöcke; `usage` bleibt
+  Wert-Bestandteil, das willRetry-Verhalten (KEINE Error-Row während des
+  Retrys) ist unverändert und weiter getestet.
 
 ### Security
 

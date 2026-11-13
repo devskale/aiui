@@ -48,6 +48,28 @@ test('message_end stasht usage am current; turn_end committet es mit', () => {
   assert.equal(committed.usage, usage)
 })
 
+// ── Phase-Flags bleiben Reducer-Zustand (CODING_STANDARDS §2) ──
+
+test('committete Entries tragen KEINE Phase-Flags (thinking/thinkingDone/messageComplete/errorMessage)', () => {
+  let s = reducer(S0, { type: 'agent_start' })
+  s = reducer(s, { type: 'message_start' })
+  s = reducer(s, { type: 'message_update', assistantMessageEvent: { type: 'thinking_start' } })
+  s = reducer(s, { type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: 'hmm' } })
+  s = reducer(s, { type: 'message_update', assistantMessageEvent: { type: 'thinking_end' } })
+  s = reducer(s, { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'Antwort' } })
+  s = reducer(s, { type: 'message_end', message: { usage: { totalTokens: 1 } } })
+  assert.equal(s.current.thinkingDone, true, 'live current trägt die Flags noch')
+  s = reducer(s, { type: 'turn_end' })
+  const committed = s.entries[s.entries.length - 1]
+  assert.equal(committed.role, 'assistant')
+  assert.equal(committed.text, 'Antwort')
+  assert.ok(!('thinking' in committed), 'thinking gestrippt')
+  assert.ok(!('thinkingDone' in committed), 'thinkingDone gestrippt')
+  assert.ok(!('messageComplete' in committed), 'messageComplete gestrippt')
+  assert.ok(!('errorMessage' in committed), 'errorMessage gestrippt')
+  assert.equal(committed.usage.totalTokens, 1, 'usage bleibt Wert-Bestandteil')
+})
+
 test('message_end ohne usage behält vorhandenen Stash (defensiv)', () => {
   const usage = { input: 1, output: 1, totalTokens: 2 }
   let s = reducer(S0, { type: 'agent_start' })

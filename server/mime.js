@@ -53,3 +53,24 @@ export function rawContentType(ext) {
   const key = String(ext).toLowerCase().replace(/^\./, '')
   return EXT[key] || RAW_EXT[key] || null
 }
+
+// ── Classification tiers over image-ness (one home, three consumers) ──
+// EXT above is the strict VISION tier (what may become an attachment).
+// Two wider tiers drive classification/embedding decisions; they live here
+// so the lists can't drift again (avif had already drifted library-only):
+//   MENTION: @-mention + #dokname embedding candidates — svg/bmp included,
+//            the file is read and offered; a rejecting vision model is the
+//            EXT tier's business, not the classifier's
+//   LIBRARY: UI kind classification (widest — avif previews fine in a chip)
+export const IMAGE_EXTS_MENTION = 'png|jpe?g|gif|webp|bmp|svg'
+export const IMAGE_EXTS_LIBRARY = 'png|jpe?g|gif|webp|bmp|avif|svg'
+
+/** Loose ext → image mime for classification-tier files (svg/bmp — NOT the
+ *  vision-attachable EXT tier). Same ext normalization as mimeFor. */
+export function imageMimeLoose(ext) {
+  const key = String(ext || '').toLowerCase().replace(/^\./, '')
+  if (!key) return null
+  if (key === 'svg') return 'image/svg+xml'
+  if (key === 'jpg') return 'image/jpeg'
+  return `image/${key}`
+}
