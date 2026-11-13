@@ -21,6 +21,7 @@ import path from 'node:path'
 import { authConfigSnapshot, AUTH_FILE_PATH } from './auth.js'
 import { userLimit } from './auth.js'
 import { peekQuota } from './quota.js'
+import { normalizeHostActions } from './host-actions.js'
 
 // ── Key-Einträge (pure) ──
 // Tolerantes Normalisieren eines widgetKeys-Blocks: kaputte Einträge fallen
@@ -37,6 +38,7 @@ export function normalizeWidgetKeys(raw) {
       agent: typeof e.agent === 'string' ? e.agent : '',
       revoked: e.revoked === true,
     readonly: e.readonly === true,
+      hostActions: normalizeHostActions(e.hostActions), // ADR-0006 Phase 2: pro Key allowlistet
       config: {
         variant: e.config?.variant === 'modal' || e.config?.variant === 'inline' ? e.config.variant : 'corner',
         theme: e.config?.theme && typeof e.config.theme === 'object' ? e.config.theme : {},

@@ -10,6 +10,23 @@ The latest version is shown in the UI under `#/releases`.
 
 ### Added
 
+- **Host-Actions (ADR-0006 Phase 2 nachgeholt)** — ein Widget-Key kann
+  vom Host freigegebene Aktionen deklarieren
+  (`hostActions: [{ name, description }]`, Provision-Skript
+  `--host-action name=beschreibung`): der Agent bekommt ein
+  `host_action`-Tool, dessen Schema genau die allowlisteten Namen kennt —
+  der Agent wirkt auf der Host-Seite, nicht nur im Panel. Security-Story
+  wie im ADR gefordert: (1) Allowlist pro Key, serverseitig im Tool-Call
+  erzwungen; (2) jede Ausführung sichtbar im Widget bestätigt
+  (RiskConfirmation-Karte: Warn-Icon, Beschreibung, Args, Checkbox-gated
+  Confirm, Ablehnen); (3) Host-JS bekommt nie aiui-Credentials — bei
+  Bestätigung feuert das Widget `ai-chat:host-action` an die Host-Seite,
+  der Host meldet über `el.resolveHostAction(id, { ok, result })` zurück,
+  und das Widget relayt die Antwort mit seinem Token
+  (`POST /api/widget/host-action/answer`). Decline erreicht den Host nie;
+  Timeout/Abort lösen mit Status statt den Run zu blocken (ask-Tool-
+  Muster, `server/host-actions.js`). Demo: `dev/embed-demo.html`.
+
 - **Upload-Fokus: PDF / IMG / MD / TXT — drei Pakete in einem Zug:**
   1. **Attachment-Chips sagen, was mitreist** — Typ-Icon, menschliche Größe,
      PDF-Seitenzahl (best-effort pdfjs beim Upload), Klick öffnet die

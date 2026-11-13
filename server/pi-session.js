@@ -12,6 +12,7 @@ import os from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { getBus } from './event-bus.js'
 import { createAskTool, abortAsks, resolveAsk as askResolve } from './ask.js'
+import { createHostActionTool, abortHostActions } from './host-actions.js'
 import { isImageCapable, bridgeImages } from './vision-bridge.js'
 import { extractDocTokens, stripDocTokens, resolveDocToken, docContextBlock } from './library.js'
 import { resolveWorkspacePath } from './workspace-files.js'
@@ -311,7 +312,11 @@ function ctxFor(user) {
     // ask tool (choice cards) nur für die Haupt-App — Widget-Embeds rendern
     // keine Cards, dort würde der Tool-Call bis zum Timeout hängen.
     const askTools = instance ? [] : [createAskTool(u, getBus(u))]
-    tools = tools ? [...tools, ...askTools] : (askTools.length ? askTools : undefined)
+    // host_action (ADR-0006 Phase 2): nur für Visitor-Scopes mit Key-Allowlist
+    // — der Agent wirkt auf der Host-Seite, Bestätigung läuft übers Widget.
+    const hostTool = instance ? createHostActionTool(u, getBus(u), pending?.hostActions) : null
+    const extraTools = [...askTools, ...(hostTool ? [hostTool] : [])]
+    tools = tools ? [...tools, ...extraTools] : (extraTools.length ? extraTools : undefined)
     // Seed behavioral defaults on first creation (ADR-0001). Entitlement stays
     // empty (default-deny); the admin curates it per-User.
     const settingsPath = path.join(agentDir, 'settings.json')
@@ -678,6 +683,7 @@ export async function abort(user) {
   // (queued-message loss prevention, pi-web-ui #834 pattern).
   const queued = s.clearQueue() // { steering: string[], followUp: string[] }
   abortAsks(scopeKey(user)) // parked ask cards resolve with "aborted" — no hanging run
+  abortHostActions(scopeKey(user)) // parked host-action confirms likewise
   await s.abort()
   return queued
 }
@@ -979,12 +985,12 @@ export async function getCommands(user) {
 // berühren (stream wie prompt). Idempotent: nach der ersten Runtime gilt
 // der einmal gebundene Zustand (Agent-Wechsel wäre Session-Wechsel, readonly
 // bleibt — Sicherheitseigenschaften lockern sich nicht durch Reloads).
-const pendingWidgetConfig = new Map() // scopeKey → { agent, readonly }
-export function prepareWidgetContext(user, { agent, readonly } = {}) {
+const pendingWidgetConfig = new Map() // scopeKey → { agent, readonly, hostActions }
+export function prepareWidgetContext(user, { agent, readonly, hostActions } = {}) {
   const k = scopeKey(user)
   if (!k.includes('/')) return // kein Visitor-Scope → nichts zu konfigurieren
   if (contexts.has(k) && contexts.get(k).runtime) return contexts.get(k)
-  pendingWidgetConfig.set(k, { agent, readonly: readonly === true })
+  pendingWidgetConfig.set(k, { agent, readonly: readonly === true, hostActions })
   return null
 }
 

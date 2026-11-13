@@ -67,6 +67,37 @@
 .aiw-reveal { align-self: center; margin: 6px 0 10px; padding: 4px 12px; font-size: 12px; color: var(--text-3, #9aa1a8); background: transparent; border: 1px solid var(--border-1, #2a2f36); border-radius: 999px; cursor: pointer; }
 .aiw-notice { font-size: 12.5px; color: #f59e0b; }
 
+/* ── Host-Action-Confirm-Card (ADR-0006 Phase 2, RiskConfirmation-Muster) ── */
+.aiw-hacard {
+  margin: 4px 0; padding: 12px; border-radius: 10px;
+  border: 1px solid #b45309; background: rgba(180, 83, 9, .08);
+  font-size: 13px;
+}
+.aiw-hahead {
+  display: flex; align-items: center; gap: 7px; margin-bottom: 8px;
+  color: #f59e0b; font-weight: 600; font-size: 12.5px;
+}
+.aiw-hadesc { color: var(--text, #e6e6e6); line-height: 1.45; margin-bottom: 8px; }
+.aiw-haargs {
+  margin: 0 0 8px; padding: 8px; border-radius: 8px; max-height: 120px; overflow: auto;
+  background: var(--bg-surface, #1a1d20); border: 1px solid var(--border-subtle, #24272b);
+  font-size: 11.5px; white-space: pre-wrap; word-break: break-word; color: var(--text-3, #9aa1a8);
+}
+.aiw-hacheck {
+  display: flex; align-items: center; gap: 7px; margin-bottom: 10px;
+  cursor: pointer; color: var(--text-2, #c7ccd1); font-size: 12.5px;
+}
+.aiw-harow { display: flex; justify-content: flex-end; gap: 8px; }
+.aiw-hadecline, .aiw-haconfirm {
+  border-radius: 8px; padding: 7px 13px; font: inherit; font-size: 12.5px; cursor: pointer;
+  border: 1px solid var(--border, #2a2d31); background: var(--bg-surface, #1a1d20);
+  color: var(--text, #e6e6e6);
+}
+.aiw-haconfirm:not(:disabled) {
+  background: var(--aiw-accent, #10b981); border-color: transparent; color: #fff;
+}
+.aiw-haconfirm:disabled { opacity: .45; cursor: not-allowed; }
+
 /* Entries übernehmen die App-Styles; nur die Breite kappen wir */
 .aiw-body :is(.entry-user, .entry-assistant) { max-width: 100%; font-size: 13.5px; }
 

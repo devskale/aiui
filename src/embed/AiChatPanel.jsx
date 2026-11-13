@@ -14,6 +14,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { MessageCircle, X, SendHorizontal } from 'lucide-react'
 import { UserEntry, AssistantEntry, ErrorEntry } from '../components/StreamEntry.jsx'
 import { useWidgetChat } from './useWidgetChat.js'
+import { HostActionCard } from './HostActionCard.jsx'
 import { resolveVariant } from './variant.js'
 import { createFocusTrap } from './focus-trap.js'
 import { visibleWindow, captureScrollDistance, restoreScrollTop } from '../lib/chat-window.js'
@@ -39,6 +40,7 @@ export function AiChatPanel({ transport, launcherLabel = 'Chat', controller, onT
     transport,
     onTheme: stableOnTheme,
     onSettled: (text) => controller?.onSettled?.(text),
+    onHostAction: (card) => controller?.onHostAction?.(card), // → ai-chat:host-action
   })
   const [text, setText] = useState('')
   const ref = useRef(null)
@@ -55,12 +57,15 @@ export function AiChatPanel({ transport, launcherLabel = 'Chat', controller, onT
   const dismissOnBackdrop = chat.config?.dismissOnBackdrop !== false
   const open = variant === 'inline' ? true : chat.open
 
-  // Host-Bridge: el.open()/close()/send() steuert dieselbe Instanz.
+  // Host-Bridge: el.open()/close()/send()/resolveHostAction() steuert dieselbe
+  // Instanz. resolveHostAction meldet das Ergebnis einer bestätigten Host-
+  // Action zurück (ADR-0006 Phase 2) — der Host selbst hält kein Token.
   useEffect(() => {
     if (!controller) return
     controller.open = () => chat.setOpen(true)
     controller.close = () => chat.setOpen(false)
     controller.send = (t) => chat.send(t)
+    controller.resolveHostAction = (id, result) => chat.resolveHostAction(id, result)
   })
 
   // Modal: Focus-Trap + Start-Fokus beim Öffnen, Restore beim Schließen.
@@ -142,7 +147,10 @@ export function AiChatPanel({ transport, launcherLabel = 'Chat', controller, onT
           : <AssistantEntry key={i} entry={e} isStreaming={false} />
         )}
         {chat.current && <AssistantEntry entry={chat.current} isStreaming />}
-        {!chat.entries.length && !chat.current && !chat.greeting && !chat.notice && (
+        {(chat.pendingHostActions || []).map(a => (
+          <HostActionCard key={a.id} card={a} onConfirm={chat.confirmHostAction} onDecline={chat.declineHostAction} />
+        ))}
+        {!chat.entries.length && !chat.current && !chat.greeting && !chat.notice && !chat.pendingHostActions?.length && (
           <div className="aiw-greeting">Ask anything…</div>
         )}
       </div>

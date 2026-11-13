@@ -300,6 +300,7 @@ in the Node process outside the sandbox.
 | POST | `/api/widget/session` | widget key | mint a 1 h HMAC widget token (domain check, rate-limited — ADR-0006) |
 | GET  | `/api/widget/stream` | widget token | SSE stream for a widget visitor |
 | POST | `/api/widget/prompt` | widget token | prompt as a widget visitor (scoped runtime) |
+| POST | `/api/widget/host-action/answer` | widget token | confirm-result of a host action (visitor confirmed; host result or decline — ADR-0006 Phase 2) |
 | GET  | `/embed` | public | iframe fallback (per-key frame-ancestors, ADR-0006) |
 
 ## Tech Stack

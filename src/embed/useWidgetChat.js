@@ -25,7 +25,7 @@ export function collectPageContext(doc = globalThis.document) {
   }
 }
 
-export function useWidgetChat({ transport, onTheme, onSettled }) {
+export function useWidgetChat({ transport, onTheme, onSettled, onHostAction }) {
   const [state, dispatch] = useReducer(widgetReducer, initialState)
   const [open, setOpen] = useState(false)
   const [notice, setNotice] = useState('') // Mint-/Verbindungsfehler (UI-Fläche)
@@ -75,5 +75,28 @@ export function useWidgetChat({ transport, onTheme, onSettled }) {
     }
   }, [transport])
 
-  return { ...state, open, setOpen, send, notice, config }
+  // ── Host-Actions (ADR-0006 Phase 2) ──
+  // Confirm: Karte hat ihren Zweck erfüllt → abräumen und dem HOST die
+  // Ausführung überlassen (ai-chat:host-action-Event). Das Ergebnis kommt
+  // asynchron über el.resolveHostAction(id, { ok, result }) zurück — erst
+  // DANN relaischt der POST; der Host bekommt nie das Widget-Token.
+  const confirmHostAction = useCallback((card) => {
+    if (!card?.id) return
+    dispatch({ type: 'host_action_clear', id: card.id })
+    onHostAction?.({ id: card.id, action: card.action, args: card.args ?? null })
+  }, [onHostAction])
+
+  // Decline: direkt beantworten — der Host erfährt von keiner Ausführung.
+  const declineHostAction = useCallback(async (id) => {
+    dispatch({ type: 'host_action_clear', id })
+    try { await transport.answerHostAction(id, { declined: true }) } catch { /* Server-TimeOut fängt den Rest */ }
+  }, [transport])
+
+  // Host-Ergebnis (Element-Methode el.resolveHostAction) → geparktes Tool.
+  const resolveHostAction = useCallback(async (id, result = {}) => {
+    try { await transport.answerHostAction(id, { ok: result.ok !== false, result: String(result.result ?? '') }) }
+    catch (e) { setNotice(e.message || 'host action failed') }
+  }, [transport])
+
+  return { ...state, open, setOpen, send, notice, config, confirmHostAction, declineHostAction, resolveHostAction }
 }

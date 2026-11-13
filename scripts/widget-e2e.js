@@ -110,6 +110,7 @@ fs.writeFileSync(authFile, JSON.stringify({
     wk_ok: { user: 'widget:demo', domains: ['localhost:5173', 'kunde.at'] },
     wk_revoked: { user: 'widget:demo', domains: ['localhost:5173'], revoked: true },
     wk_ro: { user: 'widget:demo', domains: ['localhost:5173'], readonly: true },
+    wk_ha: { user: 'widget:demo', domains: ['localhost:5173'], hostActions: [{ name: 'addToCart', description: 'In den Warenkorb' }] },
   },
 }))
 
@@ -163,6 +164,15 @@ try {
   ok('readonly: Mint + Stream ok', (await req(port, 'GET', '/api/widget/stream?visitor=vRO&token=' + tok2)).status === 200 || true)
   // (Stream hält offen — Status egal; Fehler würde 4xx/5xx liefern. Wir prüfen
   //  nur, dass KEIN 5xx kommt: sseNames liefert hier [] bei sofortigem Abbruch.)
+
+  // ── 9: Host-Action-Answer-Contract (ADR-0006 Phase 2) ──
+  console.log('host-action:')
+  const tokHa = JSON.parse((await req(port, 'POST', '/api/widget/session', { headers: { Origin: 'http://localhost:5173' }, body: { key: 'wk_ha' } })).body || '{}').token
+  const haAuth = { Authorization: `Bearer ${tokHa}` }
+  ok('host-action: bad token → 401', (await req(port, 'POST', '/api/widget/host-action/answer?visitor=vHA', { headers: { Authorization: 'Bearer nope' }, body: { id: 'x' } })).status === 401)
+  ok('host-action: kein Visitor → 400', (await req(port, 'POST', '/api/widget/host-action/answer', { headers: haAuth, body: { id: 'x' } })).status === 400)
+  ok('host-action: keine id → 400', (await req(port, 'POST', '/api/widget/host-action/answer?visitor=vHA', { headers: haAuth, body: { declined: true } })).status === 400)
+  ok('host-action: unbekannte id → 404 (stale/foreign)', (await req(port, 'POST', '/api/widget/host-action/answer?visitor=vHA', { headers: haAuth, body: { id: '00000000-0000-0000-0000-000000000000', ok: true, result: 'x' } })).status === 404)
 
   child.kill()
   await new Promise(r => child.on('exit', r))

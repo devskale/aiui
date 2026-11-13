@@ -16,6 +16,7 @@ export const initialState = {
   sessionModel: null,
   greeting: '',     // aus der Key-Config (über connect gesetzt, nicht SSE)
   error: null,
+  pendingHostActions: [], // offene Host-Action-Confirms ({ id, action, description, args })
 }
 
 export function widgetReducer(state = initialState, action = {}) {
@@ -69,14 +70,25 @@ export function widgetReducer(state = initialState, action = {}) {
       }
       return state
     }
+    case 'host_action':
+      // ADR-0006 Phase 2: der Agent will eine allowlistete Host-Aktion
+      // ausführen — nichts passiert, bevor der Visitor die Card bestätigt.
+      return { ...state, pendingHostActions: [...(state.pendingHostActions || []), {
+        id: action.id, action: action.action, description: action.description, args: action.args ?? null,
+      }] }
+    case 'host_action_clear':
+      return { ...state, pendingHostActions: (state.pendingHostActions || []).filter(a => a.id !== action.id) }
+
     case 'agent_settled': {
+      // Settle räumt auch abgelaufene Host-Action-Cards ab (Timeout/Abort
+      // hat das Tool längst aufgelöst — hier geht es nur um UI-Restzustand).
       if (state.current?.errorMessage && !state.current.text && !state.current.toolCalls.length) {
-        return { ...state, entries: [...state.entries, Entry.error(state.current.errorMessage)], current: null, streaming: false }
+        return { ...state, entries: [...state.entries, Entry.error(state.current.errorMessage)], current: null, streaming: false, pendingHostActions: [] }
       }
       const entries = state.current && (state.current.text.trim() || state.current.toolCalls.length)
         ? [...state.entries, state.current]
         : state.entries
-      return { ...state, entries, current: null, streaming: false }
+      return { ...state, entries, current: null, streaming: false, pendingHostActions: [] }
     }
     default: {
       // Wert-produzierende Events → Entry.fold (shared, getestet)

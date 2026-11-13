@@ -87,6 +87,17 @@
     const note = (line) => { log.textContent = line + '\n' + log.textContent }
     addEventListener('ai-chat:reply', e => note(`ai-chat:reply → ${String(e.detail.text).slice(0, 120)}…`))
     addEventListener('ai-chat:settled', () => note('ai-chat:settled'))
+    // Host-Action (ADR-0006 Phase 2): der Agent hat eine allowlistete Aktion
+    // proposeiert, der Besucher hat sie im Widget bestätigt — JETZT führt der
+    // Host sie aus und meldet das Ergebnis zurück. Nur Aktionen, die der Key
+    // deklariert, kommen hier an; vor der Visitor-Bestätigung passiert nichts.
+    addEventListener('ai-chat:host-action', e => {
+      const { id, action, args } = e.detail || {}
+      note(`ai-chat:host-action → ${action} ${JSON.stringify(args ?? null).slice(0, 80)}`)
+      // Demo-Ausführung: das hier ist der Platz für echtes Host-Verhalten
+      // (Formular füllen, in den Warenkorb, Navigation, …).
+      document.querySelector('ai-chat')?.resolveHostAction(id, { ok: true, result: `demo host executed '${action}'` })
+    })
 
     // Variante am Element umschalten (Attribut schlägt Key-Config)
     const variantNow = document.getElementById('variant-now')

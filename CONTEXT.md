@@ -140,6 +140,13 @@ interface, depth, seam, adapter, leverage, locality — is separate from this li
   a DATA block (never host-JS trust): composable, replay-safe. The
   host-bridge (`el.open/close/send`, `ai-chat:reply/settled` events) is the
   narrow host-side API around it.
+- **Host action** — an allowlisted action (`hostActions` on the widget key)
+  the AGENT may invoke on the host page: per-key allowlist enforced at
+  tool-call time (`server/host-actions.js`), every execution confirmed
+  visibly in the widget (RiskConfirmation card), and the host reports back
+  via `ai-chat:host-action` + `el.resolveHostAction(id, { ok, result })` —
+  the widget relays with its token, so host JS never holds aiui
+  credentials. Decline never reaches the host.
 
 ### Registration & accounts
 

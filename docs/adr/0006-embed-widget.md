@@ -145,6 +145,13 @@ Dinge, die ab Tag 1 architektonisch vorbereitet sind:
    Panel. **Security-Story zwingend** (Muster: RiskConfirmation aus
    ideas.md §13): pro Key allowlistet, jede Ausführung **sichtbar
    bestätigt** im Widget, Host-JS bekommt nie blanket trust.
+   - *Umgesetzt 2026-11-13*: `server/host-actions.js` (Allowlist-Enforcement
+     im Tool-Call, `host_action`-SSE-Event, geparktes Promise wie beim
+     ask-Tool) + Confirm-Card im Widget (`aiw-hacard`, Checkbox-gated) +
+     Host-Bridge `ai-chat:host-action`-Event / `el.resolveHostAction(id,
+     { ok, result })` — das Widget relayt die Antwort mit seinem Token,
+     der Host hält nie aiui-Credentials. Decline/Timeout/Abort lösen mit
+     Status statt den Run zu blocken.
 
 Dazu: **Embed-Endpoints als dokumentiertes Mini-Protokoll.**
 `/api/widget/session|stream|prompt` + Token-Kette werden als versioniertes,

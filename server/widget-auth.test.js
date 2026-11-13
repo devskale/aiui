@@ -28,6 +28,24 @@ test('normalizeWidgetKeys: entries without user dropped; garbage input → {}', 
   const out = normalizeWidgetKeys({ wk_bad: { domains: ['x.at'] }, wk_ok: { user: 'widget:x' } })
   assert.equal(Object.keys(out).length, 1)
   assert.ok(out.wk_ok)
+})
+
+// ── hostActions (ADR-0006 Phase 2: pro Key allowlistet) ──
+
+test('normalizeWidgetKeys: hostActions normalized per key, invalid entries dropped', () => {
+  const out = normalizeWidgetKeys({
+    wk_ha: {
+      user: 'widget:demo',
+      hostActions: [
+        { name: 'addToCart', description: 'In den Warenkorb' },
+        { name: 'bad name', description: 'x' },   // Name-Vertrag verletzt
+        { name: 'noDesc' },                        // ohne Beschreibung
+      ],
+    },
+    wk_plain: { user: 'widget:x' },
+  })
+  assert.deepEqual(out.wk_ha.hostActions, [{ name: 'addToCart', description: 'In den Warenkorb' }])
+  assert.deepEqual(out.wk_plain.hostActions, [], 'ohne Block → leere Allowlist (Tool existiert nicht)')
   assert.deepEqual(normalizeWidgetKeys(null), {})
   assert.deepEqual(normalizeWidgetKeys([1, 2]), {})
 })

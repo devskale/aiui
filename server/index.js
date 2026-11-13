@@ -15,6 +15,7 @@ import { getOrCreateSession, disposeSession, prompt, abort, setModel, setThinkin
 import { listAgents } from './agents.js'
 import { sttConfigured, sttReachable, sttModel, transcribe } from './stt.js'
 import { resolveBashOutputPath, readBashOutput } from './bash-output.js'
+import { resolveHostAction } from './host-actions.js'
 import { listDir, readTextFile, resolveWorkspacePath, mimeFor } from './workspace-files.js'
 import { toMarkdown } from '../shared/session-export.js'
 import { searchCatalog } from './skills-catalog.js'
@@ -292,9 +293,9 @@ app.get('/api/widget/stream', widgetAuth, async (req, res) => {
   if (!widgetVisitorStatus(req.widget.user, { probeInstance: visitor }).admitted) {
     return res.status(429).json({ error: 'widget busy — too many concurrent visitors' })
   }
-  // Key-Config (Agent + readonly) VOR der ersten ctx-Berührung setzen —
-  // customTools/Agent binden bei der ctx/Runtime-Erzeugung.
-  prepareWidgetContext(scope, { agent: req.widget.entry.agent, readonly: req.widget.entry.readonly })
+  // Key-Config (Agent + readonly + Host-Action-Allowlist) VOR der ersten
+  // ctx-Berührung setzen — customTools/Agent binden bei der ctx-Erzeugung.
+  prepareWidgetContext(scope, { agent: req.widget.entry.agent, readonly: req.widget.entry.readonly, hostActions: req.widget.entry.hostActions })
   // Persistenz (ADR-0006 Phase 2): nach einem Server-Restart die neueste
   // Visitor-Session resumen, bevor Status/History gereplayt werden — sonst
   // startet jedes Restart eine neue, leere Konversation.
@@ -322,9 +323,9 @@ app.post('/api/widget/prompt', widgetAuth, async (req, res) => {
   if (!widgetVisitorStatus(req.widget.user, { probeInstance: visitor }).admitted) {
     return res.status(429).json({ error: 'widget busy — too many concurrent visitors' })
   }
-  // Key-Config binden (Agent + readonly), bevor die erste Session gebaut
-  // wird (ADR-0004 + D3).
-  prepareWidgetContext(scope, { agent: req.widget.entry.agent, readonly: req.widget.entry.readonly })
+  // Key-Config binden (Agent + readonly + Host-Action-Allowlist), bevor die
+  // erste Session gebaut wird (ADR-0004 + D3 + Phase 2).
+  prepareWidgetContext(scope, { agent: req.widget.entry.agent, readonly: req.widget.entry.readonly, hostActions: req.widget.entry.hostActions })
   res.json({ ok: true })
   try {
     // Persistenz: bestehende Visitor-Konversation fortsetzen, kein neues
@@ -338,6 +339,23 @@ app.post('/api/widget/prompt', widgetAuth, async (req, res) => {
   } catch (err) {
     getBus(scope).push('error', { message: err.message })
   }
+})
+
+// Host-Action-Antwort (ADR-0006 Phase 2): der Visitor bestätigt oder lehnt
+// im Widget ab. Bei Bestätigung führt der HOST die Aktion aus und meldet das
+// Ergebnis über die Element-Methode zurück — das Widget relayt die Antwort
+// mit seinem Token (der Host bekommt nie aiui-Credentials, D5).
+app.post('/api/widget/host-action/answer', widgetAuth, (req, res) => {
+  const visitor = String(req.query.visitor || req.body?.visitor || '')
+  if (!VISITOR_RE.test(visitor)) return res.status(400).json({ error: 'invalid visitor id' })
+  const { id, declined, ok, result } = req.body || {}
+  if (typeof id !== 'string' || !id) return res.status(400).json({ error: 'no id' })
+  const payload = declined === true
+    ? { declined: true }
+    : { ok: ok !== false, result: typeof result === 'string' ? result.slice(0, 4000) : '' }
+  const scope = scopedUser(req.widget.user, visitor)
+  if (!resolveHostAction(scope, id, payload)) return res.status(404).json({ error: 'no pending host action' })
+  res.json({ ok: true })
 })
 
 // Everything else under /api requires a session when auth is configured.

@@ -7,6 +7,27 @@ import assert from 'node:assert/strict'
 import { resolveVariant } from './variant.js'
 import { widgetReducer, initialState } from './widget-chat.js'
 import { stripPageContext } from '../../shared/page-context.js'
+
+// ── host_action (ADR-0006 Phase 2: Confirm-Card im Widget-Reducer) ──
+
+test('host_action parkt die Confirm-Card; clear nimmt sie raus; Settle räumt Reste ab', () => {
+  let s = widgetReducer(initialState, {
+    type: 'host_action', id: 'ha1', action: 'addToCart', description: 'In den Warenkorb', args: '{\n "sku": 7\n}',
+  })
+  assert.equal(s.pendingHostActions.length, 1)
+  assert.equal(s.pendingHostActions[0].action, 'addToCart')
+  assert.equal(s.pendingHostActions[0].args, '{\n "sku": 7\n}')
+  // zweite Karte stapelt (Timeout-Rest + neue Action)
+  s = widgetReducer(s, { type: 'host_action', id: 'ha2', action: 'scroll-to', description: 'Zur Sektion' })
+  assert.equal(s.pendingHostActions.length, 2)
+  assert.equal(s.pendingHostActions[1].args, null, 'ohne Args → null')
+  // clear entfernt gezielt
+  s = widgetReducer(s, { type: 'host_action_clear', id: 'ha1' })
+  assert.deepEqual(s.pendingHostActions.map(a => a.id), ['ha2'])
+  // Settle (Timeout/Abort haben das Tool längst aufgelöst) räumt den UI-Rest
+  s = widgetReducer(s, { type: 'agent_settled' })
+  assert.equal(s.pendingHostActions.length, 0)
+})
 import { nextTabTarget } from './focus-trap.js'
 import { createReadonlyTools } from '../../server/sandbox.js'
 import fs from 'node:fs'

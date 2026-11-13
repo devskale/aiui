@@ -92,6 +92,7 @@ export class WidgetTransport {
       'tool_execution_start', 'tool_execution_update', 'tool_execution_end',
       'queue_update', 'session_status', 'session_stats', 'session_history',
       'thinking_level_changed', 'compaction_start', 'compaction_end', 'error',
+      'host_action', // ADR-0006 Phase 2: Confirm-Card (der Visitor entscheidet)
     ]
     for (const kind of kinds) {
       es.addEventListener(kind, (ev) => {
@@ -106,17 +107,29 @@ export class WidgetTransport {
   /** Prompt absetzen (steuert serverseitig automatisch, wenn noch gestreamt
    *  wird). pageContext ist DATEN über die Host-Seite, nie Instruktion. */
   async sendPrompt(text, pageContext) {
+    return this._post('/api/widget/prompt', buildPromptBody(text, pageContext), 'prompt failed')
+  }
+
+  /** Host-Action-Antwort (ADR-0006 Phase 2): Confirm-Ergebnis des HOSTS
+   *  (oder Decline des Visitors) an den geparkten Tool-Call relayen. Das
+   *  Widget trägt das Token — der Host bekommt nie aiui-Credentials. */
+  async answerHostAction(id, payload) {
+    return this._post('/api/widget/host-action/answer', { id, visitor: this.visitor, ...payload }, 'host-action answer failed')
+  }
+
+  async _post(pathname, body, failMsg) {
     if (!this._fetch) throw new Error('no fetch available')
+    const q = pathname.includes('?') ? '&' : '?'
     const r = await this._fetch(
-      `${this.apiBase}/api/widget/prompt?visitor=${encodeURIComponent(this.visitor)}`,
+      `${this.apiBase}${pathname}${q}visitor=${encodeURIComponent(this.visitor)}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...this.headers },
-        body: JSON.stringify(buildPromptBody(text, pageContext)),
+        body: JSON.stringify(body),
       },
     )
     if (!r.ok) {
-      let msg = `prompt failed (${r.status})`
+      let msg = `${failMsg} (${r.status})`
       try { msg = (await r.json()).error || msg } catch {}
       const err = new Error(msg); err.status = r.status; throw err
     }

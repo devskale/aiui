@@ -53,12 +53,18 @@ class AiChatElement extends HTMLElement {
     // lazy beim ersten open() (useWidgetChat), nicht beim Script-Load.
     const transport = new WidgetTransport({ apiBase: api, key: this.getAttribute('key') || '' })
 
-    // Host-Bridge-Handle: das Panel befüllt open/close/send/onSettled.
+    // Host-Bridge-Handle: das Panel befüllt open/close/send/onSettled/
+    // onHostAction/resolveHostAction.
     this._controller = {
       el: this, // Panel beobachtet variant-Attributänderungen daran
       onSettled: (lastReplyText) => {
         this.dispatchEvent(new CustomEvent('ai-chat:settled', { bubbles: true, detail: {} }))
         if (lastReplyText) this.dispatchEvent(new CustomEvent('ai-chat:reply', { bubbles: true, detail: { text: lastReplyText } }))
+      },
+      // ADR-0006 Phase 2: erst NACH der Visitor-Bestätigung im Widget bekommt
+      // der HOST die Ausführung — Detail trägt nur die allowlistete Aktion.
+      onHostAction: (card) => {
+        this.dispatchEvent(new CustomEvent('ai-chat:host-action', { bubbles: true, detail: { ...card } }))
       },
     }
 
@@ -90,6 +96,9 @@ class AiChatElement extends HTMLElement {
   open() { this._controller.open?.(); this.dispatchEvent(new CustomEvent('ai-chat:open', { bubbles: true })) }
   close() { this._controller.close?.(); this.dispatchEvent(new CustomEvent('ai-chat:close', { bubbles: true })) }
   send(text) { this._controller.send?.(text) }
+  // Host-Action-Ergebnis (ADR-0006 Phase 2): der Host meldet zurück, das
+  // Widget relayt mit seinem Token — { ok: boolean, result?: string }.
+  resolveHostAction(id, result) { this._controller.resolveHostAction?.(id, result) }
 }
 
 if (!customElements.get('ai-chat')) customElements.define('ai-chat', AiChatElement)
