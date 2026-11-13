@@ -124,6 +124,14 @@ ssh amd2 sudo cat /etc/nginx/sites-enabled/skale.dev
 # mirror of amd2 nginx lives in the configs repo: nginx/amd2/skale.dev
 ```
 
+**Temp dir on multi-user Linux boxes:** the SDK spills truncated bash output
+to `pi-bash-*.log` under `os.tmpdir()` — shared `/tmp` when multiple OS users
+run agents on one host. `/api/bash-output` only ever reads `pi-bash-*.log` in
+that one dir (name regex, `O_NOFOLLOW`, regular files only, 5 MiB cap), but a
+filename that leaks across users is still readable. On such hosts, give each
+service/user its own `TMPDIR` (systemd unit: `Environment=TMPDIR=/var/tmp/aiui`)
+so the spill files never share a directory.
+
 ## Auth & cookies
 
 - Auth on iff `~/.aiui-auth.json` exists on lubu. scrypt passphrase; in-memory

@@ -26,8 +26,8 @@ The latest version is shown in the UI under `#/releases`.
   3. **Dokumenten-Bibliothek + `#dokname`** — uploads/ IST die Bibliothek.
      `#` öffnet das Dokument-Autocomplete (`/api/library`), und das Token
      holt den Inhalt DIREKT in den Kontext: Text inline (24k-Cap), PDF über
-     den frischen read_pdf-OCR-Cache sonst Textlayer (16k-Cap; Scans
-     verweisen auf read_pdf), Bilder als Vision-Content (Text-only →
+     den frischen read_pdf-OCR-Cache (24k-Cap) sonst Textlayer (16k-Cap;
+     Scans verweisen auf read_pdf), Bilder als Vision-Content (Text-only →
      Bridge). Unaufgelöste `#tags` bleiben einfach stehen.
 
 ### Changed
@@ -92,6 +92,12 @@ The latest version is shown in the UI under `#/releases`.
   einmalig in den kanonischen Dir gemerged (`mergeDirInto` in
   `server/pi-session.js` — kollisionsfreie Einträge wandern, Kollisionen
   bleiben für Admin-Recovery liegen, leerer Legacy-Dir fällt weg; idempotent).
+
+- **setModel filtert auf der Base, nicht dem Scoped Key** — `setModel`
+  gab den Scope-Key (`widget:<name>/<visitor>`) an `modelFilterFor`, während
+  alle anderen Stellen `ctxFor(u).base` nutzen — ein `userModels`-Eintrag
+  für den Widget-User wäre im `/api/model`-Pfad verfehlt worden. Jetzt
+  dieselbe Basis wie `setModelFromRef`/`getAvailableModels`.
 
 - **Committed Entries tragen keine Phase-Flags mehr (CODING_STANDARDS §2)**
   — turn_end/agent_end/agent_settled committeten `current` inkl.

@@ -140,6 +140,9 @@ const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } })
 
 // ═══ API ROUTES (must be before Vite middleware) ═══
 
+// Uniform 429 body for the IP rate walls (login + all five email-auth routes).
+const ipRateLimited = (res) => res.status(429).json({ error: 'too many attempts, slow down' })
+
 // ── Email registration (public — uniform responses, enumeration-safe by design;
 //    rich module results never cross the wire) ──
 app.get('/api/auth/config', (_req, res) => {
@@ -150,7 +153,7 @@ app.post('/api/auth/register', async (req, res) => {
   const { email, passphrase, inviteCode } = req.body || {}
   const r = await registerUser({ email, passphrase, inviteCode, ip: req.ip })
   if (r.status === 'closed') return res.status(403).json({ error: 'registration is closed' })
-  if (r.status === 'rate-ip') return res.status(429).json({ error: 'too many attempts, slow down' })
+  if (r.status === 'rate-ip') return ipRateLimited(res)
   if (r.status === 'day-cap') return res.status(429).json({ error: 'registration is full for today — try again tomorrow' })
   if (r.status === 'bad-invite') return res.status(403).json({ error: 'invalid invite code' })
   if (r.status === 'invalid-email') return res.status(400).json({ error: 'that does not look like an email address' })
@@ -160,7 +163,7 @@ app.post('/api/auth/register', async (req, res) => {
 })
 app.post('/api/auth/verify', (req, res) => {
   const r = verifyRegistration(String((req.body || {}).token || ''), req.ip)
-  if (r.status === 'rate-ip') return res.status(429).json({ error: 'too many attempts, slow down' })
+  if (r.status === 'rate-ip') return ipRateLimited(res)
   if (r.status !== 'ok') return res.status(400).json({ error: 'link invalid or expired — request a new one' })
   clearStaleSessionCookies(res, req.secure)
   setSessionCookie(res, issueSession(r.user), req.secure) // auto-login on activation
@@ -169,20 +172,20 @@ app.post('/api/auth/verify', (req, res) => {
 })
 app.post('/api/auth/resend', async (req, res) => {
   const r = await resendVerification({ email: (req.body || {}).email, ip: req.ip })
-  if (r.status === 'rate-ip') return res.status(429).json({ error: 'too many attempts, slow down' })
+  if (r.status === 'rate-ip') return ipRateLimited(res)
   if (r.status === 'cooldown') return res.status(429).json({ error: 'a mail was just sent — try again in a minute' })
   res.json(REGISTERED_OK)
 })
 app.post('/api/auth/reset-request', async (req, res) => {
   const r = await requestReset({ email: (req.body || {}).email, ip: req.ip })
-  if (r.status === 'rate-ip') return res.status(429).json({ error: 'too many attempts, slow down' })
+  if (r.status === 'rate-ip') return ipRateLimited(res)
   if (r.status === 'cooldown') return res.status(429).json({ error: 'a mail was just sent — try again in a minute' })
   res.json(REGISTERED_OK)
 })
 app.post('/api/auth/reset', (req, res) => {
   const { token, passphrase } = req.body || {}
   const r = consumeReset(token, passphrase, req.ip)
-  if (r.status === 'rate-ip') return res.status(429).json({ error: 'too many attempts, slow down' })
+  if (r.status === 'rate-ip') return ipRateLimited(res)
   if (r.status === 'weak-passphrase') return res.status(400).json({ error: 'passphrase needs at least 8 characters' })
   if (r.status === 'invalid-token') return res.status(400).json({ error: 'link invalid or expired — request a new one' })
   revokeAllSessionsFor(r.user) // OWASP: credential change kills its sessions
@@ -194,7 +197,7 @@ app.post('/api/auth/reset', (req, res) => {
 // ── Auth (public — login/logout/me sit BEFORE requireAuth) ──
 app.post('/api/login', (req, res) => {
   const { username, passphrase } = req.body || {}
-  if (!noteLoginAttempt(req.ip)) return res.status(429).json({ error: 'too many attempts, slow down' })
+  if (!noteLoginAttempt(req.ip)) return ipRateLimited(res)
   const user = verifyCredentials(username, passphrase) // canonical identity (null = bad credentials)
   if (!user) return res.status(401).json({ error: 'invalid credentials' })
   // Registered users are their NORMALIZED email (CONTEXT.md; the mail-link
@@ -638,7 +641,8 @@ app.get('/api/session/export', async (req, res) => {
   const sessionPath = (req.query.path || '').toString()
   if (!sessionPath) return res.status(400).json({ error: 'no path' })
   try {
-    const ctx = { } // Guard läuft in pi-session; hier lesen über dieselbe Regel:
+    // Kein eigener Guard nötig: listSessions liest user-scoped, und der Read
+    // geht über den Pfad aus der eigenen Liste — kein Traversal.
     const list = await listSessions(req.user)
     const wanted = path.resolve(sessionPath)
     const meta = list.find(s => path.resolve(s.path) === wanted)

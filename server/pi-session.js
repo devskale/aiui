@@ -694,7 +694,9 @@ export async function setModel(user, modelId) {
   const available = rt.getModels()
   const model = available.find(m => m.id === modelId || `${m.provider}@${m.id}` === modelId)
   if (!model) throw new Error(`Model not found: ${modelId}`)
-  if (!modelAllowed(modelFilterFor(u), `${model.provider}@${model.id}`, model.id)) {
+  // Filter-Scope ist die BASE (wie setModelFromRef/getAvailableModels): ein
+  // Scoped Key (widget:<name>/<visitor>) verfehlt userModels sonst.
+  if (!modelAllowed(modelFilterFor(ctxFor(u).base), `${model.provider}@${model.id}`, model.id)) {
     throw new Error(`Model not allowed: ${modelId}`)
   }
   await s.setModel(model)
