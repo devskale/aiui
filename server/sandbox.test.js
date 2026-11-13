@@ -4,6 +4,9 @@
 // ════════════════════════════════════════════════════════════════════
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { assertInside, createTools } from './sandbox.js'
 
 const WS = '/tmp/ws'
@@ -27,10 +30,26 @@ test('assertInside: relative escape via .. throws', () => {
   assert.throws(() => assertInside(WS, '/tmp/ws/../../etc'), /outside workspace/)
 })
 
-test('assertInside: is pure — works on nonexistent paths (no fs touch)', () => {
-  // path.resolve does not touch disk, so nonexistent paths resolve fine.
+test('assertInside: works on nonexistent paths (realpath climbs to the deepest existing ancestor)', () => {
   assert.throws(() => assertInside('/tmp/ws', '/tmp/ws/../etc/shadow'), /outside workspace/)
   assert.doesNotThrow(() => assertInside('/tmp/ws', '/tmp/ws/deeply/nested/ghost'))
+})
+
+test('assertInside: symlink to outside is denied (realpath pass)', () => {
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'aiui-guard-ws-'))
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'aiui-guard-out-'))
+  fs.writeFileSync(path.join(outside, 'secret.txt'), 'x')
+  fs.symlinkSync(outside, path.join(ws, 'leak'))
+  fs.mkdirSync(path.join(ws, 'sub'))
+  assert.doesNotThrow(() => assertInside(ws, path.join(ws, 'sub')), 'real dir still fine')
+  assert.throws(() => assertInside(ws, path.join(ws, 'leak', 'secret.txt')), /outside workspace/,
+    'read through symlink → denied')
+  assert.throws(() => assertInside(ws, path.join(ws, 'leak', 'newfile.txt')), /outside workspace/,
+    'missing tail through symlink → denied (climb lands on the real target)')
+  assert.doesNotThrow(() => assertInside(ws, path.join(ws, 'sub', 'newfile.txt')),
+    'missing tail inside the workspace → fine (write target)')
+  fs.rmSync(ws, { recursive: true, force: true })
+  fs.rmSync(outside, { recursive: true, force: true })
 })
 
 test('assertInside: message names the denied path', () => {

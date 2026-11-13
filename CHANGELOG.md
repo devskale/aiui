@@ -103,6 +103,15 @@ The latest version is shown in the UI under `#/releases`.
 
 ### Security
 
+- **assertInside realpath-Pass** — der Pfad-Guard war rein lexikalisch: ein
+  im Workspace gepflanzter Symlink (Agent bash/write kann `ln -s` setzen)
+  hätte Ziele außerhalb des Workspaces durchgeschmuggelt — relevant v.a.
+  bei `AIUI_SANDBOX=0`, wo der Guard die EINZIGE Grenze ist (Seatbelt löst
+  Realpaths selbst auf, dort also Gürtel + Hosenträger). Fehlende Pfade
+  (Write-Targets resolven vor Datei-Existenz) klettern zum tiefsten
+  existierenden Vorfahren; alles andere failt closed. Symlink-Fälle
+  (Lese- und Schreib-Pfad durch den Link) getestet.
+
 - **Statische `/uploads`-Mounts hinter `requireAuth`** — der globale
   uploads/-Dir ist eine Legacy-Fläche (Uploads landen längst im
   Per-User-Workspace), wurde aber ungeprüft ausgeliefert: alte

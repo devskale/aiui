@@ -31,11 +31,34 @@ const PROFILE_NAME = '.sandbox.sb'
 
 // ── Pure path guard (exported for direct testing) ──
 // Throws if `target` resolves outside `base`. Used by every confined fs op.
-export function assertInside(base, target) {
-  const rel = path.relative(base, path.resolve(target))
-  if (rel === '..' || rel.startsWith('..') || path.isAbsolute(rel)) {
-    throw new Error(`Sandbox: path outside workspace denied: ${target}`)
+// Two passes: the cheap lexical one (plain `..` and outside-absolutes), then
+// a realpath one — a symlink planted inside the workspace (agent bash/write)
+// must not smuggle an outside target past the lexical check. That matters
+// most with AIUI_SANDBOX=0, where this guard is the ONLY boundary; seatbelt
+// resolves real paths itself, so there it's belt-and-suspenders.
+// realpath of a missing tail (write targets resolve before the file exists)
+// climbs to the deepest EXISTING ancestor; anything else fails closed.
+function realpathExisting(p) {
+  try {
+    return fs.realpathSync(p)
+  } catch (e) {
+    if (e.code !== 'ENOENT') throw e // EACCES etc. → deny (fail closed)
+    const parent = path.dirname(p)
+    if (parent === p) return p
+    return path.join(realpathExisting(parent), path.basename(p))
   }
+}
+export function assertInside(base, target) {
+  const denies = (b, t) => {
+    const rel = path.relative(b, t)
+    return rel === '..' || rel.startsWith('..') || path.isAbsolute(rel)
+  }
+  const b = path.resolve(base)
+  const t = path.resolve(target)
+  if (denies(b, t)) throw new Error(`Sandbox: path outside workspace denied: ${target}`)
+  const rb = realpathExisting(b)
+  const rt = realpathExisting(t)
+  if (denies(rb, rt)) throw new Error(`Sandbox: path outside workspace denied: ${target}`)
 }
 
 // System temp roots the bash seatbelt already permits (see buildProfile). The
