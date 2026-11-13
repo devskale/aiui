@@ -14,11 +14,22 @@ interface, depth, seam, adapter, leverage, locality — is separate from this li
   tool executions.
 - **Entry** — one chat row in the UI: a user message, an assistant turn
   (text + tool calls + thinking), or an error. Stable value shape:
-  `{ role, text, thinkingText, toolCalls }`. Has a home module — `shared/entry.js`,
+  `{ role, text, thinkingText, toolCalls }` plus optional, role-dependent
+  fields — `images`/`attachments` on user rows, `usage` on assistant rows
+  (absent key = not present, never null). Has a home module — `shared/entry.js`,
   imported by both server (replay) and client (live stream). The streaming
   phase flags (`thinking`, `thinkingDone`, `messageComplete`) are transient
   reducer state, **not** part of the Entry value — they describe how a live
   turn is being produced, not what the Entry is.
+- **Ask card** — the UI form of a parked `ask` tool call: 1–4 questions,
+  each with optional fixed choices as buttons. The run pauses until
+  `POST /api/ask/answer` resolves it (timeout/abort resolve with a stated
+  default instead of hanging). Main app only — widget embeds render no
+  cards. Home module `server/ask.js`; UI `src/components/AskCard.jsx`.
+- **Canvas** — the live research panel (ADR-0005): the agent writes
+  `reports/…/canvas.json` with its write tool; a done write matching the
+  canvas glob triggers a `/api/file` fetch and `ResearchCanvas` re-renders
+  (`useCanvas`). Zero SSE protocol changes — it rides existing events.
 
 ## Streaming
 
@@ -26,6 +37,20 @@ interface, depth, seam, adapter, leverage, locality — is separate from this li
   `tool_execution_*`, …) delivered to clients.
 - **Attachment** — a file bound to a prompt. Images carry a `dataUrl`; the server
   extracts `{ type:'image', mimeType, data }` for the SDK.
+
+## Library & vision
+
+- **Bibliothek** — the per-User document library: the workspace's uploads
+  *are* the library (`GET /api/library` lists them). A `#dokname` token in a
+  prompt pulls the document's content into the context — text inline
+  (capped), PDFs via the fresh OCR cache or the text layer, images as
+  vision content. Home module `server/library.js`.
+- **Vision bridge** — the path that keeps image mentions working on
+  text-only models (`server/vision-bridge.js`): a vision-capable model
+  describes the image one-shot over the existing `ModelRuntime`, the
+  description rides along as text evidence, and the raw image drops out.
+  Cached per file as `<name>.vision.md`; bridge model via
+  `AIUI_VISION_MODEL` (else the first catalog image model ≠ current).
 
 - **Broadcaster** *(legacy)* — the ad-hoc `broadcast` + `setEventBroadcaster`
   callback wiring that fanned Events out to SSE clients. Superseded by the
@@ -91,6 +116,30 @@ interface, depth, seam, adapter, leverage, locality — is separate from this li
 - **Quota** — a per-User daily prompt cap (`limits` in the auth config, e.g.
   `guest: 10`). `null` = unlimited. Enforced in `/api/prompt`; over-limit → a
   429 + an error Event on that User's bus.
+- **Model filter** — the include/notInclude prefix rules narrowing a User's
+  model catalog: `userModels[<user>]` in the auth config replaces the
+  deployment-wide `models` block for that User (`modelFilterFor`,
+  live-reloaded). A BYOK User's catalog follows their own keys regardless.
+
+## Embed widget
+
+- **Widget key** — the public per-site embed credential (`wk_…`, entry in
+  the auth config's `widgetKeys`): scoped, revocable, domain-bound
+  (ADR-0006). One key = one **Widget-User** — an entity of its own, never
+  mapped onto a real User; Agent and budget come from the key, Entitlement
+  is default-deny like everyone else's.
+- **Widget token** — the short-lived (1 h) HMAC token minted by
+  `POST /api/widget/session` (rate-limited, domain-checked). Authenticates
+  the token-guarded widget endpoints; deliberately not a session cookie.
+- **Visitor** — one visitor instance of a Widget-User: scope key
+  `widget:<name>/<visitor>` (`scopedUser`). Shares the Widget-User's
+  agentDir, budget, and model; gets its own runtime, bus key, and workspace
+  subdir (`visitors/<instance>`). Capped concurrent instances per key,
+  idle-TTL disposal (ADR-0006 D2).
+- **Page context** — the host-page facts the widget ships into the prompt as
+  a DATA block (never host-JS trust): composable, replay-safe. The
+  host-bridge (`el.open/close/send`, `ai-chat:reply/settled` events) is the
+  narrow host-side API around it.
 
 ### Registration & accounts
 

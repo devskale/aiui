@@ -190,8 +190,8 @@ agent_start → turn_start → message_start → [thinking_start/delta/end]*
 
 Tool calls carry across `message_start` boundaries within a turn
 (`prevToolCalls` in the reducer). Non-stream events: `session_status`,
-`session_history`, `session_stats`, `error`, `compaction_*`, `auto_retry_*`,
-`thinking_level_changed`, `user_prompt`, `user_steer`.
+`session_history`, `session_stats`, `quota`, `ask`, `error`, `compaction_*`,
+`auto_retry_*`, `thinking_level_changed`, `user_prompt`, `user_steer`.
 
 ### Auth (`server/auth.js`)
 
@@ -271,8 +271,10 @@ in the Node process outside the sandbox.
 | GET  | `/api/agents` | req | Agent catalog + STT availability (ADR-0004) |
 | POST | `/api/agent` | req | switch Agent (starts a new session) |
 | POST | `/api/stt` | req | voice → text via the STT gateway (agent mic input) |
+| GET  | `/api/stt/config` | req | direct-WS streaming config (gateway URL + token, logged-in users only — ADR-0004 amendment) |
 | GET  | `/api/skills/search` | req | browse the public skills.sh catalog (read-only; admin curates enablement) |
 | GET  | `/api/files` | req | workspace file list (@-mention) |
+| GET  | `/api/library` | req | document library (uploads view; `#dokname` autocomplete) |
 | GET  | `/api/tree` | req | one level of a workspace dir (G5 browser) |
 | GET  | `/api/file` | req | read a workspace text file (≤1MB; workspace-scoped) |
 | GET  | `/api/file/raw` | req | raw bytes (images) with mime Content-Type |
@@ -295,6 +297,10 @@ in the Node process outside the sandbox.
 | POST | `/api/admin/users/deactivate` | admin | deactivate a registered user (+ revoke sessions) |
 | GET  | `/api/changelog` | req | CHANGELOG.md |
 | POST | `/api/upload` | req | file upload (multer) |
+| POST | `/api/widget/session` | widget key | mint a 1 h HMAC widget token (domain check, rate-limited — ADR-0006) |
+| GET  | `/api/widget/stream` | widget token | SSE stream for a widget visitor |
+| POST | `/api/widget/prompt` | widget token | prompt as a widget visitor (scoped runtime) |
+| GET  | `/embed` | public | iframe fallback (per-key frame-ancestors, ADR-0006) |
 
 ## Tech Stack
 

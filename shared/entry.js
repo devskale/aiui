@@ -6,6 +6,10 @@
 //   • text:        string  (markdown for assistant, plain for user)
 //   • thinkingText:string  (assistant reasoning; '' when none)
 //   • toolCalls:   [{ name, args, status, output }]  status: 'running'|'done'|'error'
+// Optional, role-dependent fields (absent key = not present, never null):
+//   • images:      [{ url, mimeType? }]   user rows (mentioned/attached images)
+//   • attachments: [...]                  user rows (chip metadata: type, size, …)
+//   • usage:       SDK usage object       assistant rows (per-attempt, persisted)
 //
 // This is the ONE place that owns the shape. Both the server (replay from
 // stored SDK messages) and the client (folding live SSE events) go through

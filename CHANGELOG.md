@@ -52,6 +52,15 @@ The latest version is shown in the UI under `#/releases`.
   verlangt bruchfreies Settle + korrektes Live-Status-Modell. Live verifiziert
   (glm-5.3-flash → glm-4.7 mitten im Turn).
 
+- **Ask-Tool mit Choice-Cards (human-in-the-loop)** — das `ask`-Tool lässt
+  den Agenten 1–4 strukturierte Rückfragen stellen (je optional 2–6 Choices
+  als Buttons, sonst Freitext): `execute()` parkt den Run, ein `ask`-SSE-
+  Event liefert die Karten, `POST /api/ask/answer` löst das Promise und der
+  Turn läuft mit den Antworten weiter. Timeout/Abort lösen mit einer
+  "no answer"-Notiz statt den Run forever zu blocken. Nur Haupt-App —
+  Widget-Embeds rendern keine Cards (`ctxFor` verdrahtet ask nur dort).
+  `server/ask.js` + `src/components/AskCard.jsx`, e2e-gepinnt.
+
 ### Fixed
 
 - **Login normalisiert die Identität** — der Passwort-Login stellte die
@@ -356,7 +365,7 @@ The latest version is shown in the UI under `#/releases`.
   (node-testbar, kein import.meta.env im Test-Graf); 202 Tests (Start der
   Session: 135).
 
-- **Embed-Widget (ADR-0006, Phase 1+2)** — aiui als Chat-Widget für fremde
+- **Embed-Widget (ADR-0006, Phase 1+2 — ohne Host-Actions)** — aiui als Chat-Widget für fremde
   Seiten: eine Zeile `<script src="…/embed.js" data-key="wk_…">` oder
   `<ai-chat key variant>` (corner/modal/inline), Besucher chatten ohne
   Login mit einem scoped Agent. 3-Schichten-Kette: public Embed-Key
@@ -369,6 +378,9 @@ The latest version is shown in the UI under `#/releases`.
   frame-ancestors, `readonly`-Key-Flag (write/edit/bash verweigern),
   Provision-Skript + Demo-Host-Seite (`dev/embed-demo.html`) +
   Regressionsschutz `scripts/widget-e2e.js` (15 Checks, kein Model-Call).
+  *(Korrektur 2026-11-13: Host-Actions aus Phase 2 fehlen noch — bewusst
+  auf ein Folge-Issue verschoben; der Titel behauptete ursprünglich Phase
+  1+2 vollständig.)*
 
 - **Changes card pro Turn** — klickbare Chips der Dateien, die ein Turn
   tatsächlich geschrieben hat (Quelle: erfolgreiche write/edit-Tool-Calls,
