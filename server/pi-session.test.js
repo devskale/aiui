@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { evictIdleContexts, attachMentionedImages, MAX_MENTION_IMAGE_BYTES, readModelPref, rememberModel } from './pi-session.js'
+import { evictIdleContexts, attachMentionedImages, MAX_MENTION_IMAGE_BYTES, readModelPref, rememberModel, assertSessionPath } from './pi-session.js'
 
 // ── evictIdleContexts ──
 test('evict: idle non-streaming contexts are dropped and disposed', () => {
@@ -79,4 +79,15 @@ test('model pref: remember/read roundtrip, malformed file → null', () => {
   rememberModel(ctx, { id: 'no-provider' })
   assert.equal(readModelPref(ctx), null, 'invalid remembers ignored')
   fs.rmSync(agentDir, { recursive: true, force: true })
+})
+
+// ── session path guard (rename/delete/switch share it) ──
+test('assertSessionPath: accepts own sessionDir .jsonl, rejects cross-user/traversal/non-jsonl', () => {
+  const ctx = { sessionDir: '/ws/alice/sessions' }
+  assert.equal(assertSessionPath(ctx, '/ws/alice/sessions/abc.jsonl'), '/ws/alice/sessions/abc.jsonl')
+  assert.equal(assertSessionPath(ctx, '/ws/alice/sessions/./x/../y.jsonl'), '/ws/alice/sessions/y.jsonl')
+  assert.throws(() => assertSessionPath(ctx, '/ws/bob/sessions/x.jsonl'), /invalid session path/)
+  assert.throws(() => assertSessionPath(ctx, '/ws/alice/sessions/../../bob/sessions/x.jsonl'), /invalid session path/)
+  assert.throws(() => assertSessionPath(ctx, '/ws/alice/sessions/notes.txt'), /invalid session path/)
+  assert.throws(() => assertSessionPath(ctx, '/ws/alice/sessions-evil/x.jsonl'), /invalid session path/, 'prefix must end at a dir boundary')
 })

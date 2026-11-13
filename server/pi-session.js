@@ -768,7 +768,7 @@ export async function listSessions(user) {
 
 // Session-Pfade sind User-Input: resolve + Prefix-Check gegen das eigene
 // sessionDir (Traversal-Guard, endet auf .jsonl). Wirft bei Verstoß.
-function assertSessionPath(ctx, sessionPath) {
+export function assertSessionPath(ctx, sessionPath) {
   const resolved = path.resolve(String(sessionPath))
   const dir = path.resolve(ctx.sessionDir)
   if (!resolved.startsWith(dir + path.sep) || !resolved.endsWith('.jsonl')) {
@@ -814,10 +814,16 @@ export async function deleteSession(user, sessionPath) {
 // with the right persona.
 export async function switchToSession(user, sessionPath) {
   const ctx = ctxFor(user)
-  const remembered = readAgentsMap(ctx)[sessionIdFromPath(sessionPath) || '']
+  // Client-supplied path: same traversal guard as rename/delete — without it
+  // the SDK's switchSession opens ANY .jsonl on disk, including other users'.
+  const resolved = assertSessionPath(ctx, sessionPath)
+  // SDK trap (see renameSession): open() on a missing file silently builds
+  // an empty session — fail loudly instead.
+  if (!fs.existsSync(resolved)) throw new Error('session not found')
+  const remembered = readAgentsMap(ctx)[sessionIdFromPath(resolved) || '']
   ctx.agent = remembered || 'default'
   await getOrCreateSession(user)
-  await ctx.runtime.switchSession(sessionPath, { cwdOverride: ctx.cwd })
+  await ctx.runtime.switchSession(resolved, { cwdOverride: ctx.cwd })
   rememberAgent(ctx, ctx.runtime.session?.sessionId, ctx.agent)
   return ctx.runtime.session
 }

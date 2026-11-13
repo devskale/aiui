@@ -52,6 +52,16 @@ The latest version is shown in the UI under `#/releases`.
   verlangt bruchfreies Settle + korrektes Live-Status-Modell. Live verifiziert
   (glm-5.3-flash → glm-4.7 mitten im Turn).
 
+### Security
+
+- **Session-Switch-Traversal-Gap geschlossen** — `switchToSession` reichte
+  den Client-Pfad ungeprüft an die SDK-`switchSession` weiter; rename/delete
+  validierten denselben Input über `assertSessionPath`, switch nicht. Damit
+  war jede `.jsonl` auf der Platte ladbar — inkl. Sessions anderer Nutzer
+  (Replay via SSE, Anhängen ans Ende). Switch läuft jetzt durch denselben
+  Guard + Existenz-Check (leere Session statt stiller No-Op, wie rename);
+  der Guard ist exportiert und getestet (`server/pi-session.test.js`).
+
 ## [0.5.0] — 2026-11-03
 
 ### Added
