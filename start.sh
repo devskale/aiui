@@ -11,6 +11,12 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# Local secrets/overrides (gitignored — deploy.sh sources it the same way).
+# E.g. FIRMENINDEX_TOKEN=… for the firmenindex agent's API auth.
+if [ -f .env.local ]; then
+  set -a; . ./.env.local; set +a
+fi
+
 MODE="${1:-dev}"
 PORT="${PORT:-3107}"
 

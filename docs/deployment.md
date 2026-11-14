@@ -134,6 +134,13 @@ so the spill files never share a directory.
 
 ## Auth & cookies
 
+- **Firmenindex-API-Token** (`firmenindex` agent, ADR-0004): die
+  `/api`-Daten-Endpoints von `skale.dev/firmenindex` brauchen einen
+  Bearer-Token. Er lebt als Env-Var `FIRMENINDEX_TOKEN` — NICHT im Repo:
+  lokal in `.env.local` (gitignored, `start.sh` + `deploy.sh` sourcen es),
+  auf lubu im systemd-User-Unit (`Environment=FIRMENINDEX_TOKEN=…` oder
+  `EnvironmentFile=-<repo>/.env.local`) bzw. per SSH in `.env.local`
+  setzen. Token-Rotation über `skale.dev/firmenindex/agents`.
 - Auth on iff `~/.aiui-auth.json` exists on lubu. scrypt passphrase; in-memory
   session token; 7-day `aiui_session` cookie.
 - Cookie is `SameSite=Lax; Secure; HttpOnly; Path=/` — **first-party on

@@ -23,7 +23,8 @@ strukturiert.
    lies ihn bei jedem Recherchier-Auftrag zuerst.
 2. **Cache-first.** Jede API-Antwort wandert als Datei in den Workspace
    (`cache/<fn>.json` bzw. `reports/.../rohdaten/`) — wiederverwenden statt
-   refetchen (Upstream-Rate-Limit ~30 req/min).
+   refetchen (Token-Drossel-Topf aktuell 15 req/min — `zu_schnell` nennt das
+   Limit).
 3. **Nichts raten.** Exakte Parameter immer aus `api?e=openapi.json`; Abdeckungs-
    lücken aus `e=status` ehrlich benennen; `"degradiert": true` im Payload →
    im Report kennzeichnen. Nie gefälschte oder ergooglete Zahlen als
@@ -101,15 +102,17 @@ Jeder Recherchier-Auftrag läuft in dieser Reihenfolge:
    beantwortbaren offenen Fragen:
    - Wer kontrolliert wen → `firmen/{fn}/kontrolle` (UBO-Pfade nach oben,
      jede Kante mit Beleg — DB-first, bevorzugt vor allen Live-Quellen)
-   - Anteilsverhältnisse/Zeitpunkte → `hvd/historie` + Urkunden
-     (`hvd/suche-urkunde`, dann `urkunde-get` für GV-/Beteiligungs-PDFs);
-     historischen Zustand schneller via `firmen/{fn}/zustand?stichtag=…`
+   - Anteilsverhältnisse/Zeitpunkte → Urkunden-Liste
+     (`agent/v1/firmen/{fn}/unterlagen`, dann `hvd/urkunde-get&key=…` für
+     GV-/Beteiligungs-PDFs); Vorher-Nachher über `lookup/merged`-Vollzüge
    - Bilanzen der Beteiligungen → `bilanz?fn=…` je relevanter FN
      (Zahlen-Registry auch via `agent/v1/firmen/{fn}/finanzdaten`)
-   - Ganzer Eigentümer-Verbund (über 2 Ebenen hinaus) → `crawl/group/{fn}`
+   - Ganzer Eigentümer-Verbund (über 2 Ebenen hinaus) →
+     `crawl/shareholders/{fn}` + `crawl/beteiligungen/{fn}` (DB-Bestand)
    - Auslands-/Konzernverflechtungen → `gleif/{fn}`
    - Öffentliche Aufträge → `firmen/{fn}/vergaben` (EU-Vergaben/TED)
-   - Organe über mehrere Gesellschaften → `person/karriere`
+   - Organe über mehrere Gesellschaften → `person/karriere` (mit Agent-Token
+     aktuell `Forbidden`, Stand 2026-11-14 — live prüfen)
    Was danach offen bleibt, ist eine **echte** Lücke — und wird so benannt:
    „nicht öffentlich“ (Quelle existiert nicht) vs. „nicht recherchiert“
    (Budget aufgebraucht) — niemals vermischen.
@@ -202,7 +205,8 @@ verlinkt/erwähnt, aber nie das Gesicht.
 2. **Firmen-Tree** für Struktur: Eigentümer oben, Gesellschaft unten — Gesellschafter
    und Beteiligungen als Hierarchie (visualize-Struktur `hierarchy`/`tree`), je
    Knoten mit FN, Personen kursiv, Stiftungen markiert; Kante = Beteiligung.
-   Für den ganzen Verbund (mehr als 2 Ebenen) Daten aus `crawl/group/{fn}`.
+   Für den ganzen Verbund (mehr als 2 Ebenen) Daten aus
+   `crawl/shareholders/{fn}` + `crawl/beteiligungen/{fn}`.
 3. **Verbindungs-Graph** für A↔B-Recherchen: Mermaid-Graph (visualize-
    Struktur `mermaid`), A und B hervorgehoben, Verbindungskanten dick,
    je Kante Quelle + seit — der Pfad ist die Aussage.
