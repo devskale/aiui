@@ -1,6 +1,22 @@
-# aiui pre-commit: SDK-Oberfläche prüfen, Agent-Prompt-Lint, dann Tests.
+# aiui pre-commit: SDK-Oberfläche prüfen, Secrets-Guard, Agent-Prompt-Lint, dann Tests.
 # smoke[[:full]] läuft NICHT hier (bootet Server) — manuell oder bei Dep-Änderungen.
 pnpm run check:sdk
+
+# Creds-Guard: niemals Secrets einchecken. .env*-Dateien sind kategorisch
+# tabu (Werte gehören in .env.local — gitignored, wird von start.sh/deploy.sh
+# gesourced); Token-/Key-Literale im Diff blocken den Commit, damit der
+# Fehler beim Autor landet statt in der Git-Historie.
+if git diff --cached --name-only | grep -E '^\.env'; then
+  echo "pre-commit: .env*-Datei im Staging — Secrets gehören in .env.local (gitignored), nie ins Repo." >&2
+  exit 1
+fi
+# (github_pat wird konkateniert, damit der Hook-Quelltext sich nicht selbst
+# trifft — der Guard fängt jedes Diff, auch seinen eigenen Commit.)
+SECRET_RE='(Bearer [A-Za-z0-9_-]{25,}|[A-Za-z0-9_-]*TOKEN=[A-Za-z0-9_-]{20,}|sk-(live|test)-|ghp_[A-Za-z0-9]{20,}|github_pat''_|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY)'
+if git diff --cached -U0 | grep -En "$SECRET_RE"; then
+  echo "pre-commit: mögliche Credentials im Diff (Treffer oben). Wert in .env.local setzen, Env-Var referenzieren." >&2
+  exit 1
+fi
 
 # Spaced-FN-Lint: Agent-Prompts/-Skills dürfen kein "FN 123456 f"-Format
 # (Ziffern + Leerzeichen + Buchstabe) lehren — das Beispiel kopiert das
