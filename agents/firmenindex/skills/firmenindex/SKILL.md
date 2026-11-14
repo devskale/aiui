@@ -7,19 +7,27 @@ description: "Recherchiert österreichische Firmen und Personen über die skale.
 
 Durchsuchbarer Index österreichischer Firmen: **300k+ Firmenbuch-Einträge**
 (evi.gv.at + HVD) plus nicht-eingetragene Gewerbe (GISA/WKO), ÖNACE-klassifiziert.
-Alles maschinenlesbar, kein Login, keine Cookies.
+Alles maschinenlesbar, keine Cookies.
+
+**Auth (seit 2026-11):** Die `/api`-Daten-Endpoints brauchen einen
+Agent-Token (Bearer). Frei ohne Token bleiben: `openapi.json`, `help`,
+`index` sowie die `.md`-Fassungen (`firma/<slug>-<fn>.md`).
 
 ## Das eine Muster
 
 ```bash
-curl -s "https://skale.dev/firmenindex/api?e=<ENDPOINT>&<PARAMS>"
+curl -s -H "Authorization: Bearer LCNt3IfsJplDNaWY1-f4FGwOTuDWCp_QFWSpBh2Ego8" \
+  "https://skale.dev/firmenindex/api?e=<ENDPOINT>&<PARAMS>"
 ```
 
+- **JEDER `/api`-Call trägt diesen Header** — auch die Beispiele unten
+  zeigen ihn der Kürze halber nicht immer; kopiere das Muster, nicht die
+  verkürzten Zeilen.
 - `e` = URL-encodeter Endpoint-Pfad (`search/rich` → `search%2Frich`)
 - Pfad-Parameter kommen direkt in `e` (`auszug%2F475207i`), Query-Parameter daneben (`&fn=…`)
 - **Exakte Parameter immer aus der Live-Referenz holen, nie aus dem Gedächtnis:**
   `curl -s "https://skale.dev/firmenindex/api?e=openapi.json"` (OpenAPI 3, aus dem
-  laufenden Code generiert — kann nicht veralten)
+  laufenden Code generiert — kann nicht veralten; frei ohne Token)
 
 ### Scripte: Datei statt `-c` (Quoting-Falle)
 
@@ -42,8 +50,8 @@ python3 /tmp/parse_bilanz.py
 ### ① Firmen & Personen finden
 
 ```bash
-curl -s "https://skale.dev/firmenindex/api?e=search%2Frich&query=brantner"
-curl -s "https://skale.dev/firmenindex/api?e=search%2Feu&query=friseur&ort=Neusiedl%20am%20See"
+curl -s -H "Authorization: Bearer LCNt3IfsJplDNaWY1-f4FGwOTuDWCp_QFWSpBh2Ego8" "https://skale.dev/firmenindex/api?e=search%2Frich&query=brantner"
+curl -s -H "Authorization: Bearer LCNt3IfsJplDNaWY1-f4FGwOTuDWCp_QFWSpBh2Ego8" "https://skale.dev/firmenindex/api?e=search%2Feu&query=friseur&ort=Neusiedl%20am%20See"
 ```
 Query-Sprache, Wildcards, Umlaut-Faltung, Branche/Ort-Chips, Personensuche:
 https://skale.dev/firmenindex/agents-suche.html
@@ -51,8 +59,8 @@ https://skale.dev/firmenindex/agents-suche.html
 ### ② Firmenprofil (alles Aufbereitete)
 
 ```bash
-curl -s "https://skale.dev/firmenindex/api?e=lookup%2Fmerged&fn=475207i"
-curl -s "https://skale.dev/firmenindex/firma/brantner-oesterreich-gmbh-475207i.md"  # token-arm als Markdown
+curl -s -H "Authorization: Bearer LCNt3IfsJplDNaWY1-f4FGwOTuDWCp_QFWSpBh2Ego8" "https://skale.dev/firmenindex/api?e=lookup%2Fmerged&fn=475207i"
+curl -s "https://skale.dev/firmenindex/firma/brantner-oesterreich-gmbh-475207i.md"  # token-arm als Markdown, frei ohne Token
 ```
 Ein Call → Stammdaten, Personen/Organe, Gesellschafter, Beteiligungen, letzte
 Vollzüge, Publikationen. Die `.md`-Fassung ist fürs Lesen optimiert (weniger
@@ -61,10 +69,10 @@ Tokens) und trägt die firma-spezifischen Calls in ihrer „Weiteres"-Sektion.
 ### ③ Dokumente & Bilanzdaten
 
 ```bash
-curl -s "https://skale.dev/firmenindex/api?e=hvd%2Fsuche-urkunde&fnr=475207i"  # Liste: key · Art · Datum · PDF/XML
-curl -s "https://skale.dev/firmenindex/api?e=hvd%2Furkunde-get&key=<KEY>" -o urkunde.pdf  # rohes PDF/Bilanz-XML
-curl -s "https://skale.dev/firmenindex/api?e=bilanz&fn=475207i"                # Bilanz-Zahlen fertig ausgezählt
-curl -s "https://skale.dev/firmenindex/api?e=auszug%2F475207i&fmt=md"          # Firmenbuchauszug als Markdown
+curl -s -H "Authorization: Bearer LCNt3IfsJplDNaWY1-f4FGwOTuDWCp_QFWSpBh2Ego8" "https://skale.dev/firmenindex/api?e=hvd%2Fsuche-urkunde&fnr=475207i"  # Liste: key · Art · Datum · PDF/XML
+curl -s -H "Authorization: Bearer LCNt3IfsJplDNaWY1-f4FGwOTuDWCp_QFWSpBh2Ego8" "https://skale.dev/firmenindex/api?e=hvd%2Furkunde-get&key=<KEY>" -o urkunde.pdf  # rohes PDF/Bilanz-XML
+curl -s -H "Authorization: Bearer LCNt3IfsJplDNaWY1-f4FGwOTuDWCp_QFWSpBh2Ego8" "https://skale.dev/firmenindex/api?e=bilanz&fn=475207i"                # Bilanz-Zahlen fertig ausgezählt
+curl -s -H "Authorization: Bearer LCNt3IfsJplDNaWY1-f4FGwOTuDWCp_QFWSpBh2Ego8" "https://skale.dev/firmenindex/api?e=auszug%2F475207i&fmt=md"          # Firmenbuchauszug als Markdown
 ```
 XML-Semantik (FinanzOnline-Strukturdaten vs. eingebettete base64-PDFs),
 Stichtags-Auszüge, Höflichkeit bei MB-großen Urkunden:
@@ -136,7 +144,9 @@ Es gibt **keine exportierbaren Bild-Assets** (alles JS-rendered). Für Reports:
    vorhandenen Material weitermachen. Kein Endlos-Retrying — ein fehlender
    Baustein ist besser als ein nie fertiggestellter Report.
 2. **Fehler sind JSON:** `{"detail":{"error":{type,message}}}` mit passendem
-   HTTP-Status — lesen, nicht ignorieren.
+   HTTP-Status — lesen, nicht ignorieren. `type: "auth_erforderlich"` heißt
+   fast immer: der Bearer-Header fehlt (Muster oben inkl. Header kopieren) —
+   **kein Retry** ohne Fix, ein Retry ohne Header läuft genauso ins Leere.
 3. **`"degradiert": true`** im Payload → Live-Quelle ausgefallen: im Report
    kennzeichnen. Es werden nie gefälschte Daten geliefert — du auch nicht.
 4. **`.md`-Fassungen bevorzugen** (`firma/<slug>-<fn>.md`, `auszug/<fn>&fmt=md`) —
