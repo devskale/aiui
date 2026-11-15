@@ -365,7 +365,7 @@ export function FollowUps({ questions, onAsk }) {
   )
 }
 
-export const AssistantEntry = memo(function AssistantEntry({ entry, isStreaming, onCopy, interactive, onAsk, workDetails = 'standard', turnToolCalls: turnToolsProp }) {
+export const AssistantEntry = memo(function AssistantEntry({ entry, isStreaming, onCopy, interactive, onAsk, workDetails = 'standard', turnProcess: turnProcessProp }) {
   // Work-Details-Modus (Issue work-details-folding) — platzsparend ist DEFAULT:
   //   erledigte Tool-Calls stacken als Punkt-Reihe (ToolDots, aufklappbar),
   //   der LAUFENDE Call rendert immer als Live-Card mit Stream. Auch das
@@ -376,26 +376,34 @@ export const AssistantEntry = memo(function AssistantEntry({ entry, isStreaming,
   // Ergebnisse (Files written, Usage, Follow-ups) bleiben IMMER sichtbar —
   // Prozess faltet, Ergebnisse nicht. Widget: kein Prop → standard.
   //
-  // turnToolCalls (App: turnToolCalls-Reihe aus turn-rail.js): Turn-Level-
+  // turnProcess (App/Widget: turnProcess-Reihe aus turn-rail.js): Turn-Level-
   // Gruppierung über den Replay — der Server liefert einen Entry je SDK-
-  // Message (je 1 toolCall), der Live-Turn akkumuliert dagegen alle Calls
-  // in einem Entry. Wert: Array = alle Calls des Turns (dieser Entry ist
-  // der Turn-Level-Row), [] = Panel unterdrücken (frühere Tool-Entry des
-  // Turns — der Turn-Row deckt sie ab), undefined = unverändert.
+  // Message (je 1 toolCall oder 1 Thought), der Live-Turn akkumuliert
+  // dagegen alles in einem Entry. Wert: { calls, thinkings } = Prozess des
+  // ganzen Turns (dieser Entry rendert die Fold-Zeile), [] = Panel
+  // unterdrücken (frühere Prozess-Entry — der Turn-Row deckt sie ab),
+  // undefined = unverändert (Live-Entry / Legacy).
   const mode = workDetails
   const [toolsExpanded, setToolsExpanded] = useState(false)
-  const hasTurnProp = turnToolsProp !== undefined
-  const allCalls = hasTurnProp ? (turnToolsProp || []) : (entry.toolCalls || [])
-  const suppressTools = hasTurnProp && allCalls.length === 0
+  const hasTurnProp = turnProcessProp !== undefined
+  const proc = hasTurnProp ? (turnProcessProp || null) : null
+  const allCalls = hasTurnProp ? (proc?.calls || []) : (entry.toolCalls || [])
+  const turnThinkings = hasTurnProp ? (proc?.thinkings || null) : null
+  const hasTurnProc = hasTurnProp && proc !== null // dieser Entry trägt den Turn-Fold
+  const suppressProcess = hasTurnProp && proc === null // vom Turn-Row abgedeckt oder prozesslos
   const thinkingText = entry.thinkingText || ''
   const hasThinkingText = thinkingText.trim().length > 0
   // Live entry: phase flags (reducer-owned) drive the indicator.
   // Committed entry: derive from thinkingText — a historical row is always 'done'.
-  const showThinking = isStreaming
+  const showThinking = !suppressProcess && !hasTurnProc && (isStreaming
     ? (entry.thinking || entry.thinkingDone)
-    : hasThinkingText
+    : hasThinkingText)
   const thinkingDone = isStreaming ? entry.thinkingDone : true
-  const hasTools = !suppressTools && allCalls.length > 0
+  const hasTools = !suppressProcess && allCalls.length > 0
+  // Thought-Folding: standard/compact falten den Thought auf eine Zeile;
+  // LIVE bleibt er offen, solange wirklich gedacht wird (shimmer), und
+  // kollabiert mit thinkingDone. verbose = offen.
+  const thinkOpenDefault = mode === 'verbose' || (isStreaming && !thinkingDone)
   // Der laufende Call lebt als Live-Card; alle erledigten (incl. failed)
   // stacken als Dots — bzw. als volle Gruppe, wenn aufgeklappt/verbose.
   const runningCall = isStreaming
@@ -423,9 +431,41 @@ export const AssistantEntry = memo(function AssistantEntry({ entry, isStreaming,
   return (
     <div className="entry-assistant">
       {showThinking && (
-        <ThinkingBlock thinking={entry.thinking} thinkingDone={thinkingDone} thinkingText={thinkingText} defaultOpen={mode !== 'compact'} />
+        <ThinkingBlock thinking={entry.thinking} thinkingDone={thinkingDone} thinkingText={thinkingText} defaultOpen={thinkOpenDefault} />
       )}
-      {hasTools && (
+      {hasTurnProc && (
+        <>
+          {!toolsExpanded && (
+            <button type="button" className="tfs" onClick={() => setToolsExpanded(true)} title="Show tool calls and thoughts of this turn">
+              {allCalls.length > 0 && (
+                <span className="tfs-dots">
+                  {allCalls.map((tc, i) => (
+                    <span key={i} className={`tfs-dot ${tc.status === 'error' ? 'bad' : ''}`} title={tc.name + (tc.status === 'error' ? ' — failed' : '')} />
+                  ))}
+                </span>
+              )}
+              {allCalls.length > 0 && <span className="tfs-n">{allCalls.length}</span>}
+              {allCalls.length > 0 && <> tool call{allCalls.length === 1 ? '' : 's'}</>}
+              {allCalls.length > 0 && turnThinkings?.length ? <span className="tfs-hint"> ·</span> : null}
+              {turnThinkings?.length ? <> <span className="tfs-n">{turnThinkings.length}</span> thought{turnThinkings.length === 1 ? '' : 's'}</> : null}
+              <span className="tfs-hint"> · show</span>
+            </button>
+          )}
+          {toolsExpanded && (
+            <>
+              <button type="button" className="tfs" onClick={() => setToolsExpanded(false)} title="Fold process">
+                {allCalls.length > 0 && <span className="tfs-n">{allCalls.length}</span>}
+                {allCalls.length > 0 && <> tool call{allCalls.length === 1 ? '' : 's'}</>}
+                {turnThinkings?.length ? <> · <span className="tfs-n">{turnThinkings.length}</span> thought{turnThinkings.length === 1 ? '' : 's'}</> : null}
+                <span className="tfs-hint"> · hide</span>
+              </button>
+              {turnThinkings?.map((t, i) => <ThinkingBlock key={i} thinkingDone thinkingText={t} defaultOpen={false} />)}
+              {allCalls.length > 0 && <ToolGroup toolCalls={allCalls} defaultOpen={false} />}
+            </>
+          )}
+        </>
+      )}
+      {!hasTurnProp && hasTools && (
         <>
           {foldDone && <ToolDots calls={doneCalls} onExpand={() => setToolsExpanded(true)} />}
           {!foldDone && doneCalls.length > 0 && (

@@ -7,7 +7,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { apiUrl } from './lib/api'
 import { visibleWindow, growWindow, captureScrollDistance, restoreScrollTop, isAtTail, PAGE_SIZE } from './lib/chat-window'
 import { prefersReducedMotion } from './lib/motion'
-import { visibleCountForJump, turnToolCalls } from './lib/turn-rail'
+import { visibleCountForJump, turnProcess } from './lib/turn-rail'
 import { copy } from './lib/copy'
 import { JumpToLatest } from './components/JumpToLatest'
 import { TurnRail } from './components/TurnRail'
@@ -251,7 +251,7 @@ export default function App() {
   // Turn-Level-Tool-Gruppierung (turn-rail.js) auf dem sichtbaren Fenster —
   // gleiche Indizes wie der entries.slice(win.startIndex)-Render darunter.
   const visibleEntries = useMemo(() => entries.slice(win.startIndex), [entries, win.startIndex])
-  const turnGroups = useMemo(() => turnToolCalls(visibleEntries), [visibleEntries])
+  const turnGroups = useMemo(() => turnProcess(visibleEntries), [visibleEntries])
   const hasMoreRef = useRef(false)
   hasMoreRef.current = win.hasMore
   const prevEntriesLenRef = useRef(0)
@@ -677,7 +677,7 @@ export default function App() {
                 // Follow-ups are clickable only on the settled chat tail —
                 // a new turn (current/streaming) unmounts them naturally.
                 const interactive = i === entries.length - win.startIndex - 1 && !current && !streaming
-                return <AssistantEntry key={i} entry={entry} isStreaming={false} onCopy={copyEntryStable} interactive={interactive} onAsk={handleSendStable} workDetails={workDetails} turnToolCalls={turnGroup} />
+                return <AssistantEntry key={i} entry={entry} isStreaming={false} onCopy={copyEntryStable} interactive={interactive} onAsk={handleSendStable} workDetails={workDetails} turnProcess={turnGroup} />
               })}
               {current && <AssistantEntry entry={current} isStreaming={true} onCopy={copyEntryStable} />}
               {limitWait && (

@@ -18,7 +18,7 @@ import { HostActionCard } from './HostActionCard.jsx'
 import { resolveVariant } from './variant.js'
 import { createFocusTrap } from './focus-trap.js'
 import { visibleWindow, captureScrollDistance, restoreScrollTop } from '../lib/chat-window.js'
-import { turnToolCalls } from '../lib/turn-rail.js'
+import { turnProcess } from '../lib/turn-rail.js'
 
 export function AiChatPanel({ transport, launcherLabel = 'Chat', controller, onTheme, variantAttr }) {
   // Das Element kann sein variant-Attribut zur Laufzeit wechseln (Demo/
@@ -104,7 +104,7 @@ export function AiChatPanel({ transport, launcherLabel = 'Chat', controller, onT
   const win = visibleWindow(chat.entries.length, visibleCount)
   // Turn-Level-Tool-Gruppierung — Replay-Entries (je 1 Call je Message)
   // stacken sonst als eigene Zeilen (wie die Haupt-App).
-  const turnGroups = useMemo(() => turnToolCalls(chat.entries), [chat.entries])
+  const turnGroups = useMemo(() => turnProcess(chat.entries), [chat.entries])
   useEffect(() => {
     const p = revealPendingRef.current
     if (!p) return
@@ -148,7 +148,7 @@ export function AiChatPanel({ transport, launcherLabel = 'Chat', controller, onT
         {chat.entries.slice(win.startIndex).map((e, i) =>
           e.role === 'user' ? <UserEntry key={i} text={e.text} images={e.images} />
           : e.role === 'error' ? <ErrorEntry key={i} text={e.text} />
-          : <AssistantEntry key={i} entry={e} isStreaming={false} turnToolCalls={turnGroups[i]} />
+          : <AssistantEntry key={i} entry={e} isStreaming={false} turnProcess={turnGroups[i]} />
         )}
         {chat.current && <AssistantEntry entry={chat.current} isStreaming />}
         {(chat.pendingHostActions || []).map(a => (

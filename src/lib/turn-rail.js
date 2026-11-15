@@ -71,41 +71,46 @@ export function visibleCountForJump(currentVisible, totalCount, index) {
 }
 
 /**
- * Turn-Level-Gruppierung der Tool-Calls für das Chat-Rendering. Der Replay
- * (Server-History) baut einen Entry je SDK-Message — jeder oft mit genau
- * einem toolCall — während der Live-Turn alle Calls des Turns in EINEM Entry
- * akkumuliert. Diese Funktion leitet die Turn-Sicht ab, OHNE die Entry-Shape
- * anzutasten (§2): je Entry-Index entweder
- *   • das Array ALLER Tool-Calls des Turns — gehörend an die LETZTE
- *     Assistant-Entry mit toolCalls im Turn, oder
- *   • [] — diese Entry hat toolCalls, wird aber vom Turn-Level-Row
- *     mitabgedeckt (Panel unterdrücken), oder
- *   • null — keine Tool-Beteiligung (Text-Entry etc.).
+ * Turn-Level-Gruppierung des gesamten PROZESSES (Tool-Calls + Thoughts) für
+ * das Chat-Rendering. Der Replay (Server-History) baut einen Entry je SDK-
+ * Message — jeder oft mit genau einem toolCall oder einem Thought-Text —
+ * während der Live-Turn alles in EINEM Entry akkumuliert. Diese Funktion
+ * leitet die Turn-Sicht ab, OHNE die Entry-Shape anzutasten (§2): je Entry-
+ * Index entweder
+ *   • { calls, thinkings } — alle Tool-Calls + alle Thinking-Texte des
+ *     Turns, gehörend an die LETZTE Assistant-Entry mit Prozess im Turn
+ *     (dort rendert die kompakte Fold-Zeile),
+ *   • [] — diese Entry hat Prozess, wird aber vom Turn-Level-Row
+ *     mitabgedeckt (Panel unterdrücken; NIE null — würde im Render crashen),
+ *   • null — keine Prozess-Beteiligung (Text-Entry etc.).
  * Ein User-Entry beendet einen Turn (wie turnMarks).
  *
- * @param {Array<{role?: string, toolCalls?: Array<unknown>}>} entries
- * @returns {Array<null|Array>}
+ * @param {Array<{role?: string, toolCalls?: Array<unknown>, thinkingText?: string}>} entries
+ * @returns {Array<null|Array|{calls: Array, thinkings: string[]}>}
  */
-export function turnToolCalls(entries) {
+export function turnProcess(entries) {
   const out = new Array(Array.isArray(entries) ? entries.length : 0).fill(null)
   if (!Array.isArray(entries)) return out
   const flush = (from, to) => {
     const calls = []
+    const thinkings = []
     let last = -1
     for (let i = from; i <= to; i++) {
       const e = entries[i]
-      if (e && Array.isArray(e.toolCalls) && e.toolCalls.length) {
-        calls.push(...e.toolCalls)
-        last = i
-      }
+      if (!e) continue
+      const hasTools = Array.isArray(e.toolCalls) && e.toolCalls.length > 0
+      const think = typeof e.thinkingText === 'string' ? e.thinkingText.trim() : ''
+      if (hasTools) calls.push(...e.toolCalls)
+      if (think) thinkings.push(think)
+      if (hasTools || think) last = i
     }
-    if (calls.length) {
-      for (let i = from; i <= to; i++) {
-        const e = entries[i]
-        // [] = Panel unterdrücken (Turn-Row deckt ab) — NIE null (würde
-        // im Render crashen); null bleibt nur für Entries ohne Tools.
-        if (e && Array.isArray(e.toolCalls) && e.toolCalls.length) out[i] = i === last ? calls : []
-      }
+    if (last < 0) return
+    for (let i = from; i <= to; i++) {
+      const e = entries[i]
+      if (!e) continue
+      const hasTools = Array.isArray(e.toolCalls) && e.toolCalls.length > 0
+      const think = typeof e.thinkingText === 'string' ? e.thinkingText.trim() : ''
+      if (hasTools || think) out[i] = i === last ? { calls, thinkings } : []
     }
   }
   let start = 0
