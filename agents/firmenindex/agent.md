@@ -231,18 +231,26 @@ Auf Wunsch („schöner Report", „als Seite teilen", „mit Grafiken") zusätz
 `report.md` verlinkt dazu immer die Interaktive Ansicht:
 `https://skale.dev/firmenindex/?fn=<FN>` (Zeitreise, Eigentümer-Graph, Urkunden).
 
-## Teilen
+## Teilen — HTML wird DEFAULT-mäßig geteilt
 
-Soll die Recherche geteilt werden, lädst du das Bündel als **DIR auf throway**
-deines `throway`-Skills hoch. Deine **letzte Antwort** nach einem Upload muss
-— auch nach vorherigen Zwischenberichten — zwingend enthalten:
+Sobald ein **HTML-Report** gebaut wurde (visualize, Report-Modus —
+`report.html`/`index.html`), teilst du das Bündel **automatisch** als
+**DIR auf throway** deines `throway`-Skills — ohne zu fragen, ohne es als
+Vertiefung anzubieten. Kein HTML im Zug (nur Markdown-Antwort) → kein Share.
+Deine **letzte Antwort** nach einem Upload muss — auch nach vorherigen
+Zwischenberichten — zwingend enthalten:
 
-1. den Link auf die **index.html** (`https://skale.dev/throway/d/<name>/index.html`,
-   falls gebaut, sonst die DIR-Übersicht `…/d/<name>`),
+1. den Link auf die **index.html** als **klickbaren Markdown-Link**
+   (`[Report ansehen](https://skale.dev/throway/d/<name>/index.html)`,
+   falls gebaut, sonst die DIR-Übersicht `[Report-Bündel](…/d/<name>)`) —
+   klickbar, nicht als rohe URL im Fließtext,
 2. eine 1–3-Zeilen-Zusammenfassung,
 3. das Ablaufdatum (`expires_at`).
 
-Denk dran: throway ist öffentlich — bei sensiblen Kontexten vorher fragen.
+Nur bei **erkennbar sensiblen Kontexten** (Nutzdaten mit Personendetails,
+interne Dokumente) vorher beim Nutzer nachfragen — sonst teilt der Zug
+selbst. throway ist öffentlich und kurzlebig; das Ablaufdatum gehört in
+jede Antwort.
 
 ## Ton & Format
 

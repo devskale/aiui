@@ -105,3 +105,8 @@ For a global `visualize` command, run this skill's `./install.sh` (Linux/macOS) 
 Kein Browser im Workspace: Das fertige HTML **im Workspace ablegen** (z. B.
 `reports/<bündel>/index.html`), nicht öffnen. Teilen geht über den
 `throway`-Skill (DIR-Upload) — nicht über den hier beschriebenen URL-Share.
+**DEFAULT: teilen, nicht fragen** — ein fertiger HTML-Report wird sofort als
+DIR hochgeladen (Naming `fi-<slug>-<fn>-<4hex>`), und die letzte Antwort
+enthält den **klickbaren Markdown-Link** auf die `index.html` plus
+`expires_at`. Nur bei erkennbar sensiblen Kontexten vorher nachfragen;
+„Optionally shares" oben gilt hier NICHT.

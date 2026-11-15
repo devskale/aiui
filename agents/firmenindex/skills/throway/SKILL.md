@@ -1,6 +1,6 @@
 ---
 name: throway
-description: "Teilt Recherche-Reports und Datei-Bündel als kurzlebiges, benanntes Verzeichnis auf skale.dev/throway und liefert den Share-Link. Nutze dies, wenn der Nutzer ein Bündel/Report teilen will („teil das“, „auf throway“, „als Link verschicken“)."
+description: "Teilt Recherche-Reports und Datei-Bündel als kurzlebiges, benanntes Verzeichnis auf skale.dev/throway und liefert den Share-Link. DEFAULT: ein fertiger HTML-Report (visualize) wird automatisch geteilt — klickbarer Link in der Antwort. Außerdem auf Wunsch („teil das“, „auf throway“, „als Link verschicken“)."
 ---
 
 # throway — Bündel teilen
