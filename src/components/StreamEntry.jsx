@@ -385,7 +385,7 @@ export function AssistantEntry({ entry, isStreaming, onCopy, interactive, onAsk,
   const mode = workDetails
   const [toolsExpanded, setToolsExpanded] = useState(false)
   const hasTurnProp = turnToolsProp !== undefined
-  const allCalls = hasTurnProp ? turnToolsProp : (entry.toolCalls || [])
+  const allCalls = hasTurnProp ? (turnToolsProp || []) : (entry.toolCalls || [])
   const suppressTools = hasTurnProp && allCalls.length === 0
   const thinkingText = entry.thinkingText || ''
   const hasThinkingText = thinkingText.trim().length > 0
