@@ -389,8 +389,9 @@ export const AssistantEntry = memo(function AssistantEntry({ entry, isStreaming,
   const proc = hasTurnProp ? (turnProcessProp || null) : null
   const allCalls = hasTurnProp ? (proc?.calls || []) : (entry.toolCalls || [])
   const turnThinkings = hasTurnProp ? (proc?.thinkings || null) : null
-  const hasTurnProc = hasTurnProp && proc !== null // dieser Entry trägt den Turn-Fold
-  const suppressProcess = hasTurnProp && proc === null // vom Turn-Row abgedeckt oder prozesslos
+  // [] (Suppress-Sentinel) ist truthy — der Turn-Fold nur bei echtem Inhalt:
+  const hasTurnProc = !!(hasTurnProp && proc && (proc.calls?.length || proc.thinkings?.length))
+  const suppressProcess = hasTurnProp && !hasTurnProc // vom Turn-Row abgedeckt oder prozesslos
   const thinkingText = entry.thinkingText || ''
   const hasThinkingText = thinkingText.trim().length > 0
   // Live entry: phase flags (reducer-owned) drive the indicator.
