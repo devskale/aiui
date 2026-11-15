@@ -365,7 +365,7 @@ export function FollowUps({ questions, onAsk }) {
   )
 }
 
-export function AssistantEntry({ entry, isStreaming, onCopy, interactive, onAsk, workDetails = 'standard' }) {
+export function AssistantEntry({ entry, isStreaming, onCopy, interactive, onAsk, workDetails = 'standard', turnToolCalls: turnToolsProp }) {
   // Work-Details-Modus (Issue work-details-folding) — platzsparend ist DEFAULT:
   //   erledigte Tool-Calls stacken als Punkt-Reihe (ToolDots, aufklappbar),
   //   der LAUFENDE Call rendert immer als Live-Card mit Stream. Auch das
@@ -375,8 +375,18 @@ export function AssistantEntry({ entry, isStreaming, onCopy, interactive, onAsk,
   //   compact  = Thinking zu, Tools gefaltet
   // Ergebnisse (Files written, Usage, Follow-ups) bleiben IMMER sichtbar —
   // Prozess faltet, Ergebnisse nicht. Widget: kein Prop → standard.
+  //
+  // turnToolCalls (App: turnToolCalls-Reihe aus turn-rail.js): Turn-Level-
+  // Gruppierung über den Replay — der Server liefert einen Entry je SDK-
+  // Message (je 1 toolCall), der Live-Turn akkumuliert dagegen alle Calls
+  // in einem Entry. Wert: Array = alle Calls des Turns (dieser Entry ist
+  // der Turn-Level-Row), [] = Panel unterdrücken (frühere Tool-Entry des
+  // Turns — der Turn-Row deckt sie ab), undefined = unverändert.
   const mode = workDetails
   const [toolsExpanded, setToolsExpanded] = useState(false)
+  const hasTurnProp = turnToolsProp !== undefined
+  const allCalls = hasTurnProp ? turnToolsProp : (entry.toolCalls || [])
+  const suppressTools = hasTurnProp && allCalls.length === 0
   const thinkingText = entry.thinkingText || ''
   const hasThinkingText = thinkingText.trim().length > 0
   // Live entry: phase flags (reducer-owned) drive the indicator.
@@ -385,15 +395,15 @@ export function AssistantEntry({ entry, isStreaming, onCopy, interactive, onAsk,
     ? (entry.thinking || entry.thinkingDone)
     : hasThinkingText
   const thinkingDone = isStreaming ? entry.thinkingDone : true
-  const hasTools = entry.toolCalls && entry.toolCalls.length > 0
+  const hasTools = !suppressTools && allCalls.length > 0
   // Der laufende Call lebt als Live-Card; alle erledigten (incl. failed)
   // stacken als Dots — bzw. als volle Gruppe, wenn aufgeklappt/verbose.
   const runningCall = isStreaming
-    ? (entry.toolCalls || []).find(tc => tc.status === 'running')
+    ? allCalls.find(tc => tc.status === 'running')
     : null
   const doneCalls = runningCall
-    ? (entry.toolCalls || []).filter(tc => tc.status !== 'running')
-    : (entry.toolCalls || [])
+    ? allCalls.filter(tc => tc.status !== 'running')
+    : allCalls
   const foldDone = mode !== 'verbose' && !toolsExpanded && doneCalls.length > 0
   // Changes card: only on the settled entry (a live turn still has running
   // calls; extractTurnWrittenFiles ignores non-'done' ones, so it's safe, but

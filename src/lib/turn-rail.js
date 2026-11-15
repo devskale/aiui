@@ -69,3 +69,52 @@ export function visibleCountForJump(currentVisible, totalCount, index) {
   const needed = Math.max(0, total - idx)
   return Math.max(cur, needed)
 }
+
+/**
+ * Turn-Level-Gruppierung der Tool-Calls für das Chat-Rendering. Der Replay
+ * (Server-History) baut einen Entry je SDK-Message — jeder oft mit genau
+ * einem toolCall — während der Live-Turn alle Calls des Turns in EINEM Entry
+ * akkumuliert. Diese Funktion leitet die Turn-Sicht ab, OHNE die Entry-Shape
+ * anzutasten (§2): je Entry-Index entweder
+ *   • das Array ALLER Tool-Calls des Turns — gehörend an die LETZTE
+ *     Assistant-Entry mit toolCalls im Turn, oder
+ *   • [] — diese Entry hat toolCalls, wird aber vom Turn-Level-Row
+ *     mitabgedeckt (Panel unterdrücken), oder
+ *   • null — keine Tool-Beteiligung (Text-Entry etc.).
+ * Ein User-Entry beendet einen Turn (wie turnMarks).
+ *
+ * @param {Array<{role?: string, toolCalls?: Array<unknown>}>} entries
+ * @returns {Array<null|Array>}
+ */
+export function turnToolCalls(entries) {
+  const out = new Array(Array.isArray(entries) ? entries.length : 0).fill(null)
+  if (!Array.isArray(entries)) return out
+  const flush = (from, to) => {
+    const calls = []
+    let last = -1
+    for (let i = from; i <= to; i++) {
+      const e = entries[i]
+      if (e && Array.isArray(e.toolCalls) && e.toolCalls.length) {
+        calls.push(...e.toolCalls)
+        last = i
+      }
+    }
+    if (calls.length) {
+      for (let i = from; i <= to; i++) {
+        const e = entries[i]
+        // [] = Panel unterdrücken (Turn-Row deckt ab) — NIE null (würde
+        // im Render crashen); null bleibt nur für Entries ohne Tools.
+        if (e && Array.isArray(e.toolCalls) && e.toolCalls.length) out[i] = i === last ? calls : []
+      }
+    }
+  }
+  let start = 0
+  entries.forEach((e, i) => {
+    if (e && e.role === 'user') {
+      if (i > start) flush(start, i - 1)
+      start = i + 1
+    }
+  })
+  if (entries.length > start) flush(start, entries.length - 1)
+  return out
+}

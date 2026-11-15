@@ -7,7 +7,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { apiUrl } from './lib/api'
 import { visibleWindow, growWindow, captureScrollDistance, restoreScrollTop, isAtTail, PAGE_SIZE } from './lib/chat-window'
 import { prefersReducedMotion } from './lib/motion'
-import { visibleCountForJump } from './lib/turn-rail'
+import { visibleCountForJump, turnToolCalls } from './lib/turn-rail'
 import { copy } from './lib/copy'
 import { JumpToLatest } from './components/JumpToLatest'
 import { TurnRail } from './components/TurnRail'
@@ -234,6 +234,10 @@ export default function App() {
   // das Fenster nicht auf, sonst wäre Lazy-Render beim Öffnen langer
   // Sessions wirkungslos.
   const win = visibleWindow(entries.length, visibleCount)
+  // Turn-Level-Tool-Gruppierung (turn-rail.js) auf dem sichtbaren Fenster —
+  // gleiche Indizes wie der entries.slice(win.startIndex)-Render darunter.
+  const visibleEntries = useMemo(() => entries.slice(win.startIndex), [entries, win.startIndex])
+  const turnGroups = useMemo(() => turnToolCalls(visibleEntries), [visibleEntries])
   const hasMoreRef = useRef(false)
   hasMoreRef.current = win.hasMore
   const prevEntriesLenRef = useRef(0)
@@ -637,12 +641,13 @@ export default function App() {
               )}
               {entries.slice(win.startIndex).map((entry, i) => {
                 const entryIdx = win.startIndex + i
+                const turnGroup = turnGroups[i]
                 if (entry.role === 'user') return <UserEntry key={i} entryIdx={entryIdx} text={entry.text} images={entry.images} onCopy={copyEntry} />
                 if (entry.role === 'error') return <ErrorEntry key={i} text={entry.text} onCopy={copyEntry} />
                 // Follow-ups are clickable only on the settled chat tail —
                 // a new turn (current/streaming) unmounts them naturally.
                 const interactive = i === entries.length - win.startIndex - 1 && !current && !streaming
-                return <AssistantEntry key={i} entry={entry} isStreaming={false} onCopy={copyEntry} interactive={interactive} onAsk={handleSend} workDetails={workDetails} />
+                return <AssistantEntry key={i} entry={entry} isStreaming={false} onCopy={copyEntry} interactive={interactive} onAsk={handleSend} workDetails={workDetails} turnToolCalls={turnGroup} />
               })}
               {current && <AssistantEntry entry={current} isStreaming={true} onCopy={copyEntry} />}
               {limitWait && (
