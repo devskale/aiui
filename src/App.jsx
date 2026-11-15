@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useAgentEvents } from './hooks/useAgentEvents'
 import { useAttachments } from './hooks/useAttachments'
 import { useHashRoute } from './hooks/useHashRoute'
