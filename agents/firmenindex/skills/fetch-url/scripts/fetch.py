@@ -8,6 +8,7 @@ Extracts readable text from web pages without rendering.
 
 import os
 import sys
+import shutil
 import argparse
 import subprocess
 import platform as platform_module
@@ -27,7 +28,7 @@ requests = None
 try:
     import requests
 except ImportError:
-    pass  # Will show error when API mode is actually used
+    pass  # loud-ok: API mode errors loudly at call time when requests is missing
 
 # credgoo is a declared dependency (uv sync installs it into this skill's venv).
 # The missing-key message is surfaced through `logging` at DEBUG — silent by
@@ -51,8 +52,23 @@ W3M_CONFIG = SKILL_DIR / "w3m_config"
 LYNX_CONFIG = SKILL_DIR / "lynx_config"
 SETTINGS_FILE = SKILL_DIR / "settings.json"
 DEFAULT_API_URL = "https://amd.skale.dev/api/fetch_url"
+
 MARKDOWN_NEW_URL = "https://markdown.new"
 JINA_READER_URL = "https://r.jina.ai"
+
+
+# Defuddle (Obsidian Web Clipper's extraction engine): local main-content
+# extraction, curl_fetched HTML -> `npx defuddle parse --json`.
+# Pinned: pre-1.0 project, CLI/API may shift between minors.
+DEFUDDLE_VERSION = "0.19.5"
+
+# Below this word count defuddle output is a nav shell, not content —
+# measured: JS shells (Medium) = ~48 words, shortest real page (pydocs) = 316.
+_DEFUDDLE_MIN_WORDS = 100
+
+# Browser-like User-Agent for plain-HTTP fallbacks (defuddle fetch layer).
+_CHROME_UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+              "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36")
 
 # Strong error patterns: these never appear in legitimate article content.
 # Any single match in the first 1500 chars is a definitive block.
@@ -81,6 +97,12 @@ WEAK_ERROR_PATTERNS = [
     r"rate limited",
 ]
 
+# Login-wall shells: tiny pages whose whole visible text is a skip-to-
+# content link (plus login redirect or markdown frontmatter). Measured
+# 2026-10: old.reddit served this shell to w3m/lynx AND markdown.new/jina
+# instead of the post. Too short to be an article.
+_LOGIN_SHELL_MAX_CHARS = 400
+
 ERROR_PATTERNS = STRONG_ERROR_PATTERNS + WEAK_ERROR_PATTERNS
 
 # Site-specific tool preferences (domains that need specific tools)
@@ -91,11 +113,11 @@ _DEFAULT_SITE_TOOL_HINTS = {
     "www.reddit.com": ["w3m", "lynx", "jina", "markdown"],
     "old.reddit.com": ["w3m", "lynx", "jina", "markdown"],
     "news.ycombinator.com": ["w3m", "lynx", "jina"],
-    "wikipedia.org": ["jina", "lynx", "w3m", "markdown"],
-    "en.wikipedia.org": ["jina", "lynx", "w3m", "markdown"],
-    "github.com": ["w3m", "jina", "markdown"],
-    "docs.python.org": ["jina", "w3m", "lynx"],
-    "developer.mozilla.org": ["jina", "w3m", "lynx"],
+    "wikipedia.org": ["jina", "defuddle", "lynx", "w3m", "markdown"],
+    "en.wikipedia.org": ["jina", "defuddle", "lynx", "w3m", "markdown"],
+    "github.com": ["defuddle", "jina", "markdown"],
+    "docs.python.org": ["defuddle", "jina", "w3m", "lynx"],
+    "developer.mozilla.org": ["defuddle", "jina", "w3m", "lynx"],
     "medium.com": ["jina", "markdown", "w3m"],
     "stackoverflow.com": ["markdown", "jina"],
     "stackexchange.com": ["markdown", "jina"],
@@ -112,8 +134,11 @@ def load_settings() -> Dict[str, Any]:
     if SETTINGS_FILE.exists():
         try:
             return json.loads(SETTINGS_FILE.read_text())
-        except json.JSONDecodeError:
-            pass
+        except json.JSONDecodeError as exc:
+            # Corrupt settings are a real config error — warn loudly, then
+            # fall back to defaults instead of hiding the breakage.
+            print(f"Warning: {SETTINGS_FILE} is corrupt ({exc}) — "
+                  f"using default settings.", file=sys.stderr)
     return get_default_settings()
 
 
@@ -123,15 +148,16 @@ def get_default_settings() -> Dict[str, Any]:
         "tools": {
             "w3m": {"platforms": ["Darwin", "Linux"], "requires_install": True},
             "lynx": {"platforms": ["Darwin", "Linux"], "requires_install": True},
+            "defuddle": {"platforms": ["Darwin", "Linux", "Windows"], "requires_install": True},
             "markdown": {"platforms": ["Darwin", "Linux", "Windows"], "requires_install": False},
             "jina": {"platforms": ["Darwin", "Linux", "Windows"], "requires_install": False},
         },
         "defaults": {
-            "Darwin": ["jina", "markdown", "w3m", "lynx"],
-            "Linux": ["jina", "markdown", "w3m", "lynx"],
+            "Darwin": ["jina", "markdown", "w3m", "lynx", "defuddle"],
+            "Linux": ["jina", "markdown", "w3m", "lynx", "defuddle"],
             "Windows": ["jina", "markdown"]
         },
-        "fallback_order": ["w3m", "lynx", "jina", "markdown", "chawan"],
+        "fallback_order": ["w3m", "lynx", "defuddle", "jina", "markdown", "chawan"],
         "timeout": 30
     }
 
@@ -165,6 +191,25 @@ def check_tool_available(tool: str, settings: Dict[str, Any]) -> bool:
     return current_platform in tool_config.get("platforms", [])
 
 
+def _key_with_refresh(service: str) -> Optional[str]:
+    """credgoo lookup: local cache first, refetch from source on miss/error.
+
+    credgoo's own cache is the freshness authority (7-day TTL, override with
+    CREDGOO_CACHE_TTL_SECONDS), so one refetch on a miss is correct and a
+    per-skill refresh gate is not — it would track the wrong TTL and starve the
+    second bearer lookup.
+    """
+    try:
+        if key := get_api_key(service):
+            return key
+    except Exception:
+        pass  # network hiccup / backend down → try the source once  # loud-ok: next statement retries with no_cache=True; final miss errors loudly at the caller
+    try:
+        return get_api_key(service, no_cache=True) or None
+    except Exception:
+        return None  # genuinely unavailable → caller falls back
+
+
 def get_bearer_token() -> Optional[str]:
     """Get bearer token from env or credgoo. No silent fallbacks.
 
@@ -176,9 +221,9 @@ def get_bearer_token() -> Optional[str]:
         if token := os.environ.get(env_key):
             return token
 
-    # Credgoo
+    # Credgoo (cache-first, self-healing, cooldown-bounded refresh)
     for key in ("FETCH_URL_BEARER", "WEB_SEARCH_BEARER"):
-        if token := get_api_key(key):
+        if token := _key_with_refresh(key):
             return token
 
     return None
@@ -240,6 +285,7 @@ def is_valid_content(content: str) -> bool:
     - Strong patterns (e.g. "checking your browser"): any single hit = block.
     - Weak patterns (e.g. "cloudflare"): need 2+ distinct hits = block.
       A single "cloudflare" mention in an HN headline is not a block.
+    - Tiny login-wall shells (skip-to-content + login link only) are invalid.
     """
     if not content or not content.strip():
         return False
@@ -249,6 +295,13 @@ def is_valid_content(content: str) -> bool:
         return True
 
     scan = content[:_ERROR_SCAN_WINDOW].lower()
+
+    # Login-wall shell: short page whose only substance is a skip-to-content
+    # link (+ login redirect / markdown frontmatter). A real page never fits
+    # this profile: content pages have body text beyond the nav link.
+    stripped = content.strip()
+    if len(stripped) <= _LOGIN_SHELL_MAX_CHARS and "skip to main content" in scan:
+        return False
 
     # Strong patterns: any single match means block.
     for pattern in STRONG_ERROR_PATTERNS:
@@ -328,6 +381,81 @@ def fetch_with_jina(url: str, timeout: int = 30) -> str:
         raise RuntimeError(f"Jina.ai request timed out for URL: {url}")
     except requests.exceptions.RequestException as e:
         raise RuntimeError(f"Jina.ai failed: {e}")
+
+
+def _fetch_html_chrome_tls(url: str, timeout: int = 30) -> str:
+    """Fetch raw HTML with a browser-like TLS fingerprint.
+
+    curl_cffi (Chrome JA4 impersonation) first — TLS/JA4 gates are the most
+    common block layer (apisniffer SOTA check 2026-10). Plain requests with a
+    browser UA as fallback for environments where curl_cffi isn't installed.
+    """
+    try:
+        from curl_cffi import requests as cffi_requests
+    except ImportError:
+        cffi_requests = None
+
+    if cffi_requests is not None:
+        try:
+            response = cffi_requests.get(url, timeout=timeout, impersonate="chrome")
+            response.raise_for_status()
+            return response.text
+        except Exception as e:
+            raise RuntimeError(f"defuddle fetch (curl_cffi) failed: {e}")
+
+    if requests is None:
+        raise RuntimeError("Neither curl_cffi nor requests available for defuddle fetch")
+    try:
+        response = requests.get(url, timeout=timeout, headers={"User-Agent": _CHROME_UA})
+        response.raise_for_status()
+        return response.text
+    except requests.exceptions.Timeout:
+        raise RuntimeError(f"defuddle fetch timed out for URL: {url}")
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f"defuddle fetch failed: {e}")
+
+
+def fetch_with_defuddle(url: str, timeout: int = 30) -> str:
+    """Fetch main content locally with defuddle (Obsidian Web Clipper engine).
+
+    curl_cffi fetch -> `npx defuddle parse --json` on stdin. Fully local
+    and free (no third-party extractor API). Shines on article/doc pages
+    (GitHub README, MDN, docs sites). JS-built pages return a nav shell —
+    detected via wordCount (< _DEFUDDLE_MIN_WORDS) and raised as a failure
+    so the fallback chain moves on to the next tool.
+    """
+    npx = shutil.which('npx')
+    if not npx:
+        raise RuntimeError("npx not found. Install Node.js for the defuddle tool (nodejs.org)")
+
+    url = url.strip()
+    if not url.startswith('http://') and not url.startswith('https://'):
+        url = 'https://' + url
+
+    html = _fetch_html_chrome_tls(url, timeout)
+
+    try:
+        cmd = [npx, '-y', f'defuddle@{DEFUDDLE_VERSION}', 'parse', '--json']
+        result = subprocess.run(cmd, input=html, capture_output=True, text=True,
+                                check=True, timeout=timeout)
+        data = json.loads(result.stdout)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"defuddle timed out for URL: {url}")
+    except subprocess.CalledProcessError as e:
+        stderr = (e.stderr or '').strip()[:200]
+        raise RuntimeError(f"defuddle failed: {stderr or e}")
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"defuddle returned invalid JSON: {e}")
+
+    content = data.get('contentMarkdown') or data.get('content') or ''
+    word_count = data.get('wordCount', 0)
+    if not content.strip():
+        raise RuntimeError("defuddle returned empty content (JS-built page?)")
+    if word_count < _DEFUDDLE_MIN_WORDS:
+        # Nav shell, not an article — let the next tool try.
+        raise RuntimeError(
+            f"defuddle extracted only {word_count} words (nav shell / JS-built page)")
+    return content
 
 
 def fetch_with_w3m(url: str, links: bool = False, timeout: int = 30) -> str:
@@ -438,7 +566,7 @@ def _find_chrome() -> Optional[str]:
             if result.returncode == 0:
                 return result.stdout.strip()
         except Exception:
-            pass
+            pass  # loud-ok: best-effort `which` probe; None is the defined miss
     return None
 
 
@@ -536,6 +664,8 @@ def fetch_with_tool(tool: str, url: str, links: bool = False, bearer: str = None
         return fetch_with_markdown_new(url, md_method, md_retain_images, timeout)
     elif tool == 'jina':
         return fetch_with_jina(url, timeout)
+    elif tool == 'defuddle':
+        return fetch_with_defuddle(url, timeout)
     elif tool == 'api':
         # Get API URL from settings if not provided
         if not api_url and settings:
@@ -600,7 +730,7 @@ def fetch_with_fallback(url: str, preferred_tool: str, settings: Dict[str, Any],
         except Exception as e:
             errors.append(f"{tool}: {e}")
 
-    raise RuntimeError(f"All tools failed:\n  " + "\n  ".join(errors))
+    raise RuntimeError("All tools failed:\n  " + "\n  ".join(errors))
 
 
 def fetch_url(url: str, tool: str = 'auto', links: bool = False, use_api: bool = False,
@@ -618,7 +748,7 @@ def fetch_url(url: str, tool: str = 'auto', links: bool = False, use_api: bool =
     if re.match(r'https?://(www\.)?reddit\.com', url):
         url = re.sub(r'https?://(www\.)?reddit\.com', 'https://old.reddit.com', url)
         if verbose:
-            print(f"Redirected to old.reddit.com for text browser support", file=sys.stderr)
+            print("Redirected to old.reddit.com for text browser support", file=sys.stderr)
 
     # API mode doesn't use fallback
     if use_api:
@@ -686,7 +816,7 @@ Examples:
     )
 
     parser.add_argument('url', help='URL to fetch')
-    parser.add_argument('--tool', choices=['auto', 'w3m', 'lynx', 'chawan', 'chrome', 'markdown', 'jina', 'api'], 
+    parser.add_argument('--tool', choices=['auto', 'w3m', 'lynx', 'defuddle', 'chawan', 'chrome', 'markdown', 'jina', 'api'], 
                         default='auto', help='Tool to use (default: auto)')
     parser.add_argument('--links', action='store_true', help='Display link numbers (w3m only)')
     parser.add_argument('--clean', '-c', action='store_true', default=True, 

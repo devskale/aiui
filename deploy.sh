@@ -28,9 +28,11 @@ rsync -avz --delete \
   --exclude='.pi/' \
   --exclude='.git/' \
   --exclude='test-results/' \
+  --exclude='.venv/' \
+  --exclude='__pycache__/' \
   ./ "$HOST:$REMOTE_DIR/"
 
 echo "🔄 Installing deps + migrating to per-user agentDir + enabling baseline extensions + restarting service..."
-ssh "$HOST" "export CI=true PATH=/home/woodmastr/.nvm/versions/node/v24.13.0/bin:/home/woodmastr/.local/share/pnpm/bin:\$PATH; cd $REMOTE_DIR && pnpm install --frozen-lockfile && node scripts/migrate-per-user-agentdir.js && node scripts/enable-baseline-extensions.js && systemctl --user restart aiui"
+ssh "$HOST" "export CI=true PATH=/home/woodmastr/.nvm/versions/node/v24.13.0/bin:/home/woodmastr/.local/share/pnpm/bin:\$PATH; cd $REMOTE_DIR && pnpm install --frozen-lockfile && node scripts/migrate-per-user-agentdir.js && node scripts/enable-baseline-extensions.js && for d in agents/*/skills/*/; do if [ -f \$d/pyproject.toml ] && [ -d \$d/scripts ]; then (cd \$d && UV_NO_SYNC=0 ~/.local/bin/uv sync --quiet 2>&1 | tail -1); fi; done; systemctl --user restart aiui"
 
 echo "✅ Deployed to $HOST (port 8082)"

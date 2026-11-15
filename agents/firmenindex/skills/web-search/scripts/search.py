@@ -6,13 +6,13 @@ Supports private Duck API and SearXNG with credentials for better results.
 """
 
 import argparse
+import base64
 import io
 import json
 import os
 import sys
 import urllib.parse
 import urllib.request
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 # Fix Windows console encoding: reconfigure stdout to UTF-8 so that
@@ -28,7 +28,7 @@ if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
                 sys.stdout.buffer, encoding='utf-8', errors='replace'
             )
         except Exception:
-            pass
+            pass  # loud-ok: display-encoding fallback for exotic terminals
 
 # Optional dependencies with graceful fallback
 try:
@@ -92,19 +92,40 @@ def filter_ads(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 # Credentials (Optional)
 # =============================================================================
 
+def _key_with_refresh(service: str) -> Optional[str]:
+    """credgoo lookup: local cache first, refetch from source on miss/error.
+
+    credgoo's own cache is the freshness authority — it carries a 7-day TTL
+    (CREDGOO_CACHE_TTL_SECONDS), so a key added or rotated in the backend is
+    picked up automatically. A cache miss therefore means "stale or absent",
+    and one refetch is the correct response. No refresh gate lives here on
+    purpose: a per-skill gate would need to track the backend's TTL, go stale
+    of its own, and starve the second lookup of a multi-key skill.
+    """
+    try:
+        if key := get_api_key(service):
+            return key
+    except Exception:
+        pass  # network hiccup / backend down → try the source once  # loud-ok: next statement retries with no_cache=True; final miss errors loudly at the caller
+    try:
+        return get_api_key(service, no_cache=True) or None
+    except Exception:
+        return None  # genuinely unavailable → caller falls back (SearXNG)
+
+
 def get_bearer_token() -> Optional[str]:
     """Get bearer token from env or credgoo. No silent fallbacks."""
     if token := os.environ.get("WEB_SEARCH_BEARER"):
         return token
 
-    return get_api_key("WEB_SEARCH_BEARER")
+    return _key_with_refresh("WEB_SEARCH_BEARER")
 
 
 def _resolve_url(env_key: str, credgoo_key: str) -> str:
     """Resolve a config URL from env var, then credgoo. Empty if unset."""
     if url := os.environ.get(env_key):
         return url
-    return (get_api_key(credgoo_key) or "").strip()
+    return (_key_with_refresh(credgoo_key) or "").strip()
 
 
 def get_duck_api_url() -> str:
@@ -157,6 +178,11 @@ def get_searxng_credentials() -> Optional[Dict[str, str]]:
         result = _parse_searxng_cred(PRIVATE_SEARXNG_URL)
         if result:
             return result
+        # Fail loud: a set-but-unparseable SEARXNG_URL is a config error,
+        # not a reason to silently drop to credgoo/public instances.
+        print(f"Warning: SEARXNG_URL is set but unparseable "
+              f"(expected URL or URL@USER@PASS): {PRIVATE_SEARXNG_URL!r} — "
+              f"ignoring it and trying credgoo/public instances.", file=sys.stderr)
 
     # Credgoo (no silent fallback to searx.json — that masked failures)
     if cred := get_api_key("searx"):
@@ -259,16 +285,18 @@ def search_duck(
         if resp.status_code == 502:
             # All upstream backends failed or the box-wide ddgs queue is
             # saturated — retrying immediately just deepens the queue.
-            return [{"error": "Search backend temporarily unavailable "
-                             "(all backends failed or queue saturated). "
-                             "Retry in a few seconds."}]
+            return [{"error": "Duck API error 502 (all upstream backends "
+                              "failed or the ddgs queue is saturated). "
+                              "Retry in a few seconds."}]
         resp.raise_for_status()
         return filter_ads(resp.json().get("results", []))
     except requests.RequestException as e:
         safe_msg = str(e).split("Authorization")[0].rstrip(": ,")
-        return [{"error": f"Search failed: {safe_msg}"}]
+        host = urllib.parse.urlparse(get_duck_search_url()).netloc
+        return [{"error": f"Duck API request failed ({host}): {safe_msg}"}]
     except Exception as e:
-        return [{"error": f"Unexpected error: {e}"}]
+        return [{"error": f"Duck API unexpected error "
+                         f"({type(e).__name__}): {e}"}]
 
 
 def search_duck_news(
@@ -317,16 +345,19 @@ def search_duck_news(
         if resp.status_code == 404:
             return []
         if resp.status_code == 502:
-            return [{"error": "News backend temporarily unavailable "
-                             "(all backends failed or queue saturated). "
-                             "Retry in a few seconds."}]
+            return [{"error": "Duck news API error 502 (all upstream backends "
+                              "failed or the ddgs queue is saturated). "
+                              "Retry in a few seconds."}]
         resp.raise_for_status()
         return filter_ads(resp.json().get("results", []))
     except requests.RequestException as e:
         safe_msg = str(e).split("Authorization")[0].rstrip(": ,")
-        return [{"error": f"News search failed: {safe_msg}"}]
+        host = urllib.parse.urlparse(get_duck_news_url()).netloc
+        return [{"error": f"Duck news API request failed ({host}): "
+                         f"{safe_msg}"}]
     except Exception as e:
-        return [{"error": f"Unexpected error: {e}"}]
+        return [{"error": f"Duck news API unexpected error "
+                         f"({type(e).__name__}): {e}"}]
 
 
 # =============================================================================
@@ -369,6 +400,7 @@ def search_searxng(
     import ssl
 
     last_error: Optional[str] = None
+    degraded: Optional[Dict[str, Any]] = None
     for i, instance in enumerate(instances_to_try):
         url = f"{instance}/search?{urllib.parse.urlencode(params)}"
         try:
@@ -388,13 +420,101 @@ def search_searxng(
                 if "results" in data:
                     data["results"] = filter_ads(data["results"])[:max_results]
                     data["_instance"] = instance
+                    if not data["results"] and data.get("unresponsive_engines"):
+                        # Degraded instance, not a genuine miss: every queried
+                        # engine is suspended (CAPTCHA / access denied / 429).
+                        # Try the next instance; keep this payload as last
+                        # resort so the suspension stays visible (format_results).
+                        if degraded is None:
+                            degraded = data
+                        dead = ", ".join(e for e, _ in data["unresponsive_engines"])
+                        last_error = f"{instance}: engines suspended ({dead})"
+                        # Fail loud even when a later instance saves the query.
+                        print(f"Warning: {instance}: all engines suspended "
+                              f"({dead}) — trying next instance.", file=sys.stderr)
+                        continue
                 return data
         except Exception as exc:
             last_error = f"{instance}: {exc}"
             continue
 
-    detail = f" ({last_error})" if last_error else ""
-    return {"error": f"All SearXNG instances failed (tried {len(instances_to_try)}).{detail}"}
+    if degraded is not None:
+        return degraded
+    detail = f" — last error: {last_error}" if last_error else ""
+    return {"error": f"SearXNG error: all {len(instances_to_try)} instances "
+                     f"failed{detail}"}
+
+
+# =============================================================================
+# SearXNG invocation + Duck fallback
+# =============================================================================
+
+def _duck_only_flags(args: argparse.Namespace) -> List[str]:
+    """Flags only the Duck API supports (SearXNG ignores them)."""
+    return [f for f, v in (
+        ("--site", args.site), ("--filetype", args.filetype),
+        ("--inurl", args.inurl), ("--exclude", args.exclude),
+        ("--exact", args.exact),
+    ) if v]
+
+
+def _run_searxng_search(args: argparse.Namespace) -> Dict[str, Any]:
+    """One SearXNG pass: private instance (if configured) first, then the
+    public instance list. Serves as the primary SearXNG path and as the
+    fallback when the Duck API errors (issue 2026-10-13: public SearXNG is
+    the LAST resort, never the default)."""
+    creds = get_searxng_credentials()
+    instance_url = creds["url"] if creds else None
+    auth = None
+    if creds and creds.get("user") and creds.get("pass"):
+        auth = base64.b64encode(
+            f"{creds['user']}:{creds['pass']}".encode()
+        ).decode()
+    return search_searxng(
+        query=args.query,
+        max_results=args.max,
+        categories=args.categories,
+        engines=args.engines,
+        time_range=args.time_range or (args.timelimit[0] if args.timelimit else None),
+        language=args.language,
+        instance_url=instance_url,
+        auth=auth,
+    )
+
+
+def _searxng_fallback(
+    args: argparse.Namespace, results: List[Dict[str, Any]],
+) -> tuple:
+    """Fall back from a failed Duck API call to SearXNG (one attempt).
+
+    A Duck error row is a backend OUTAGE, not "no results" — retry the query
+    via SearXNG instead of giving up. Every error names its origin (Duck API
+    vs SearXNG) so the failure trail stays readable.
+
+    Returns (results, fell_back). results is None when both backends failed
+    (both errors already printed to stderr, origin-labeled).
+    """
+    if not (results and isinstance(results[0], dict) and "error" in results[0]):
+        return results, False
+
+    duck_error = results[0]["error"]
+    print(f"Warning: {duck_error}", file=sys.stderr)
+
+    is_news = bool(args.categories and args.categories.strip() == "news")
+    if not is_news:
+        unsupported = _duck_only_flags(args)
+        if unsupported:
+            print(f"Warning: {', '.join(unsupported)} cannot carry over to "
+                  f"SearXNG (Duck-only filters).", file=sys.stderr)
+    print("Warning: falling back to SearXNG (private instance first, then "
+          "public instances)...", file=sys.stderr)
+
+    sx = _run_searxng_search(args)
+    if isinstance(sx, dict) and "error" in sx:
+        print(f"Error: Duck API failed first: {duck_error}", file=sys.stderr)
+        print(f"Error: SearXNG fallback failed too: {sx['error']}", file=sys.stderr)
+        return None, True
+    return sx, True
 
 
 # =============================================================================
@@ -410,6 +530,13 @@ def format_results(results: Union[List, Dict], backend: str, query: str, limit: 
 
     items = results if isinstance(results, list) else results.get("results", [])
     if not items:
+        if isinstance(results, dict) and results.get("unresponsive_engines"):
+            dead = ", ".join(e for e, _ in results["unresponsive_engines"])
+            where = results.get("_instance", "the instance")
+            return (f"No results found for '{query}'.\n\n"
+                    f"⚠ Instance degraded ({where}): all queried engines "
+                    f"suspended — {dead}. Not a query miss; engines usually "
+                    f"recover after their suspension window.")
         return f"No results found for '{query}'."
 
     lines = [f"# Results for '{query}'\n"]
@@ -529,13 +656,9 @@ Backends:
         # text-search operators (site/filetype/inurl/exclude/exact) don't
         # apply there.
         if args.categories and args.categories.strip() == "news":
-            duck_only_flags = [f for f, v in (
-                ("--site", args.site), ("--filetype", args.filetype),
-                ("--inurl", args.inurl), ("--exclude", args.exclude),
-                ("--exact", args.exact),
-            ) if v]
-            if duck_only_flags:
-                print(f"Warning: {', '.join(duck_only_flags)} ignored "
+            news_flags = _duck_only_flags(args)
+            if news_flags:
+                print(f"Warning: {', '.join(news_flags)} ignored "
                       f"(not supported for news).", file=sys.stderr)
             results = search_duck_news(
                 topic=args.query,
@@ -560,40 +683,21 @@ Backends:
                 backend=args.backend,
                 bearer=bearer,
             )
+
+        # Backend outage (error row) → one SearXNG attempt before giving up.
+        results, fell_back = _searxng_fallback(args, results)
+        if results is None:
+            sys.exit(1)
+        if fell_back:
+            backend = "searxng"
+            if args.verbose:
+                print("# Backend: searxng (fallback)", file=sys.stderr)
     else:
-        creds = get_searxng_credentials()
-        instance_url = creds["url"] if creds else None
-        auth = None
-        if creds and creds.get("user") and creds.get("pass"):
-            auth = __import__("base64").b64encode(
-                f"{creds['user']}:{creds['pass']}".encode()
-            ).decode()
+        duck_only = _duck_only_flags(args)
+        if duck_only:
+            print(f"Warning: {', '.join(duck_only)} ignored (Duck API only). Use --api to force Duck backend.", file=sys.stderr)
 
-        # Warn about Duck-only flags used with SearXNG
-        duck_only_flags = []
-        if args.site:
-            duck_only_flags.append("--site")
-        if args.filetype:
-            duck_only_flags.append("--filetype")
-        if args.inurl:
-            duck_only_flags.append("--inurl")
-        if args.exclude:
-            duck_only_flags.append("--exclude")
-        if args.exact:
-            duck_only_flags.append("--exact")
-        if duck_only_flags:
-            print(f"Warning: {', '.join(duck_only_flags)} ignored (Duck API only). Use --api to force Duck backend.", file=sys.stderr)
-
-        results = search_searxng(
-            query=args.query,
-            max_results=args.max,
-            categories=args.categories,
-            engines=args.engines,
-            time_range=args.time_range or (args.timelimit[0] if args.timelimit else None),
-            language=args.language,
-            instance_url=instance_url,
-            auth=auth,
-        )
+        results = _run_searxng_search(args)
 
     # Check for errors
     if isinstance(results, dict) and "error" in results:

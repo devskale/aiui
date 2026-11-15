@@ -9,14 +9,26 @@ done
 SKILL_DIR="$(cd "$(dirname "$SELF")" && pwd)"
 # Fallback: when this launcher is a copy (not a real symlink) outside the
 # skill directory — e.g. on Windows git-bash where ln -s produces a copy
-# instead of a native symlink — resolve the skill location via the pi skill
-# registry using the launcher's own name as the skill name.
+# instead of a native symlink — resolve the skill location by probing agent
+# skill directories, standard-first. The launcher's own name doubles as the
+# skill name. Probes, in order:
+#   1. ~/.agents/skills/<name>   (agentskills.io standard — most agents)
+#   2. ~/.pi/agent/skills/<name>  (pi's global skill dir)
+#   3. ~/.claude/skills/<name> · ~/.codex/skills/<name> (other agents)
+# pi stays a first-class probe target; the standard dir simply comes first
+# because every spec-compliant agent (pi included) reads it.
 if [ ! -f "$SKILL_DIR/scripts/search.py" ]; then
     _name="$(basename "$0")"
-    _try="$HOME/.pi/agent/skills/$_name"
-    if [ -d "$_try" ]; then
-        SKILL_DIR="$(cd "$_try" && pwd -P)"
-    fi
+    for _try in \
+        "$HOME/.agents/skills/$_name" \
+        "$HOME/.pi/agent/skills/$_name" \
+        "$HOME/.claude/skills/$_name" \
+        "$HOME/.codex/skills/$_name"; do
+        if [ -f "$_try/scripts/search.py" ]; then
+            SKILL_DIR="$(cd "$_try" && pwd -P)"
+            break
+        fi
+    done
 fi
 STAMP_FILE="$SKILL_DIR/.last-update"
 AUTO_UPDATE_DAYS=7
@@ -44,9 +56,15 @@ export UV_PROJECT_ENVIRONMENT="$ENV_DIR"
 case "${1:-}" in
     --update)
         echo "Updating web-search..."
-        cd "$GIT_ROOT"
-        git pull --ff-only 2>&1 || true
-        (cd "$SKILL_DIR" && uv sync --quiet 2>&1)
+        cd "$GIT_ROOT" || exit 1
+        if ! git -c pull.rebase=false pull --ff-only 2>&1; then
+            echo "✗ git pull failed — staying on current code, stamp NOT updated" >&2
+            exit 1
+        fi
+        if ! (cd "$SKILL_DIR" && uv sync 2>&1); then
+            echo "✗ uv sync failed — code updated but deps may be stale" >&2
+            exit 1
+        fi
         date +%s > "$STAMP_FILE"
         echo "✓ Updated $(date)"
         exit 0
@@ -98,12 +116,24 @@ if [ -d "$GIT_ROOT/.git" ]; then
         [ $(( (now_ts - last_ts) / 86400 )) -ge "$AUTO_UPDATE_DAYS" ] && needs_update=true
     fi
     if $needs_update; then
+        # Auto-update: non-blocking, but NOT silent on failure. stdout is
+        # discarded, stderr stays attached — a failed pull/sync warns on
+        # stderr and does NOT write the stamp, so the next run retries
+        # (loudly) instead of hiding the breakage for AUTO_UPDATE_DAYS.
+        # Hard rule (AGENTS.md): failures must be loud, never silenced.
         (
-            cd "$GIT_ROOT"
-            git pull --ff-only --quiet 2>/dev/null
-            (cd "$SKILL_DIR" && uv sync --quiet 2>/dev/null)
-            date +%s > "$STAMP_FILE"
-        ) &>/dev/null &
+            cd "$GIT_ROOT" || exit 1
+            ok=true
+            if ! git -c pull.rebase=false pull --ff-only --quiet; then
+                echo "web-search: auto-update git pull failed — staying on current code, will retry next run" >&2
+                ok=false
+            fi
+            if $ok && ! (cd "$SKILL_DIR" && uv sync --quiet); then
+                echo "web-search: auto-update uv sync failed — staying on current code, will retry next run" >&2
+                ok=false
+            fi
+            $ok && date +%s > "$STAMP_FILE"
+        ) >/dev/null &
     fi
 fi
 
