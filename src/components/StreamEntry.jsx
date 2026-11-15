@@ -162,12 +162,20 @@ function ToolGroup({ toolCalls, defaultOpen = false }) {
   )
 }
 
-// ── ToolFoldSummary — Compact-Modus: Prozess auf eine Zeile, auf Demand
-// aufklappbar (Issue work-details-folding).
-function ToolFoldSummary({ count, onExpand }) {
+// ── ToolDots — platzsparende Stapel-Ansicht erledigter Tool-Calls: eine
+// Reihe von Punkten (ein Punkt je Call, rot bei Fehler), auf Demand
+// aufklappbar (Issue work-details-folding + Tool-Call-Stacking). Der
+// LAUFENDE Call rendert daneben immer als Live-Card — hier nur die alten.
+function ToolDots({ calls, onExpand }) {
   return (
     <button type="button" className="tfs" onClick={onExpand} title="Show tool calls of this turn">
-      <span className="tfs-n">{count}</span> tool call{count === 1 ? '' : 's'} <span className="tfs-hint">· show</span>
+      <span className="tfs-dots">
+        {calls.map((tc, i) => (
+          <span key={i} className={`tfs-dot ${tc.status === 'error' ? 'bad' : ''}`} title={tc.name + (tc.status === 'error' ? ' — failed' : '')} />
+        ))}
+      </span>
+      <span className="tfs-n">{calls.length}</span> tool call{calls.length === 1 ? '' : 's'}
+      <span className="tfs-hint">· show</span>
     </button>
   )
 }
@@ -358,14 +366,16 @@ export function FollowUps({ questions, onAsk }) {
 }
 
 export function AssistantEntry({ entry, isStreaming, onCopy, interactive, onAsk, workDetails = 'standard' }) {
-  // Work-Details-Modus (Issue work-details-folding) gilt NUR für
-  // abgeschlossene Turns — das Live-Turn zeigt alles (heutiges Verhalten):
-  //   standard = Thinking offen, Tool-Cards zu (Status quo)
+  // Work-Details-Modus (Issue work-details-folding) — platzsparend ist DEFAULT:
+  //   erledigte Tool-Calls stacken als Punkt-Reihe (ToolDots, aufklappbar),
+  //   der LAUFENDE Call rendert immer als Live-Card mit Stream. Auch das
+  //   Live-Turn faltet — ein Recherche-Turn stapelt sonst 20 Cards übereinander.
+  //   standard = Thinking offen, Tools gefaltet (neues Default)
   //   verbose  = alles offen
-  //   compact  = Thinking zu, Tool-Prozess hinter Summary-Zeile
+  //   compact  = Thinking zu, Tools gefaltet
   // Ergebnisse (Files written, Usage, Follow-ups) bleiben IMMER sichtbar —
-  // Prozess faltet, Ergebnisse nicht. Widget: kein Prop → standard = heute.
-  const mode = isStreaming ? 'standard' : workDetails
+  // Prozess faltet, Ergebnisse nicht. Widget: kein Prop → standard.
+  const mode = workDetails
   const [toolsExpanded, setToolsExpanded] = useState(false)
   const thinkingText = entry.thinkingText || ''
   const hasThinkingText = thinkingText.trim().length > 0
@@ -376,6 +386,15 @@ export function AssistantEntry({ entry, isStreaming, onCopy, interactive, onAsk,
     : hasThinkingText
   const thinkingDone = isStreaming ? entry.thinkingDone : true
   const hasTools = entry.toolCalls && entry.toolCalls.length > 0
+  // Der laufende Call lebt als Live-Card; alle erledigten (incl. failed)
+  // stacken als Dots — bzw. als volle Gruppe, wenn aufgeklappt/verbose.
+  const runningCall = isStreaming
+    ? (entry.toolCalls || []).find(tc => tc.status === 'running')
+    : null
+  const doneCalls = runningCall
+    ? (entry.toolCalls || []).filter(tc => tc.status !== 'running')
+    : (entry.toolCalls || [])
+  const foldDone = mode !== 'verbose' && !toolsExpanded && doneCalls.length > 0
   // Changes card: only on the settled entry (a live turn still has running
   // calls; extractTurnWrittenFiles ignores non-'done' ones, so it's safe, but
   // showing the card only once the turn settles avoids a flickering list).
@@ -396,9 +415,22 @@ export function AssistantEntry({ entry, isStreaming, onCopy, interactive, onAsk,
       {showThinking && (
         <ThinkingBlock thinking={entry.thinking} thinkingDone={thinkingDone} thinkingText={thinkingText} defaultOpen={mode !== 'compact'} />
       )}
-      {hasTools && (mode === 'compact' && !toolsExpanded
-        ? <ToolFoldSummary count={entry.toolCalls.length} onExpand={() => setToolsExpanded(true)} />
-        : <ToolGroup toolCalls={entry.toolCalls} defaultOpen={mode === 'verbose'} />)}
+      {hasTools && (
+        <>
+          {foldDone && <ToolDots calls={doneCalls} onExpand={() => setToolsExpanded(true)} />}
+          {!foldDone && doneCalls.length > 0 && (
+            mode === 'verbose' && !toolsExpanded
+              ? <ToolGroup toolCalls={doneCalls} defaultOpen />
+              : <>
+                  <button type="button" className="tfs" onClick={() => setToolsExpanded(false)} title="Fold tool calls">
+                    <span className="tfs-n">{doneCalls.length}</span> tool call{doneCalls.length === 1 ? '' : 's'} <span className="tfs-hint">· hide</span>
+                  </button>
+                  <ToolGroup toolCalls={doneCalls} defaultOpen />
+                </>
+          )}
+          {runningCall && <ToolGroup toolCalls={[runningCall]} defaultOpen />}
+        </>
+      )}
       {writtenFiles.length > 0 && <TurnWrittenFiles files={writtenFiles} />}
       {!isStreaming && <TurnUsage usage={entry.usage} />}
       {hasText && (

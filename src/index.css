@@ -1350,6 +1350,14 @@ pre code { background: none; padding: 0; font-size: 13px; }
 .tfs-n { color: var(--text-2); font-weight: 500; }
 .tfs-hint { opacity: .7; }
 
+/* Tool-Dots: ein Punkt je erledigtem Call — platzsparender Stapel (aufklappbar) */
+.tfs-dots { display: inline-flex; gap: 3px; align-items: center; margin-right: 3px; }
+.tfs-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--border, #3a3f44); display: inline-block;
+}
+.tfs-dot.bad { background: var(--bad, #e5484d); }
+
 /* ── Screenreader-only (a11y live region) ── */
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
