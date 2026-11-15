@@ -97,6 +97,16 @@ The latest version is shown in the UI under `#/releases`.
 
 ### Fixed
 
+- **Tool-Calls stacken turn-weit platzsparend** — erledigte Calls rendern
+  als eine klickbare Punkt-Reihe (ein Punkt je Call, rot bei Fehler,
+  aufklappbar mit „· hide"-Toggle), der LAUFENDE Call bleibt immer als
+  Live-Card mit Stream sichtbar. Default in allen Work-Details-Modi außer
+  verbose; Ergebnis-Flächen (Files written, Usage, Follow-ups) bleiben
+  offen. Zwei Teilfixes: (1) Live-Turn faltete gar nicht (mode war immer
+  „standard"), (2) der Replay baut einen Entry je SDK-Message — jeder mit
+  genau einem toolCall — sodass eine Recherche als ~20 „1 tool call"-Zeilen
+  stackte; `turnToolCalls` (turn-rail.js, pure) gruppiert die Calls jetzt
+  turn-weit an die letzte Tool-Entry, frühere Zeilen unterdrücken ihr Panel.
 - **Login normalisiert die Identität** — der Passwort-Login stellte die
   Session mit dem Namen "wie getippt" aus, während die Mail-Link-Flows
   (Verify/Reset) längst normalisiert ausstellen. `Foo@bar.com` vs
