@@ -222,10 +222,24 @@ export default function App() {
 
   // Auto-scroll only when the user is near the bottom.
   // Scrolling up to read pauses auto-scroll; scrolling back down resumes it.
+  // Stick-to-Bottom beim Streamen — SOTA (use-stick-to-bottom, MUI X Chat
+  // Performance): (1) rAF-gebündelt, max. 1 Scroll pro Frame statt pro Delta;
+  // (2) INSTANT während des Streamens — scrollIntoView({behavior:'smooth'})
+  // wird von jedem nächsten Update unterbrochen und ist die Ruckel-Quelle;
+  // (3) Container-scoped (scrollTop am .chat-body) statt endRef.scrollIntoView,
+  // das jeden scrollbaren Vorfahren mitzieht.
+  const stickRafRef = useRef(0)
   useEffect(() => {
-    if (stickToBottomRef.current) {
-      endRef.current?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth' })
-    }
+    if (!stickToBottomRef.current) return
+    if (stickRafRef.current) return // bereits ein Frame pending — batchen
+    stickRafRef.current = requestAnimationFrame(() => {
+      stickRafRef.current = 0
+      const el = scrollRef.current
+      if (!el || !stickToBottomRef.current) return
+      el.scrollTop = el.scrollHeight
+    })
+    // Kein Cleanup-Cancel: der geparkte Frame soll überleben und den
+    // neuesten DOM-Stand nehmen — sonst feuert er nie bei Dauer-Deltas.
   }, [entries, current])
 
   // Lazy-Render: Fenster berechnen. hasMoreRef hält den Scroll-Handler ohne
@@ -312,7 +326,11 @@ export default function App() {
   const scrollToLatest = useCallback(() => {
     stickToBottomRef.current = true
     setAtTail(true)
-    endRef.current?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth' })
+    const el = scrollRef.current
+    // Expliziter User-Jump darf smooth sein (SOTA: smooth nur für gezielte
+    // Aktionen, nie im Streaming-Takt) — aber container-scoped statt
+    // endRef.scrollIntoView (das scrollt jeden Vorfahren mit).
+    el?.scrollTo({ top: el.scrollHeight, behavior: prefersReducedMotion() ? 'auto' : 'smooth' })
   }, [])
 
   // Work-Details-Wechsel: Distanz vom Ende vorher einfangen, nach dem
@@ -344,7 +362,17 @@ export default function App() {
     if (files.length) addFiles(files)
   }, [addFiles])
 
-  const handleSend = async (text) => {
+  // Stabile Identity für die memoisierten Entry-Komponenten (React.memo):
+  // handleSend/copyEntry lesen viele States — per Ref immer frisch, aber
+  // mit ein und derselben Funktion-Referenz (SOTA: nur die streaming Message
+  // re-rendert; die alten Bubbles brauchen stabile Props).
+  const handleSendRef = useRef(null)
+  const copyEntryRef = useRef(null)
+  const handleSendStable = useCallback((text) => handleSendRef.current?.(text), [])
+  const copyEntryStable = useCallback((el) => copyEntryRef.current?.(el), [])
+  const handleSend = handleSendStable // InputBar onSend/onAsk — gleiches Verhalten, stabile Referenz
+
+  const handleSendImpl = async (text) => {
     // Notification-Permission beim ersten Send holen (User-Geste). Still
     // bleiben bei 'denied' — fragenwirbelt niemanden.
     if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
@@ -505,9 +533,11 @@ export default function App() {
   // Can the current model accept images? Derived from each model's `input`
   // capability (models.json via /api/models) — only models that declare image
   // input accept images. Not a preference.
+  handleSendRef.current = handleSendImpl
+
   const imageCapable = imageModels.includes(sessionModel || model)
 
-  const copyEntry = (el) => {
+  copyEntryRef.current = (el) => {
     // Clone node, strip UI chrome, extract clean textContent
     const clone = el.cloneNode(true)
     clone.querySelectorAll('.tc-line, .think-line, .entry-streaming, .copy-btn, .copy-entry').forEach(n => n.remove())
@@ -642,14 +672,14 @@ export default function App() {
               {entries.slice(win.startIndex).map((entry, i) => {
                 const entryIdx = win.startIndex + i
                 const turnGroup = turnGroups[i]
-                if (entry.role === 'user') return <UserEntry key={i} entryIdx={entryIdx} text={entry.text} images={entry.images} onCopy={copyEntry} />
-                if (entry.role === 'error') return <ErrorEntry key={i} text={entry.text} onCopy={copyEntry} />
+                if (entry.role === 'user') return <UserEntry key={i} entryIdx={entryIdx} text={entry.text} images={entry.images} onCopy={copyEntryStable} />
+                if (entry.role === 'error') return <ErrorEntry key={i} text={entry.text} onCopy={copyEntryStable} />
                 // Follow-ups are clickable only on the settled chat tail —
                 // a new turn (current/streaming) unmounts them naturally.
                 const interactive = i === entries.length - win.startIndex - 1 && !current && !streaming
-                return <AssistantEntry key={i} entry={entry} isStreaming={false} onCopy={copyEntry} interactive={interactive} onAsk={handleSend} workDetails={workDetails} turnToolCalls={turnGroup} />
+                return <AssistantEntry key={i} entry={entry} isStreaming={false} onCopy={copyEntryStable} interactive={interactive} onAsk={handleSendStable} workDetails={workDetails} turnToolCalls={turnGroup} />
               })}
-              {current && <AssistantEntry entry={current} isStreaming={true} onCopy={copyEntry} />}
+              {current && <AssistantEntry entry={current} isStreaming={true} onCopy={copyEntryStable} />}
               {limitWait && (
                 <div className="steer-msg limit-wait">
                   <span className="steer-arrow">↻</span>

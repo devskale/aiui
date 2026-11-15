@@ -2,7 +2,7 @@
 // StreamEntry — renders a single stream entry (user, assistant, error)
 // Tool calls rendered pi-TUI-style: icon + name + args, expandable output
 // ════════════════════════════════════════════════════════════════════
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, memo } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { apiUrl } from '../lib/api'
@@ -321,7 +321,7 @@ export const mdComponents = {
 
 const COPY_ICON = <Copy size={13} />
 
-export function UserEntry({ text, images, onCopy, entryIdx }) {
+export const UserEntry = memo(function UserEntry({ text, images, onCopy, entryIdx }) {
   return (
     <div className="entry-user" data-entry-idx={entryIdx}>
       {images?.length > 0 && (
@@ -339,7 +339,7 @@ export function UserEntry({ text, images, onCopy, entryIdx }) {
       )}
     </div>
   )
-}
+})
 
 // ── FollowUps — clickable tail questions ("Mögliche Vertiefungen") ──
 // v1 bridge until the canvas panel owns a structured `next` (ADR-0005):
@@ -365,7 +365,7 @@ export function FollowUps({ questions, onAsk }) {
   )
 }
 
-export function AssistantEntry({ entry, isStreaming, onCopy, interactive, onAsk, workDetails = 'standard', turnToolCalls: turnToolsProp }) {
+export const AssistantEntry = memo(function AssistantEntry({ entry, isStreaming, onCopy, interactive, onAsk, workDetails = 'standard', turnToolCalls: turnToolsProp }) {
   // Work-Details-Modus (Issue work-details-folding) — platzsparend ist DEFAULT:
   //   erledigte Tool-Calls stacken als Punkt-Reihe (ToolDots, aufklappbar),
   //   der LAUFENDE Call rendert immer als Live-Card mit Stream. Auch das
@@ -456,9 +456,9 @@ export function AssistantEntry({ entry, isStreaming, onCopy, interactive, onAsk,
         </button>
       )}
     </div>
-  )}
+  )})
 
-export function ErrorEntry({ text, onCopy }) {
+export const ErrorEntry = memo(function ErrorEntry({ text, onCopy }) {
   return (
     <div className="entry-assistant">
       <div className="entry-tool-call error">
@@ -475,7 +475,7 @@ export function ErrorEntry({ text, onCopy }) {
       )}
     </div>
   )
-}
+})
 
 // ════════════════════════════════════════════════════════════════════
 // ImageEntry — renders an inline image-generation result (/image command)
