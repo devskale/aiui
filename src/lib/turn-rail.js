@@ -101,7 +101,12 @@ export function turnProcess(entries) {
       const hasTools = Array.isArray(e.toolCalls) && e.toolCalls.length > 0
       const think = typeof e.thinkingText === 'string' ? e.thinkingText.trim() : ''
       if (hasTools) calls.push(...e.toolCalls)
-      if (think) thinkings.push(think)
+      if (think) {
+        // Live-committete Turns akkumulieren Thinking in EINEM Entry (\n\n-
+        // getrennt), der Replay liefert je Message eine — beides soll die
+        // gleiche Thought-Anzahl liefern.
+        thinkings.push(...think.split(/\n\n+/).map(t => t.trim()).filter(Boolean))
+      }
       if (hasTools || think) last = i
     }
     if (last < 0) return

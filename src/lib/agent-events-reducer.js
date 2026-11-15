@@ -116,12 +116,22 @@ export function reducer(state, action) {
       return { ...state, steerQueue: action.steering || [] }
 
     case 'message_start': {
-      // Orchestration (reducer owns): seed `current`, carrying tool calls from
-      // the previous message in this turn. The value shape comes from Entry.
-      const prevToolCalls = state.current?.toolCalls || []
+      // Orchestration (reducer owns): seed `current`, carrying tool calls AND
+      // accumulated text/thinkingText from the previous message in this turn.
+      // Die SDK teilt einen Turn in mehrere Messages — ohne Carry würde der
+      // Commit am Turn-Ende alle Zwischentexte/-Thoughts verlieren (der
+      // Replay liefert sie, der Live-Pfad hatte sie verschluckt).
+      const prev = state.current
+      const prevToolCalls = prev?.toolCalls || []
       return {
         ...state,
-        current: { ...Entry.empty(prevToolCalls), thinking: false, thinkingDone: false },
+        current: {
+          ...Entry.empty(prevToolCalls),
+          thinking: false,
+          thinkingDone: false,
+          ...(prev?.text ? { text: prev.text + '\n\n' } : {}),
+          ...(prev?.thinkingText ? { thinkingText: prev.thinkingText + '\n\n' } : {}),
+        },
       }
     }
 

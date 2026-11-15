@@ -94,16 +94,21 @@ test('text_delta vor message_start ist No-Op — kein verwaistes current', () =>
   assert.deepEqual(s.entries, [])
 })
 
-test('message_start resettet current — zwei Nachrichten konkatenieren nicht', () => {
+test('message_start akkumuliert Text/Thinking turn-weit (kein Zwischentext-Verlust)', () => {
+  // Ein Turn = mehrere SDK-Messages; der Commit am Turn-Ende darf weder
+  // Zwischentexte noch Zwischen-Thoughts verlieren (Live-vs-Replay-Divergenz).
   let s = reducer(S0, { type: 'agent_start' })
   s = reducer(s, { type: 'turn_start' })
   s = reducer(s, { type: 'message_start' })
-  s = reducer(s, { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'erste' } })
+  s = reducer(s, { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'Rechercheplan ①' } })
   s = reducer(s, { type: 'message_end', message: {} })
   s = reducer(s, { type: 'message_start' }) // zweite Message im selben Turn
-  assert.equal(s.current.text, '') // NICHT 'erste' + weiter — First-Chunk beginnt leer
-  s = reducer(s, { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'zweite' } })
-  assert.equal(s.current.text, 'zweite')
+  assert.equal(s.current.text, 'Rechercheplan ①\n\n', 'Text getragen, mit Absatz-Trenner')
+  s = reducer(s, { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: '① ✓ erledigt' } })
+  assert.equal(s.current.text, 'Rechercheplan ①\n\n① ✓ erledigt')
+  // Thinking ebenfalls getragen
+  s = reducer(s, { type: 'message_start' })
+  assert.equal(s.current.text, 'Rechercheplan ①\n\n① ✓ erledigt\n\n', 'Text bleibt beim dritten message_start')
 })
 
 test('session_history ERSETZT — optimistisches user_prompt wird nicht dupliziert', () => {
