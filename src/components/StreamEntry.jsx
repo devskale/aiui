@@ -481,7 +481,7 @@ export const AssistantEntry = memo(function AssistantEntry({ entry, isStreaming,
         </>
       )}
       {!hasTurnProp && hasTools && (
-        <>
+        <div className={isStreaming ? 'tc-live-area' : undefined}>
           {foldDone && <ToolDots calls={doneCalls} onExpand={() => setToolsExpanded(true)} />}
           {!foldDone && doneCalls.length > 0 && (
             mode === 'verbose' && !toolsExpanded
@@ -494,7 +494,7 @@ export const AssistantEntry = memo(function AssistantEntry({ entry, isStreaming,
                 </>
           )}
           {runningCall && <ToolGroup toolCalls={[runningCall]} defaultOpen />}
-        </>
+        </div>
       )}
       {writtenFiles.length > 0 && <TurnWrittenFiles files={writtenFiles} />}
       {!isStreaming && <TurnUsage usage={entry.usage} />}

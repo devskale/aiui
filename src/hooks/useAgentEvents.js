@@ -10,6 +10,7 @@
 //   queue_update, compaction_start/end, auto_retry_start/end
 // ════════════════════════════════════════════════════════════════════
 import { useReducer, useEffect } from 'react'
+import { flushSync } from 'react-dom'
 import { apiUrl } from '../lib/api.js'
 import { reducer, initialState } from '../lib/agent-events-reducer.js'
 import { createSmoothStream } from '../lib/smooth-stream.js'
@@ -69,13 +70,29 @@ export function useAgentEvents(enabled = true) {
         },
         schedule: (fn) => requestAnimationFrame(fn),
       })
+      // FLIP-Anim (View Transitions API, feature-detected): die Tool-Übergänge
+      // (Live-Card ↔ Dot-Row, neue Card) morphen weich statt hart zu mounten —
+      // gescoped auf die Live-Prozess-Fläche via view-transition-name, der
+      // Root bleibt unangetastet (CSS: animation none). Delta-Stream läuft
+      // UNVERRINGERT ohne VT — nur die diskreten Tool-Kanten.
+      const withTransition = (fn) => {
+        if (typeof document !== 'undefined' && document.startViewTransition) {
+          document.startViewTransition(() => flushSync(fn))
+        } else {
+          fn()
+        }
+      }
       for (const event of events) {
         es.addEventListener(event, (e) => {
           try {
             const data = JSON.parse(e.data)
             if (!smooth.push(event, data)) {
               smooth.flush() // Reihenfolge: Buffer vor diskretem Event leeren
-              dispatch({ type: event, ...data })
+              if (event === 'tool_execution_start' || event === 'tool_execution_end') {
+                withTransition(() => dispatch({ type: event, ...data }))
+              } else {
+                dispatch({ type: event, ...data })
+              }
             }
           } catch {}
         })

@@ -1365,6 +1365,16 @@ pre code { background: none; padding: 0; font-size: 13px; }
 .tfs-n { color: var(--text-2); font-weight: 500; }
 .tfs-hint { opacity: .7; }
 
+/* ── FLIP-Anim: Tool-Übergänge morphen weich (View Transitions API) ──
+   Die Live-Prozess-Fläche trägt den VT-Namen (nur im streaming Entry —
+   eindeutig); Root-Gruppe Neutralisieren, sonst cross-fadet die ganze
+   Seite bei jedem Tool-Übergang. */
+.tc-live-area { view-transition-name: live-process; }
+::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+::view-transition-old(live-process), ::view-transition-new(live-process) {
+  animation-duration: .22s; animation-timing-function: ease-out;
+}
+
 /* Tool-Dots: ein Punkt je erledigtem Call — platzsparender Stapel (aufklappbar) */
 .tfs-dots { display: inline-flex; gap: 3px; align-items: center; margin-right: 3px; }
 .tfs-dot {
