@@ -288,6 +288,11 @@ function extractCodeText(node) {
 }
 
 export const mdComponents = {
+  // GFM-Tabellen: Scroll-Wrapper (breite Bilanz-/Kennzahlen-Tabellen clippen
+  // sonst im schmalen Chat) — die Styles liegen in index.css (.md-table-wrap).
+  table: ({ children, ...props }) => (
+    <div className="md-table-wrap"><table {...props}>{children}</table></div>
+  ),
   img: ({ src, alt, ...props }) => {
     const full = (src && !src.startsWith('http') && !src.startsWith('data:'))
       ? `${BASE_URL}${src.startsWith('/') ? '' : '/'}${src}`

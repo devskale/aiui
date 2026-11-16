@@ -1383,6 +1383,32 @@ pre code { background: none; padding: 0; font-size: 13px; }
 }
 .tfs-dot.bad { background: var(--bad, #e5484d); }
 
+/* ── Markdown-Tabellen (GFM) in Chat-Entries ──
+   Ohne Styles rendern sie als Textwand (cellPadding 0, kein Header,
+   keine Lines). Wrapper clippt breite Tabellen horizontal statt sie
+   zu quetschen. Das Widget erbt das über das injizierte index.css. */
+.md-table-wrap {
+  overflow-x: auto; overscroll-behavior-x: contain; margin: 10px 0;
+  border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.14);
+}
+.md-table-wrap table {
+  border-collapse: collapse; width: 100%; font-size: 13px; line-height: 1.5;
+  font-variant-numeric: tabular-nums; margin: 0;
+}
+.md-table-wrap th {
+  background: var(--bg-hover, #23262a); color: var(--text-2);
+  font-size: 11.5px; letter-spacing: .03em; padding: 7px 11px;
+  text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+.md-table-wrap td {
+  padding: 6px 11px; border-bottom: 1px solid var(--border-subtle);
+  vertical-align: top;
+}
+.md-table-wrap tbody tr:last-child td { border-bottom: none; }
+.md-table-wrap tbody tr:nth-child(even) { background: rgba(255, 255, 255, 0.025); }
+.md-table-wrap td code { font-size: 11.5px; }
+
 /* ── Screenreader-only (a11y live region) ── */
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
