@@ -21,14 +21,14 @@ assert.ok(teacher.systemPrompt.includes('English teacher'), 'persona body parsed
 assert.equal(teacher.stt, true)
 assert.equal(teacher.sttLanguage, 'auto', 'auto-detect (kid may mix DE/EN)')
 assert.equal(teacher.tts, true, 'spoken answers')
-assert.equal(teacher.model, 'unii@tu@qwen-3.6-35b', 'vision model pin (worksheet photos)')
+assert.equal(teacher.model, 'unii@tu@qwen-3.8-27b', 'vision model pin (worksheet photos; 3.6 tot nach TU-Drift, 3.8 vision-fähig — Gateway-probed)')
 assert.equal(teacher.skillPaths.length, 1, 'carries its skills dir')
 
 const deutsch = getAgent('deutsch')
 assert.ok(deutsch.systemPrompt.length > 50, 'persona body parsed')
 assert.equal(deutsch.stt, false)
 assert.equal(deutsch.tts, false)
-assert.equal(deutsch.model, 'unii@tu@qwen-3.6-35b', 'model pin parsed')
+assert.equal(deutsch.model, 'unii@tu@qwen-3.8-27b', 'model pin parsed')
 assert.ok(deutsch.extensionPaths.length === 0, 'pdf-tools moved to baseline (no carried extensions)')
 
 // ── Fallbacks ──
