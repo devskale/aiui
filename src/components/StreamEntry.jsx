@@ -2,7 +2,7 @@
 // StreamEntry — renders a single stream entry (user, assistant, error)
 // Tool calls rendered pi-TUI-style: icon + name + args, expandable output
 // ════════════════════════════════════════════════════════════════════
-import { useState, useEffect, useMemo, memo } from 'react'
+import { useState, useEffect, useMemo, memo, useDeferredValue } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { apiUrl } from '../lib/api'
@@ -256,12 +256,21 @@ function ThinkingBlock({ thinking, thinkingDone, thinkingText, defaultOpen = tru
   const expanded = userOpen ?? defaultOpen
   const text = thinkingText || ''
   const hasText = text.trim().length > 0
+  // Smooth-Fold: der Text-Block bleibt IMMER im DOM — die Klappe ist eine
+  // max-height-Transition (CSS), der automatische Kollaps bei thinkingDone
+  // gleitet statt zu springen. `live` bindet die Höhe während des Denkens.
+  const cls = [
+    'think-line',
+    hasText ? 'clickable' : '',
+    expanded && hasText ? 'open' : '',
+    !thinkingDone ? 'live' : '',
+  ].filter(Boolean).join(' ')
 
   return (
-    <div className={`think-line ${hasText ? 'clickable' : ''}`} onClick={() => hasText && setUserOpen(!expanded)}>
+    <div className={cls} onClick={() => hasText && setUserOpen(!expanded)}>
       <span className={`think-dot ${thinkingDone ? 'done' : ''}`} />
       <span className={`think-label ${thinkingDone ? '' : 'shimmer-text'}`}>{thinkingDone ? 'Thought' : 'Thinking…'}</span>
-      {expanded && hasText && <span className="think-text">{text}</span>}
+      {hasText && <span className="think-text">{text}</span>}
     </div>
   )
 }
@@ -428,6 +437,11 @@ export const AssistantEntry = memo(function AssistantEntry({ entry, isStreaming,
   )
   const mdText = followUps ? followUps.bodyText : entry.text
   const hasText = mdText && mdText.trim()
+  // Der Live-Text akkumulierte turn-weit — das Markdown-Re-Parse pro Delta
+  // geht als Concurrent-Render nebenher (SOTA: deferred parse), der urgent
+  // Frame bleibt frei für Scroll/Interaktion.
+  const deferredMdText = useDeferredValue(mdText)
+  const shownText = isStreaming ? (deferredMdText || '') : mdText
 
   return (
     <div className="entry-assistant">
@@ -486,7 +500,7 @@ export const AssistantEntry = memo(function AssistantEntry({ entry, isStreaming,
       {!isStreaming && <TurnUsage usage={entry.usage} />}
       {hasText && (
         <div className="entry-text">
-          <Markdown remarkPlugins={[remarkGfm]} components={mdComponents}>{mdText}</Markdown>
+          <Markdown remarkPlugins={[remarkGfm]} components={mdComponents}>{shownText}</Markdown>
           {isStreaming && <span className="entry-streaming" />}
         </div>
       )}
