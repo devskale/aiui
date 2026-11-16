@@ -314,11 +314,43 @@ export default function App() {
         setVisibleCount(c => growWindow(c))
       }
     }
-    // Gemeinsame Schluss-Regel: Auto-Scroll klebt nur, wenn der Reader am
-    // Ende ist (isAtTail, getestet) — dieselbe Toleranz für Ref und Button.
+    // Re-STICK nur am Ende — aber NIE UNSTICKEN hier: der Browser clamp't
+    // scrollTop bei Höhen-Schrumpfungen (automatisches Einklappen, grid-rows-
+    // Transition) und feuert dafür Scroll-Events OHNE User-Intent. Ein Unstick
+    // hier hätte das Auto-Follow mitten im Turn getötet (gemessen: 551 px
+    // dauerhaft drüber). Unstick = ausschließlich User-Intent (wheel/touch/
+    // keys, useEffect darunter) — use-stick-to-bottom-Muster.
     const tail = isAtTail(el.scrollTop, el.clientHeight, el.scrollHeight)
-    stickToBottomRef.current = tail
+    if (tail) stickToBottomRef.current = true
     setAtTail(prev => (prev === tail ? prev : tail))
+  }, [])
+
+  // ── User-Intent-Tracker: nur echte Nutzereingaben lösen das Kleben ──
+  useEffect(() => {
+    const el = scrollContainerRef.current
+    if (!el) return
+    const unstick = () => { stickToBottomRef.current = false }
+    const onWheel = (e) => { if (e.deltaY < 0) unstick() }
+    let lastTouchY = null
+    const onTouchStart = (e) => { lastTouchY = e.touches[0]?.clientY ?? null }
+    const onTouchMove = (e) => {
+      const y = e.touches[0]?.clientY
+      if (lastTouchY !== null && y > lastTouchY + 2) unstick() // Finger runter = Inhalt hochscrollen
+      lastTouchY = y
+    }
+    const onKeyDown = (e) => {
+      if (['ArrowUp', 'PageUp', 'Home'].includes(e.key)) unstick()
+    }
+    el.addEventListener('wheel', onWheel, { passive: true })
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchmove', onTouchMove, { passive: true })
+    el.addEventListener('keydown', onKeyDown)
+    return () => {
+      el.removeEventListener('wheel', onWheel)
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
+      el.removeEventListener('keydown', onKeyDown)
+    }
   }, [])
 
   // „Zum Neuesten" — klebenden Modus wiederherstellen und ans Ende fahren.
