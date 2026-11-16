@@ -12,6 +12,7 @@
 import { useReducer, useEffect } from 'react'
 import { apiUrl } from '../lib/api.js'
 import { reducer, initialState } from '../lib/agent-events-reducer.js'
+import { createSmoothStream } from '../lib/smooth-stream.js'
 import * as Entry from '../../shared/entry.js'
 
 
@@ -57,11 +58,25 @@ export function useAgentEvents(enabled = true) {
         }
         // CONNECTING = the browser retries on its own — leave it be.
       }
+      // Smooth-Stream (SOTA, Upstash smooth-streaming / ChatGPT-Typewriter):
+      // Text-/Thinking-Deltas bündeln und im rAF-Takt flushen — das Rendern
+      // folgt dem Frame, nicht dem bursty Chunk. Diskrete Events leeren den
+      // Buffer zuerst (Reihenfolge bleibt gewahrt).
+      const smooth = createSmoothStream({
+        onFlush: (text, think) => {
+          if (text) dispatch({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: text } })
+          if (think) dispatch({ type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: think } })
+        },
+        schedule: (fn) => requestAnimationFrame(fn),
+      })
       for (const event of events) {
         es.addEventListener(event, (e) => {
           try {
             const data = JSON.parse(e.data)
-            dispatch({ type: event, ...data })
+            if (!smooth.push(event, data)) {
+              smooth.flush() // Reihenfolge: Buffer vor diskretem Event leeren
+              dispatch({ type: event, ...data })
+            }
           } catch {}
         })
       }

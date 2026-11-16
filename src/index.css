@@ -276,18 +276,21 @@ pre code { background: none; padding: 0; font-size: 13px; }
 .think-dot.done { animation: none; opacity: 0.4; }
 .think-label { font-style: italic; color: var(--text-3); }
 .think-text {
+  /* Smooth-Fold, SOTA-exakt: grid-template-rows 0fr→1fr animiert auf die
+     GERENDE Höhe ohne max-height-Nummern (Radix-Collapsible-Trick). Der
+     Text bleibt IMMER im DOM; der automatische Kollaps bei thinkingDone
+     gleitet statt zu springen. */
   width: 100%; margin-left: 14px; font-size: 12px; color: var(--text-4);
-  font-style: italic; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
-  /* Smooth-Fold (Jank-Bekämpfung): der Text bleibt IMMER im DOM, Klappe
-     per max-height-Transition statt hartem Unmount — der automatische
-     Kollaps bei thinkingDone springt sonst um ganze Textblöcke. */
-  max-height: 0; opacity: 0; overflow: hidden;
-  transition: max-height .24s ease-out, opacity .16s ease-out;
+  font-style: italic; line-height: 1.5;
+  display: grid; grid-template-rows: 0fr; opacity: 0;
+  transition: grid-template-rows .24s ease-out, opacity .16s ease-out;
 }
-.think-line.open .think-text {
-  max-height: 11em; opacity: 1; overflow-y: auto; overscroll-behavior: contain;
+.think-line.open .think-text { grid-template-rows: 1fr; opacity: 1; }
+.think-inner {
+  min-height: 0; overflow: hidden; white-space: pre-wrap; word-break: break-word;
 }
-.think-line.open.live .think-text { max-height: 8em; } /* Live-Denken: gebunden, wächst nicht unendlich */
+.think-line.open .think-inner { overflow-y: auto; overscroll-behavior: contain; }
+.think-line.open.live .think-inner { max-height: 8em; } /* Live-Denken: gebunden, wächst nicht unendlich */
 @keyframes pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.7; } }
 
 /* ── Tool calls — subtle cards with per-tool glyph (TUI-style) ── */

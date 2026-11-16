@@ -270,7 +270,7 @@ function ThinkingBlock({ thinking, thinkingDone, thinkingText, defaultOpen = tru
     <div className={cls} onClick={() => hasText && setUserOpen(!expanded)}>
       <span className={`think-dot ${thinkingDone ? 'done' : ''}`} />
       <span className={`think-label ${thinkingDone ? '' : 'shimmer-text'}`}>{thinkingDone ? 'Thought' : 'Thinking…'}</span>
-      {hasText && <span className="think-text">{text}</span>}
+      {hasText && <span className="think-text"><span className="think-inner">{text}</span></span>}
     </div>
   )
 }
