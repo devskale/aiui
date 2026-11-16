@@ -13,7 +13,7 @@
 //   bind(session)          subscribe a SDK session's Events to push (idempotent)
 // ════════════════════════════════════════════════════════════════════
 
-function createBus() {
+function createBus(user) {
   const clients = new Map() // res → keepalive interval
   let unsubscribe = null
   let boundSession = null
@@ -62,7 +62,15 @@ function createBus() {
     if (session === boundSession) return // idempotent
     if (unsubscribe) { try { unsubscribe() } catch {} unsubscribe = null }
     boundSession = session
-    if (session) unsubscribe = session.subscribe((event) => push(event.type, event))
+    if (session) unsubscribe = session.subscribe((event) => {
+      // Tool-Fehler strukturiert loggen (→ journald) — die roten Dots in der
+      // Fold-Zeile müssen im Log nachvollziehbar sein (was, für wen, warum).
+      if (event.type === 'tool_execution_end' && event.isError) {
+        const what = String(JSON.stringify(event.result?.content ?? event.output ?? '')).slice(0, 200)
+        console.log(JSON.stringify({ t: 'tool-error', user, tool: event.toolName || event.tool, err: what }))
+      }
+      push(event.type, event)
+    })
   }
 
   return { attach, detach, push, send, bind }
@@ -75,6 +83,6 @@ const buses = new Map() // user → bus
 export function getBus(user) {
   const key = user || ANON
   let b = buses.get(key)
-  if (!b) { b = createBus(); buses.set(key, b) }
+  if (!b) { b = createBus(key); buses.set(key, b) }
   return b
 }

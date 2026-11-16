@@ -167,11 +167,17 @@ function ToolGroup({ toolCalls, defaultOpen = false }) {
 // aufklappbar (Issue work-details-folding + Tool-Call-Stacking). Der
 // LAUFENDE Call rendert daneben immer als Live-Card — hier nur die alten.
 function ToolDots({ calls, onExpand }) {
+  // Tooltip sagt WAS schiefging — Exit-Code-1-Semantik (Cache-Probes o. ä.)
+  // ist für den Betrachter sonst nicht von einem echten Break unterscheidbar.
+  const dotTitle = (tc) => {
+    const out = String(tc.output || '').replace(/\s+/g, ' ').trim()
+    return tc.name + (tc.status === 'error' ? ' — failed: ' + (out.slice(0, 140) || 'exit ≠ 0') : '')
+  }
   return (
     <button type="button" className="tfs" onClick={onExpand} title="Show tool calls of this turn">
       <span className="tfs-dots">
         {calls.map((tc, i) => (
-          <span key={i} className={`tfs-dot ${tc.status === 'error' ? 'bad' : ''}`} title={tc.name + (tc.status === 'error' ? ' — failed' : '')} />
+          <span key={i} className={`tfs-dot ${tc.status === 'error' ? 'bad' : ''}`} title={dotTitle(tc)} />
         ))}
       </span>
       <span className="tfs-n">{calls.length}</span> tool call{calls.length === 1 ? '' : 's'}
@@ -459,9 +465,12 @@ export const AssistantEntry = memo(function AssistantEntry({ entry, isStreaming,
             <button type="button" className="tfs" onClick={() => setToolsExpanded(true)} title="Show tool calls and thoughts of this turn">
               {allCalls.length > 0 && (
                 <span className="tfs-dots">
-                  {allCalls.map((tc, i) => (
-                    <span key={i} className={`tfs-dot ${tc.status === 'error' ? 'bad' : ''}`} title={tc.name + (tc.status === 'error' ? ' — failed' : '')} />
-                  ))}
+                  {allCalls.map((tc, i) => {
+                    const out = String(tc.output || '').replace(/\s+/g, ' ').trim()
+                    return (
+                      <span key={i} className={`tfs-dot ${tc.status === 'error' ? 'bad' : ''}`} title={tc.name + (tc.status === 'error' ? ' — failed: ' + (out.slice(0, 140) || 'exit ≠ 0') : '')} />
+                    )
+                  })}
                 </span>
               )}
               {allCalls.length > 0 && <span className="tfs-n">{allCalls.length}</span>}
