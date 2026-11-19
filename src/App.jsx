@@ -234,7 +234,7 @@ export default function App() {
     if (stickRafRef.current) return // bereits ein Frame pending — batchen
     stickRafRef.current = requestAnimationFrame(() => {
       stickRafRef.current = 0
-      const el = scrollRef.current
+      const el = scrollContainerRef.current
       if (!el || !stickToBottomRef.current) return
       el.scrollTop = el.scrollHeight
     })
@@ -358,7 +358,7 @@ export default function App() {
   const scrollToLatest = useCallback(() => {
     stickToBottomRef.current = true
     setAtTail(true)
-    const el = scrollRef.current
+    const el = scrollContainerRef.current
     // Expliziter User-Jump darf smooth sein (SOTA: smooth nur für gezielte
     // Aktionen, nie im Streaming-Takt) — aber container-scoped statt
     // endRef.scrollIntoView (das scrollt jeden Vorfahren mit).
