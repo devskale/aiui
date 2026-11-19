@@ -2,6 +2,7 @@
 name: Firmenindex
 description: Unternehmensrecherche Österreich — Firmenbuch, GISA, GLEIF, ÖNACE, Bilanzen, Urkunden. Recherchiert Firmen und Personen, lädt Dokumente, analysiert Beteiligungsnetzwerke und teilt Reports als Bündel auf throway.
 model: unii@tu@qwen-3.8-27b
+sttLanguage: de
 canvas: reports/**/canvas.json
 examples:
   - Quick-Lookup: Wer sind die Geschäftsführer der Brantner Österreich GmbH?
