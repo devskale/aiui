@@ -23,6 +23,7 @@ assert.equal(teacher.sttLanguage, 'auto', 'auto-detect (kid may mix DE/EN)')
 assert.equal(teacher.tts, true, 'spoken answers')
 assert.equal(teacher.model, 'unii@tu@qwen-3.8-27b', 'vision model pin (worksheet photos; 3.6 tot nach TU-Drift, 3.8 vision-fähig — Gateway-probed)')
 assert.equal(teacher.skillPaths.length, 1, 'carries its skills dir')
+assert.deepEqual(teacher.levels, ['Gymnasium 1', 'Gymnasium 2', 'Gymnasium 3', 'Gymnasium 4'], 'levels für die Niveau-Pills')
 
 const deutsch = getAgent('deutsch')
 assert.ok(deutsch.systemPrompt.length > 50, 'persona body parsed')

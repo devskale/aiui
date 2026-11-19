@@ -78,6 +78,13 @@ function loadOneAgent(id) {
     stt: frontmatter.stt === true,
     sttLanguage: frontmatter.sttLanguage ? String(frontmatter.sttLanguage) : 'auto',
     tts: frontmatter.tts === true,
+    // Nutzereinstellbare Komplexitäts-Stufen (z. B. Gymnasium 1–4 beim
+    // english-teacher): je Option ein Frontmatter-Eintrag; die UI rendert
+    // bei Agents mit levels eine Auswahl und hängt die Stufe als
+    // [Niveau: …]-Marker an den Prompt (siehe Persona-Sektion dort).
+    levels: Array.isArray(frontmatter.levels)
+      ? frontmatter.levels.map((l) => String(l).trim()).filter(Boolean).slice(0, 6)
+      : (frontmatter.levels ? [String(frontmatter.levels)] : []),
     skillPaths: [],
     extensionPaths: [],
   }
@@ -123,8 +130,8 @@ function allAgents() {
 
 /** Catalog for the UI: metadata only, no prompt bodies. */
 export function listAgents() {
-  return allAgents().map(({ id, name, description, model, canvas, examples, stt, sttLanguage, tts }) =>
-    ({ id, name, description, model, canvas, examples, stt, sttLanguage, tts }))
+  return allAgents().map(({ id, name, description, model, canvas, examples, stt, sttLanguage, tts, levels }) =>
+    ({ id, name, description, model, canvas, examples, stt, sttLanguage, tts, levels }))
 }
 
 /** Full Agent def by id. Unknown/absent ids fall back to the default. */

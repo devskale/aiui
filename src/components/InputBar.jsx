@@ -56,7 +56,7 @@ function splitByImageSupport(files, imageCapable) {
   return { accept, rejectedImages }
 }
 
-export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRemoveAttachment, onAddFiles, onCompact, onNewChat, onOpenModelPicker, imageCapable, inputRef, sttLanguage, prefill, sessionId, user }) {
+export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRemoveAttachment, onAddFiles, onCompact, onNewChat, onOpenModelPicker, imageCapable, inputRef, sttLanguage, prefill, sessionId, user, agentLevels, agentLevel, onAgentLevelChange }) {
   const [text, setText] = useState('')
   const ref = inputRef || useRef(null)
   const fileRef = useRef(null)
@@ -337,6 +337,18 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
             placeholder={streaming ? 'Steer π… (queued after current turn)' : 'Ask π anything…  (type / for commands, @ for files, # for documents)'}
           rows={1}
         />
+        {agentLevels?.length && (
+          <div className="lvl-pills" role="group" aria-label="Level">
+            {agentLevels.map((l, i) => (
+              <button
+                key={l}
+                className={`lvl-pill ${agentLevel === l ? 'active' : ''} ${stt.state === 'recording' ? 'rec' : ''}`}
+                onClick={() => onAgentLevelChange?.(l)}
+                title={l}
+              >{i + 1}</button>
+            ))}
+          </div>
+        )}
         {stt.mode && (
           <button
             className={`ib-btn stt-lang ${stt.state === 'recording' ? 'rec' : ''}`}

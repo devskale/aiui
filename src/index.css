@@ -1409,6 +1409,17 @@ pre code { background: none; padding: 0; font-size: 13px; }
 .md-table-wrap tbody tr:nth-child(even) { background: rgba(255, 255, 255, 0.025); }
 .md-table-wrap td code { font-size: 11.5px; }
 
+/* Level-Pills (agent.levels — z. B. Gymnasium 1–4) */
+.lvl-pills { display: inline-flex; gap: 3px; align-items: center; }
+.lvl-pill {
+  width: 24px; height: 26px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle); background: none;
+  color: var(--text-4); font-size: 11px; font-weight: 600; cursor: pointer;
+}
+.lvl-pill:hover { color: var(--text-2); border-color: var(--border); }
+.lvl-pill.active { color: var(--accent); border-color: var(--accent); background: rgba(16,185,129,0.08); }
+.lvl-pill.rec { opacity: .5; pointer-events: none; }
+
 /* STT-Sprach-Pill (de/en) neben dem Mikro */
 .stt-lang {
   font-size: 10px; font-weight: 700; letter-spacing: .06em;

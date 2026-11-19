@@ -107,6 +107,19 @@ export default function App() {
 
   // ── TTS (agent-gated spoken answers — ADR-0004) ──
   const activeAgent = agents.find(a => a.id === sessionAgent)
+  const agentLevels = activeAgent?.levels || null
+  // Nutzergewählte Komplexitäts-Stufe (z. B. Gymnasium 1–4 beim english-
+  // teacher): pro Agent persistiert, landet als [Niveau: …]-Marker am Prompt.
+  const [agentLevel, setAgentLevel] = useState(
+    () => localStorage.getItem('aiui-level-' + sessionAgent) || null
+  )
+  // Agent-Wechsel: das persistierte Level des NEUEN Agents laden
+  useEffect(() => {
+    setAgentLevel(localStorage.getItem('aiui-level-' + sessionAgent) || null)
+  }, [sessionAgent])
+  useEffect(() => {
+    if (agentLevel) localStorage.setItem('aiui-level-' + sessionAgent, agentLevel)
+  }, [sessionAgent, agentLevel])
   const ttsAvailable = !!activeAgent?.tts
   const [ttsOn, setTtsOn] = useState(() => localStorage.getItem('aiui-tts') === '1')
   const { speaking, speak, cancel } = useTts()
@@ -405,6 +418,11 @@ export default function App() {
   const handleSend = handleSendStable // InputBar onSend/onAsk — gleiches Verhalten, stabile Referenz
 
   const handleSendImpl = async (text) => {
+    // Niveau-Marker (agent.levels): als eigener Absatz am Ende — die Persona
+    // kalibriert darauf (english-teacher Gymnasium 1–4).
+    if (agentLevels?.length && agentLevel && agentLevels.includes(agentLevel)) {
+      text = text + '\n\n[Niveau: ' + agentLevel + ']'
+    }
     // Notification-Permission beim ersten Send holen (User-Geste). Still
     // bleiben bei 'denied' — fragenwirbelt niemanden.
     if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
@@ -754,6 +772,9 @@ export default function App() {
           imageCapable={imageCapable}
           inputRef={inputRef}
           sttLanguage={agents.find(a => a.id === sessionAgent)?.sttLanguage || 'auto'}
+          agentLevels={agentLevels}
+          agentLevel={agentLevel}
+          onAgentLevelChange={setAgentLevel}
           prefill={draft}
           sessionId={sessionId}
           user={me?.user}
