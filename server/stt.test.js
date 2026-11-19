@@ -14,7 +14,7 @@ try {
   delete process.env.AIUI_STT
   delete process.env.STT_URL
   assert.equal(sttConfigured(), true, 'configured by default')
-  assert.equal(sttModel(), 'nemotron-3.5-asr-streaming-0.6b', 'default model')
+  assert.equal(sttModel(), 'hab@nemotron-3.5-asr-streaming-0.6b', 'default model (uniinfer hab@-Upstream)')
   process.env.AIUI_STT = 'off'
   assert.equal(sttConfigured(), false, 'AIUI_STT=off disables')
   process.env.AIUI_STT = ''

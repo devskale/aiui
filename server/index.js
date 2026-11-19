@@ -13,7 +13,7 @@ import { widgetKeyEntry, originAllowed, noteMintAttempt, mintWidgetToken, getWid
 import { consumeQuota, peekQuota } from './quota.js'
 import { getOrCreateSession, disposeSession, prompt, abort, setModel, setThinkingLevel, getThinkingInfo, compactSession, abortCompaction, setAutoCompaction, listSessions, switchToSession, renameSession, deleteSession, resumeWidgetVisitor, getAvailableModels, getCommands, getSessionInfo, getSessionStats, getSessionHistory, newSession, workspaceCwd, getForkTargets, forkSession, scopedUser, widgetVisitorStatus, prepareWidgetContext, composeWidgetPrompt, resolveAsk, migrateLegacyWorkspace, VISITOR_RE } from './pi-session.js'
 import { listAgents } from './agents.js'
-import { sttConfigured, sttReachable, sttModel, transcribe } from './stt.js'
+import { sttConfigured, sttReachable, sttModel, sttStreaming, transcribe } from './stt.js'
 import { resolveBashOutputPath, readBashOutput } from './bash-output.js'
 import { resolveHostAction } from './host-actions.js'
 import { listDir, readTextFile, resolveWorkspacePath, mimeFor } from './workspace-files.js'
@@ -830,9 +830,10 @@ app.get('/api/stt/config', (req, res) => {
   if (!sttConfigured()) return res.json({ enabled: false })
   res.json({
     enabled: true,
-    gateway: process.env.STT_URL || 'http://dgxp:3001',
+    gateway: process.env.STT_URL || 'https://uniinfer.skale.dev',
     token: process.env.STT_TOKEN || '',
     model: sttModel(),
+    streaming: sttStreaming(), // REST-only-Gateways (uniinfer): false → Batch-Tier
   })
 })
 

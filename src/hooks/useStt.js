@@ -88,7 +88,7 @@ export function useStt({ language = 'auto', onTranscript, onError }) {
       .then(r => (r.ok ? r.json() : null))
       .then(cfg => {
         configRef.current = cfg
-        if (cfg?.enabled && cfg.token) setMode('ws')
+        if (cfg?.enabled && cfg.token && cfg.streaming) setMode('ws')
         else if (cfg?.enabled) setMode('batch')
       })
       .catch(() => {})

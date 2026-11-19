@@ -1,20 +1,28 @@
 // ════════════════════════════════════════════════════════════════════
 // stt — speech-to-text gateway client (OpenAI-compatible transcriptions)
 //
-// Proxies browser audio to the DGX model-proxy gateway
+// Proxies browser audio to the uniinfer proxy gateway
 // (POST /v1/audio/transcriptions, multipart WAV → {text}). The Bearer
 // token stays server-side (never in the browser), same pattern as
 // skills-catalog.js: env-configurable base URL, timeout, non-throwing
 // { error } returns so the UI degrades gracefully.
 //
+// Das Mic zeigt defaultmäßig auf den uniinfer-Proxy: Modell
+// hab@nemotron-3.5-asr-streaming-0.6b (Wunsch-Pin 2026-11-19; alternativ
+// tu@whisper-large — beides über denselben Proxy). uniinfer ist
+// REST-only: kein WS-Streaming-Tier, /api/stt/config advertisiert
+// streaming:false (Client geht direkt in Batch).
+//
 // Env:
-//   STT_URL    gateway base (default http://dgxp:3001; '' or AIUI_STT=off disables)
-//   STT_TOKEN  gateway Bearer token (optional if the gateway is unauthenticated)
-//   STT_MODEL  transcription model id (default nemotron-3.5-asr-streaming-0.6b)
+//   STT_URL    gateway base (default https://uniinfer.skale.dev; '' or AIUI_STT=off disables)
+//   STT_TOKEN  gateway Bearer token (uniinfer-Key — nötig, uniinfer ist authed)
+//   STT_MODEL  transcription model id (default hab@nemotron-3.5-asr-streaming-0.6b)
+//   STT_WS     '1' = WS-Streaming-Tier freischalten (nur Gateways mit
+//              /v1/audio/transcriptions/stream-WS — uniinfer: nein)
 // ════════════════════════════════════════════════════════════════════
 
-const DEFAULT_URL = 'http://dgxp:3001'
-const DEFAULT_MODEL = 'nemotron-3.5-asr-streaming-0.6b'
+const DEFAULT_URL = 'https://uniinfer.skale.dev'
+const DEFAULT_MODEL = 'hab@nemotron-3.5-asr-streaming-0.6b'
 
 function gatewayUrl() {
   return (process.env.STT_URL ?? DEFAULT_URL).replace(/\/+$/, '')
@@ -28,6 +36,12 @@ export function sttConfigured() {
 
 export function sttModel() {
   return process.env.STT_MODEL || DEFAULT_MODEL
+}
+
+/** WS-Streaming-Tier freigeschaltet? (nur Gateways mit transcriptions/stream-
+ *  WS; uniinfer ist REST-only → false → Client geht direkt in Batch.) */
+export function sttStreaming() {
+  return process.env.STT_WS === '1'
 }
 
 // ── Reachability probe (cached) ──
