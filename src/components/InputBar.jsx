@@ -119,8 +119,20 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
   // Voice input (ADR-0004): OS/browser recognizer when available, else the
   // STT gateway (streaming WS or batch proxy). Transcript lands in the
   // textarea; hold-to-talk on the mic, or click to toggle.
+  // STT-Sprache: sichtbar schaltbar (de/en) — Persistenz im localStorage,
+  // initial aus dem Agent-Pin (sttLanguage) bzw. 'de' für diese Deployment-
+  // Domäne. NIE 'auto' an den Server: nemotron-ASR dekodiert sonst englisch.
+  const [sttLang, setSttLangState] = useState(() => {
+    const saved = localStorage.getItem('aiui-stt-lang')
+    if (saved === 'de' || saved === 'en') return saved
+    return sttLanguage && sttLanguage !== 'auto' ? sttLanguage : 'de'
+  })
+  const setSttLang = (lang) => {
+    setSttLangState(lang)
+    localStorage.setItem('aiui-stt-lang', lang)
+  }
   const stt = useStt({
-    language: sttLanguage || 'auto',
+    language: sttLang,
     onTranscript: (text) => {
       if (!text) return
       setText(prev => (prev && prev.trim() ? prev.replace(/\s+$/, '') + ' ' : '') + text)
@@ -325,6 +337,15 @@ export function InputBar({ onSend, onSteer, onStop, streaming, attachments, onRe
             placeholder={streaming ? 'Steer π… (queued after current turn)' : 'Ask π anything…  (type / for commands, @ for files, # for documents)'}
           rows={1}
         />
+        {stt.mode && (
+          <button
+            className={`ib-btn stt-lang ${stt.state === 'recording' ? 'rec' : ''}`}
+            onClick={() => setSttLang(sttLang === 'de' ? 'en' : 'de')}
+            disabled={stt.state === 'recording'}
+            aria-label={`STT language: ${sttLang} (click to switch)`}
+            title={`Mikro-Sprache: ${sttLang.toUpperCase()} — klicken zum Wechseln`}
+          >{sttLang.toUpperCase()}</button>
+        )}
         {stt.mode && (
           <button
             className={`ib-btn mic ${stt.state === 'recording' ? 'rec' : ''}`}
