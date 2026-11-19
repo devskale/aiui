@@ -46,12 +46,17 @@ function wavBytes(pcm) {
 }
 
 // 'idle' | 'recording' | 'processing'; mode: 'webspeech' | 'ws' | 'batch' | null
+// Override: localStorage 'aiui-stt-mode' = 'batch'|'ws'|'webspeech' — erzwingt
+// einen Tier (Test: z. B. uniinfer-Batch trotz Chrome-Webspeech).
 export function useStt({ language = 'auto', onTranscript, onError }) {
   const [state, setState] = useState('idle')
   const [partial, setPartial] = useState('')
+  const forcedMode = (typeof localStorage !== 'undefined' && localStorage.getItem('aiui-stt-mode')) || null
   const [mode, setMode] = useState(
-    (typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition))
-      ? 'webspeech' : null
+    forcedMode === 'batch' || forcedMode === 'ws' || forcedMode === 'webspeech'
+      ? forcedMode
+      : (typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition))
+        ? 'webspeech' : null
   )
   const ctxRef = useRef(null)
   const streamRef = useRef(null)
@@ -88,6 +93,7 @@ export function useStt({ language = 'auto', onTranscript, onError }) {
       .then(r => (r.ok ? r.json() : null))
       .then(cfg => {
         configRef.current = cfg
+        if (forcedMode === 'batch' || forcedMode === 'ws') return // Override: Modus bleibt
         if (cfg?.enabled && cfg.token && cfg.streaming) setMode('ws')
         else if (cfg?.enabled) setMode('batch')
       })
